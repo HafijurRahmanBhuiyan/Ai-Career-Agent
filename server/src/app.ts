@@ -14,6 +14,7 @@ import resumeRoutes from "./routes/resume";
 import githubRoutes from "./routes/github";
 import jobsRoutes from "./routes/jobs";
 import jobMatchRoutes from "./routes/jobMatch.routes";
+import applicationRoutes from "./routes/applications";
 import { registerJobSource } from "./integrations/jobs/jobSourceRegistry";
 import { MockJobSource } from "./integrations/jobs/sources/mockJobSource";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
@@ -57,6 +58,7 @@ app.use("/api/resumes", resumeRoutes);
 app.use("/api/github", githubRoutes);
 app.use("/api/jobs", jobsRoutes);
 app.use("/api/job-matches", jobMatchRoutes);
+app.use("/api/applications", applicationRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

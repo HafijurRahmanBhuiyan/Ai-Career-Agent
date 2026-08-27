@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import GitHubIntegrations from "./pages/GitHubIntegrations";
 import Jobs from "./pages/Jobs";
 import JobMatches from "./pages/JobMatches";
+import Applications from "./pages/Applications";
 
 function App() {
   return (
@@ -45,6 +46,14 @@ function App() {
           element={
             <ProtectedRoute>
               <JobMatches />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/applications"
+          element={
+            <ProtectedRoute>
+              <Applications />
             </ProtectedRoute>
           }
         />

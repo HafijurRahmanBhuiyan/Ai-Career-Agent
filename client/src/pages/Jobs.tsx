@@ -66,6 +66,7 @@ function Jobs() {
   });
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [matchJob, setMatchJob] = useState<Job | null>(null);
+  const [trackMsg, setTrackMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,6 +180,7 @@ function Jobs() {
 
   const handleViewJob = (job: Job) => {
     setSelectedJob(job);
+    setTrackMsg(null);
   };
 
   const handleAnalyzeMatch = (job: Job) => {
@@ -187,6 +189,29 @@ function Jobs() {
 
   const handleApply = (job: Job) => {
     if (job.applyUrl) window.open(job.applyUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleTrackApplication = async (job: Job) => {
+    setTrackMsg(null);
+    try {
+      await api.post(`${API_BASE}/applications`, { jobId: job._id });
+      setTrackMsg("Application saved. Update its status from My Applications.");
+    } catch (err: unknown) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        (err as { response?: { status?: number } }).response?.status === 409
+      ) {
+        setTrackMsg("You are already tracking this job.");
+      } else {
+        const msg =
+          typeof err === "object" &&
+          err !== null &&
+          (err as { response?: { data?: { error?: string } } }).response?.data
+            ?.error;
+        setTrackMsg(msg || "Could not save this application. Please try again.");
+      }
+    }
   };
 
   return (
@@ -371,6 +396,8 @@ function Jobs() {
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
           onApply={() => handleApply(selectedJob)}
+          onTrack={() => handleTrackApplication(selectedJob)}
+          trackMsg={trackMsg}
         />
       )}
 
@@ -442,10 +469,14 @@ function JobDetail({
   job,
   onClose,
   onApply,
+  onTrack,
+  trackMsg,
 }: {
   job: Job;
   onClose: () => void;
   onApply: () => void;
+  onTrack: () => void;
+  trackMsg: string | null;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -519,6 +550,12 @@ function JobDetail({
           )}
 
           <div className="flex gap-3 mt-6">
+            <button
+              onClick={onTrack}
+              className="flex-1 px-4 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              Track this job
+            </button>
             {job.applyUrl && (
               <button
                 onClick={onApply}
@@ -538,6 +575,11 @@ function JobDetail({
               </a>
             )}
           </div>
+          {trackMsg && (
+            <p className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+              {trackMsg}
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -16,21 +16,17 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
-**Milestone 7.5: Frontend Authentication Integration**
+**Milestone 8: Job Application Tracking**
 
-- Wires the existing JWT-based backend auth (register/login/me) into the React frontend
-- Centralized `AuthContext` (`user`, `token`, `isAuthenticated`, `isLoading`, `login`, `register`, `logout`, `refreshUser`)
-- Centralized Axios client (`api/client.ts`) with a request interceptor that auto-attaches `Authorization: Bearer <token>`
-- Token persisted in `sessionStorage` (never passwords, GitHub tokens, or API keys); session restored on startup via `GET /api/auth/me`
-- 401 response handling clears auth state and session, redirecting to login (no redirect loops)
-- `/login` and `/register` pages with validation, loading states, and user-friendly API errors
-- `ProtectedRoute` guard for `/dashboard`, `/dashboard/integrations`, `/dashboard/jobs`, `/dashboard/job-matches`; loading screen while auth is checked; unauthenticated users redirected to `/login`
-- Dashboard sidebar shows the authenticated user (name/email) with a logout button
-- All dashboard pages consume the same `AuthContext` via a shared `DashboardLayout`
+- Full CRUD backend for job applications (`/api/applications`) with JWT auth and Zod validation
+- Application statuses: `saved` → `applied` → `screening` → `interview` → `offer`, plus `rejected` and `withdrawn`
+- Each user can track each job once (unique `user + job` index); duplicate creates return a friendly 409
+- Smart date handling: creating/updating to `applied` without a date sets `appliedAt` to now; moving away from `applied` never erases an existing date unless explicitly cleared
+- Ownership enforced on every read/update/delete (404 if you don't own the application); only active jobs can be tracked
+- "My Applications" page: list, status filter, pagination, view/edit (status, applied date, notes), delete with confirmation
+- Jobs page "Track Application" button that saves a job at `saved` status with friendly success/duplicate feedback — external Apply behavior preserved
 
-**Milestone 7.5 (Frontend Authentication) is implemented.**
-
-Milestone 7 (AI Job Matching) and Milestones 1–6 remain implemented.
+**Milestone 7.5 (Frontend Authentication) and Milestone 7 (AI Job Matching) and Milestones 1–6 remain implemented.**
 
 LinkedIn, Gmail, and job automation (auto-application / POST-apply) are **NOT** yet implemented.
 
@@ -204,6 +200,20 @@ cd server && npm test
 | GET    | `/api/jobs/:id/match`     | Get existing match for a job           | Yes           |
 | POST   | `/api/jobs/:id/match/reanalyze` | Force fresh analysis, replaces old | Yes           |
 | GET    | `/api/job-matches`        | List the user's job matches (filters)  | Yes           |
+
+### Applications
+
+| Method | Endpoint                      | Description                                            | Auth Required |
+|--------|-------------------------------|--------------------------------------------------------|---------------|
+| POST   | `/api/applications`           | Create an application for a job (body: `jobId`, optional `status`/`appliedAt`/`notes`) | Yes |
+| GET    | `/api/applications`           | List the user's applications (`page`, `limit`, `status`) | Yes |
+| GET    | `/api/applications/:id`       | Get a single application                               | Yes |
+| PATCH  | `/api/applications/:id`       | Update status/appliedAt/notes                          | Yes |
+| DELETE | `/api/applications/:id`       | Delete an application                                  | Yes |
+
+- Application statuses: `saved`, `applied`, `screening`, `interview`, `offer`, `rejected`, `withdrawn`
+- One application per user per job; duplicates return `409`
+- Only active jobs can be tracked; you can only read/update/delete your own applications
 
 ## Job Discovery
 
