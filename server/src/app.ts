@@ -5,6 +5,12 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import healthRoutes from "./routes/health";
 import authRoutes from "./routes/auth";
+import profileRoutes from "./routes/profile";
+import educationRoutes from "./routes/education";
+import experienceRoutes from "./routes/experience";
+import skillRoutes from "./routes/skill";
+import projectRoutes from "./routes/project";
+import resumeRoutes from "./routes/resume";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 dotenv.config();
@@ -35,6 +41,12 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/profile", profileRoutes);
+app.use("/api/education", educationRoutes);
+app.use("/api/experience", experienceRoutes);
+app.use("/api/skills", skillRoutes);
+app.use("/api/projects", projectRoutes);
+app.use("/api/resumes", resumeRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

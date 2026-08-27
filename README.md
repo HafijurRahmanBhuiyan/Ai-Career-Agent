@@ -16,15 +16,15 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
-**Milestone 2: MongoDB + User Authentication**
+**Milestone 3: Career Profile Management**
 
-- MongoDB connection with Mongoose
-- User model with password hashing (bcryptjs)
-- JWT authentication (register, login, me)
-- Role-based authorization foundation (USER, ADMIN)
-- Input validation with Zod
-- Centralized error handling
-- 20 automated tests passing
+- Profile, Education, Experience, Skill, Project, Resume models
+- Full CRUD APIs for all career data
+- Ownership protection (users can only access their own data)
+- Zod input validation on all endpoints
+- Duplicate skill prevention with compound unique index
+- Active resume logic (only one active resume per user)
+- 79 automated tests passing
 
 ## Project Structure
 
@@ -89,7 +89,9 @@ npm run client    # Frontend on port 5173
 cd server && npm test
 ```
 
-## Authentication API
+## API Endpoints
+
+### Authentication
 
 | Method | Endpoint               | Description       | Auth Required |
 |--------|------------------------|-------------------|---------------|
@@ -98,33 +100,63 @@ cd server && npm test
 | GET    | `/api/auth/me`         | Get current user  | Yes           |
 | GET    | `/api/health`          | Health check      | No            |
 
-### Register
+### Profile
 
-```json
-POST /api/auth/register
-{
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "securePassword123"
-}
-```
+| Method | Endpoint          | Description     | Auth Required |
+|--------|-------------------|-----------------|---------------|
+| GET    | `/api/profile`    | Get profile     | Yes           |
+| POST   | `/api/profile`    | Create profile  | Yes           |
+| PATCH  | `/api/profile`    | Update profile  | Yes           |
 
-### Login
+### Education
 
-```json
-POST /api/auth/login
-{
-  "email": "john@example.com",
-  "password": "securePassword123"
-}
-```
+| Method | Endpoint                | Description          | Auth Required |
+|--------|-------------------------|----------------------|---------------|
+| GET    | `/api/education`        | List education       | Yes           |
+| POST   | `/api/education`        | Create education     | Yes           |
+| GET    | `/api/education/:id`    | Get specific record  | Yes           |
+| PATCH  | `/api/education/:id`    | Update record        | Yes           |
+| DELETE | `/api/education/:id`    | Delete record        | Yes           |
 
-### Get Current User
+### Experience
 
-```
-GET /api/auth/me
-Authorization: Bearer <token>
-```
+| Method | Endpoint                  | Description          | Auth Required |
+|--------|---------------------------|----------------------|---------------|
+| GET    | `/api/experience`         | List experience      | Yes           |
+| POST   | `/api/experience`         | Create experience    | Yes           |
+| GET    | `/api/experience/:id`     | Get specific record  | Yes           |
+| PATCH  | `/api/experience/:id`     | Update record        | Yes           |
+| DELETE | `/api/experience/:id`     | Delete record        | Yes           |
+
+### Skills
+
+| Method | Endpoint              | Description          | Auth Required |
+|--------|-----------------------|----------------------|---------------|
+| GET    | `/api/skills`         | List skills          | Yes           |
+| POST   | `/api/skills`         | Create skill         | Yes           |
+| GET    | `/api/skills/:id`     | Get specific skill   | Yes           |
+| PATCH  | `/api/skills/:id`     | Update skill         | Yes           |
+| DELETE | `/api/skills/:id`     | Delete skill         | Yes           |
+
+### Projects
+
+| Method | Endpoint                | Description          | Auth Required |
+|--------|-------------------------|----------------------|---------------|
+| GET    | `/api/projects`         | List projects        | Yes           |
+| POST   | `/api/projects`         | Create project       | Yes           |
+| GET    | `/api/projects/:id`     | Get specific project | Yes           |
+| PATCH  | `/api/projects/:id`     | Update project       | Yes           |
+| DELETE | `/api/projects/:id`     | Delete project       | Yes           |
+
+### Resumes
+
+| Method | Endpoint              | Description          | Auth Required |
+|--------|-----------------------|----------------------|---------------|
+| GET    | `/api/resumes`        | List resumes         | Yes           |
+| POST   | `/api/resumes`        | Create resume        | Yes           |
+| GET    | `/api/resumes/:id`    | Get specific resume  | Yes           |
+| PATCH  | `/api/resumes/:id`    | Update resume        | Yes           |
+| DELETE | `/api/resumes/:id`    | Delete resume        | Yes           |
 
 ## Status
 
