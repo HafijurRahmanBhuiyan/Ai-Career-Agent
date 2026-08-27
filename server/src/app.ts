@@ -1,0 +1,41 @@
+import dotenv from "dotenv";
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import healthRoutes from "./routes/health";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5001;
+const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+
+app.use(helmet());
+
+app.use(
+  cors({
+    origin: CLIENT_URL,
+    credentials: true,
+  })
+);
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." },
+});
+app.use(limiter);
+
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+app.use("/api", healthRoutes);
+
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+export { app, PORT };

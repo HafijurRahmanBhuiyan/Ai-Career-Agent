@@ -1,0 +1,27 @@
+{
+  "name": "ai-career-agent",
+  "version": "1.0.0",
+  "description": "AI-powered personal career automation platform",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "client": "npm run dev --prefix client",
+    "server": "npm run dev --prefix server",
+    "build": "npm run build --prefix client && npm run build --prefix server",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "lint": "npm run lint --prefix server",
+    "typecheck": "npm run typecheck --prefix server && npm run typecheck --prefix client",
+    "test": "npm test --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "keywords": [
+    "ai",
+    "career",
+    "automation",
+    "mern"
+  ],
+  "author": "",
+  "license": "MIT"
+}
