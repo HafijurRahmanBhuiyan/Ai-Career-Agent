@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
+import JobMatchModal from "../components/JobMatchModal";
 
 interface Job {
   _id: string;
@@ -63,6 +64,7 @@ function Jobs() {
     totalPages: 0,
   });
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [matchJob, setMatchJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +180,10 @@ function Jobs() {
     setSelectedJob(job);
   };
 
+  const handleAnalyzeMatch = (job: Job) => {
+    setMatchJob(job);
+  };
+
   const handleApply = (job: Job) => {
     if (job.applyUrl) window.open(job.applyUrl, "_blank", "noopener,noreferrer");
   };
@@ -196,6 +202,12 @@ function Jobs() {
           <NavItem label="GitHub Projects" />
           <NavItem label="LinkedIn Posts" />
           <NavItem label="Jobs" active />
+          <Link
+            to="/dashboard/job-matches"
+            className="block px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-lg transition-colors"
+          >
+            My Job Matches
+          </Link>
           <NavItem label="Applications" />
           <NavItem label="Emails" />
           <NavItem label="Settings" />
@@ -351,6 +363,7 @@ function Jobs() {
                   key={job._id}
                   job={job}
                   onView={() => handleViewJob(job)}
+                  onMatch={() => handleAnalyzeMatch(job)}
                 />
               ))}
             </div>
@@ -393,11 +406,28 @@ function Jobs() {
           onApply={() => handleApply(selectedJob)}
         />
       )}
+
+      {matchJob && (
+        <JobMatchModal
+          jobId={matchJob._id}
+          jobTitle={matchJob.title}
+          jobCompany={matchJob.companyName}
+          onClose={() => setMatchJob(null)}
+        />
+      )}
     </div>
   );
 }
 
-function JobCard({ job, onView }: { job: Job; onView: () => void }) {
+function JobCard({
+  job,
+  onView,
+  onMatch,
+}: {
+  job: Job;
+  onView: () => void;
+  onMatch: () => void;
+}) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col">
       <div className="flex-1">
@@ -423,12 +453,20 @@ function JobCard({ job, onView }: { job: Job; onView: () => void }) {
           Source: {job.source} | Posted {formatDate(job.postedAt)}
         </p>
       </div>
-      <button
-        onClick={onView}
-        className="w-full px-3 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-      >
-        View Job
-      </button>
+      <div className="space-y-2">
+        <button
+          onClick={onView}
+          className="w-full px-3 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          View Job
+        </button>
+        <button
+          onClick={onMatch}
+          className="w-full px-3 py-2 text-sm text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+        >
+          Analyze Match
+        </button>
+      </div>
     </div>
   );
 }
