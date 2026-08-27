@@ -11,6 +11,7 @@ import experienceRoutes from "./routes/experience";
 import skillRoutes from "./routes/skill";
 import projectRoutes from "./routes/project";
 import resumeRoutes from "./routes/resume";
+import githubRoutes from "./routes/github";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 dotenv.config();
@@ -47,6 +48,7 @@ app.use("/api/experience", experienceRoutes);
 app.use("/api/skills", skillRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/resumes", resumeRoutes);
+app.use("/api/github", githubRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

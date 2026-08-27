@@ -16,15 +16,14 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
-**Milestone 3: Career Profile Management**
+**Milestone 4: GitHub Integration and Repository Import**
 
-- Profile, Education, Experience, Skill, Project, Resume models
-- Full CRUD APIs for all career data
-- Ownership protection (users can only access their own data)
-- Zod input validation on all endpoints
-- Duplicate skill prevention with compound unique index
-- Active resume logic (only one active resume per user)
-- 79 automated tests passing
+- GitHub OAuth flow with CSRF state protection
+- Token encryption at rest (AES-256-GCM)
+- Repository listing, import, sync, and deletion
+- Repository language and README retrieval
+- Frontend GitHub connection UI
+- 115 automated tests passing
 
 ## Project Structure
 
@@ -65,6 +64,10 @@ Edit `server/.env` and set:
 - `MONGODB_URI` — MongoDB connection string (e.g., `mongodb://localhost:27017/ai-career-agent`)
 - `JWT_SECRET` — A strong random string for JWT signing
 - `JWT_EXPIRES_IN` — Token expiration (default: `7d`)
+- `GITHUB_CLIENT_ID` — GitHub OAuth App client ID
+- `GITHUB_CLIENT_SECRET` — GitHub OAuth App client secret
+- `GITHUB_CALLBACK_URL` — OAuth callback URL (e.g., `http://localhost:5001/api/github/callback`)
+- `GITHUB_TOKEN_ENCRYPTION_KEY` — 64-character hex string for AES-256 token encryption
 
 See `server/.env.example` for the full list.
 
@@ -157,6 +160,22 @@ cd server && npm test
 | GET    | `/api/resumes/:id`    | Get specific resume  | Yes           |
 | PATCH  | `/api/resumes/:id`    | Update resume        | Yes           |
 | DELETE | `/api/resumes/:id`    | Delete resume        | Yes           |
+
+### GitHub Integration
+
+| Method | Endpoint                                        | Description                    | Auth Required |
+|--------|-------------------------------------------------|--------------------------------|---------------|
+| GET    | `/api/github/connect`                           | Get OAuth authorize URL        | Yes           |
+| GET    | `/api/github/callback`                          | OAuth callback handler         | Yes           |
+| POST   | `/api/github/disconnect`                        | Disconnect GitHub account      | Yes           |
+| GET    | `/api/github/status`                            | Check connection status        | Yes           |
+| GET    | `/api/github/repositories`                      | List GitHub repositories       | Yes           |
+| GET    | `/api/github/repositories/imported`             | List imported repositories     | Yes           |
+| POST   | `/api/github/repositories/:id/import`           | Import a repository            | Yes           |
+| POST   | `/api/github/repositories/:id/sync`             | Sync imported repository       | Yes           |
+| DELETE | `/api/github/repositories/:id`                  | Remove imported repository     | Yes           |
+| GET    | `/api/github/repositories/:id/languages`        | Get repository languages       | Yes           |
+| GET    | `/api/github/repositories/:id/readme`           | Get repository README          | Yes           |
 
 ## Status
 
