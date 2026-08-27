@@ -16,13 +16,15 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
-**Milestone 1: MERN Project Initialization**
+**Milestone 2: MongoDB + User Authentication**
 
-- Project structure created
-- Backend Express server with TypeScript
-- Frontend React app with Vite, TypeScript, Tailwind CSS
-- Health check endpoint
-- Basic routing (Landing + Dashboard)
+- MongoDB connection with Mongoose
+- User model with password hashing (bcryptjs)
+- JWT authentication (register, login, me)
+- Role-based authorization foundation (USER, ADMIN)
+- Input validation with Zod
+- Centralized error handling
+- 20 automated tests passing
 
 ## Project Structure
 
@@ -37,12 +39,13 @@ ai-career-agent/
 └── README.md
 ```
 
-## Local Development
-
-### Prerequisites
+## Prerequisites
 
 - Node.js >= 18
 - npm >= 9
+- MongoDB >= 6.0 (local or Atlas)
+
+## Local Development
 
 ### Setup
 
@@ -55,25 +58,73 @@ cp server/.env.example server/.env
 cp client/.env.example client/.env
 ```
 
+### Environment Variables
+
+Edit `server/.env` and set:
+
+- `MONGODB_URI` — MongoDB connection string (e.g., `mongodb://localhost:27017/ai-career-agent`)
+- `JWT_SECRET` — A strong random string for JWT signing
+- `JWT_EXPIRES_IN` — Token expiration (default: `7d`)
+
+See `server/.env.example` for the full list.
+
 ### Running
 
 ```bash
+# Start MongoDB (if running locally)
+mongod
+
 # Start both frontend and backend
 npm run dev
 
 # Or start individually
-npm run server   # Backend on port 5001
-npm run client   # Frontend on port 5173
+npm run server    # Backend on port 5001
+npm run client    # Frontend on port 5173
 ```
 
-### Environment Variables
+### Testing
 
-Copy `.env.example` files and fill in values as needed:
+```bash
+# Run backend tests (uses in-memory MongoDB, no real DB needed)
+cd server && npm test
+```
 
-- **server/.env** — Backend configuration
-- **client/.env** — Frontend configuration
+## Authentication API
 
-See `.env.example` files for the full list of required variables.
+| Method | Endpoint               | Description       | Auth Required |
+|--------|------------------------|-------------------|---------------|
+| POST   | `/api/auth/register`   | Register new user | No            |
+| POST   | `/api/auth/login`      | Login             | No            |
+| GET    | `/api/auth/me`         | Get current user  | Yes           |
+| GET    | `/api/health`          | Health check      | No            |
+
+### Register
+
+```json
+POST /api/auth/register
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "securePassword123"
+}
+```
+
+### Login
+
+```json
+POST /api/auth/login
+{
+  "email": "john@example.com",
+  "password": "securePassword123"
+}
+```
+
+### Get Current User
+
+```
+GET /api/auth/me
+Authorization: Bearer <token>
+```
 
 ## Status
 
