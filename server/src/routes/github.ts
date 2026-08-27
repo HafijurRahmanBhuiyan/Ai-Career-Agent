@@ -12,6 +12,12 @@ import {
   getReadme,
   getImportedRepositories,
 } from "../controllers/github";
+import {
+  analyze,
+  getAnalysis,
+  history,
+  reanalyze,
+} from "../controllers/projectAnalysis";
 import { authenticate } from "../middleware/auth";
 
 const router = Router();
@@ -27,5 +33,9 @@ router.post("/repositories/:githubRepositoryId/sync", authenticate, syncReposito
 router.delete("/repositories/:githubRepositoryId", authenticate, deleteRepository);
 router.get("/repositories/:githubRepositoryId/languages", authenticate, getLanguages);
 router.get("/repositories/:githubRepositoryId/readme", authenticate, getReadme);
+router.post("/repositories/:githubRepositoryId/analyze", authenticate, analyze);
+router.get("/repositories/:githubRepositoryId/analysis", authenticate, getAnalysis);
+router.get("/repositories/:githubRepositoryId/analyses", authenticate, history);
+router.post("/repositories/:githubRepositoryId/reanalyze", authenticate, reanalyze);
 
 export default router;

@@ -16,14 +16,21 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
-**Milestone 4: GitHub Integration and Repository Import**
+**Milestone 5: Claude AI Integration and GitHub Project Analysis**
 
-- GitHub OAuth flow with CSRF state protection
-- Token encryption at rest (AES-256-GCM)
-- Repository listing, import, sync, and deletion
-- Repository language and README retrieval
-- Frontend GitHub connection UI
-- 115 automated tests passing
+- Anthropic Claude API integration
+- Structured AI project analysis with Zod validation
+- Project analysis storage with versioned prompt history
+- Re-analysis preserving historical versions
+- GitHub → Claude data pipeline (metadata + languages + README)
+- Prompt versioning (`v1`)
+- Cost/token safeguards (README limits, max tokens, no auto re-analysis)
+- Frontend analysis UI with history and re-analysis
+- 152 automated tests passing
+
+**Claude AI project analysis is implemented.**
+
+LinkedIn, Gmail, job matching and job automation are **NOT** yet implemented.
 
 ## Project Structure
 
@@ -68,6 +75,9 @@ Edit `server/.env` and set:
 - `GITHUB_CLIENT_SECRET` — GitHub OAuth App client secret
 - `GITHUB_CALLBACK_URL` — OAuth callback URL (e.g., `http://localhost:5001/api/github/callback`)
 - `GITHUB_TOKEN_ENCRYPTION_KEY` — 64-character hex string for AES-256 token encryption
+- `ANTHROPIC_API_KEY` — Anthropic Claude API key (server-side only, never exposed)
+- `CLAUDE_MODEL` — Claude model (e.g., `claude-sonnet-4-20250514`)
+- `CLAUDE_MAX_TOKENS` — Max output tokens for analysis (default: `4096`)
 
 See `server/.env.example` for the full list.
 
@@ -176,6 +186,61 @@ cd server && npm test
 | DELETE | `/api/github/repositories/:id`                  | Remove imported repository     | Yes           |
 | GET    | `/api/github/repositories/:id/languages`        | Get repository languages       | Yes           |
 | GET    | `/api/github/repositories/:id/readme`           | Get repository README          | Yes           |
+| POST   | `/api/github/repositories/:id/analyze`          | Run AI project analysis        | Yes           |
+| GET    | `/api/github/repositories/:id/analysis`         | Get latest analysis            | Yes           |
+| GET    | `/api/github/repositories/:id/analyses`         | Get analysis history           | Yes           |
+| POST   | `/api/github/repositories/:id/reanalyze`        | Re-analyze (new version)       | Yes           |
+
+## Claude AI Project Analysis
+
+### Analysis Schema
+
+Each project analysis produces a structured JSON result:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `projectSummary` | string | Overview of the project |
+| `problemStatement` | string | Problem the project solves |
+| `keyFeatures` | string[] | Main features |
+| `technologies` | string[] | All detected/inferred technologies |
+| `programmingLanguages` | string[] | Languages used |
+| `frameworks` | string[] | Frameworks and libraries |
+| `databases` | string[] | Databases detected |
+| `tools` | string[] | Development tools |
+| `cloudServices` | string[] | Cloud platforms |
+| `architecture` | string | Architecture description |
+| `developmentHighlights` | string[] | Engineering practices |
+| `skillsDemonstrated` | string[] | Developer skills shown |
+| `difficultyLevel` | string | Beginner/Intermediate/Advanced |
+| `developerRole` | string | Likely developer role |
+| `resumeDescription` | string | Resume bullet point |
+| `linkedinDescription` | string | LinkedIn description |
+| `suggestedTags` | string[] | Discovery tags |
+
+### Data Pipeline
+
+For an imported repository, the analysis service collects:
+- Repository metadata (name, description, language, topics, stars, forks, size)
+- GitHub language statistics (deterministic, not guessed)
+- README content (truncated to a safe maximum)
+
+Only this data is sent to Claude. No `.env` files, private keys, passwords, or other repository contents are sent.
+
+### Privacy & Security
+
+- `ANTHROPIC_API_KEY` is stored only in server environment — never exposed or sent to the client
+- GitHub access tokens are encrypted at rest and never returned
+- Only necessary project information is sent to Claude
+- No secrets, credentials, JWTs, or passwords are sent to Claude
+- All analysis data is scoped per authenticated user (IDOR protected)
+
+### Cost Safeguards
+
+- README input limited to 15,000 characters (truncated with indication)
+- `CLAUDE_MAX_TOKENS` caps output token usage
+- No infinite retries on Claude failures
+- No automatic background re-analysis — re-analysis is explicitly requested
+- Re-analysis creates a new version without destroying history
 
 ## Status
 
