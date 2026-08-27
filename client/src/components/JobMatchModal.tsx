@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import api from "../api/client";
 import { JobMatch } from "../types/jobMatch";
 import {
   matchLevelLabel,
@@ -9,7 +10,7 @@ import {
   formatAnalyzedDate,
 } from "../utils/match";
 
-const API_BASE = "http://localhost:5001/api";
+const API_BASE = "";
 
 interface Props {
   jobId: string;
@@ -47,7 +48,7 @@ export default function JobMatchModal({
       const url = `${API_BASE}/jobs/${jobId}/match${
         reanalyze ? "/reanalyze" : ""
       }`;
-      const res = await axios.post<{ match: JobMatch; job?: MatchJobMeta; cached?: boolean }>(
+      const res = await api.post<{ match: JobMatch; job?: MatchJobMeta; cached?: boolean }>(
         url
       );
       setMatch(res.data.match);
@@ -75,7 +76,7 @@ export default function JobMatchModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get<{ match: JobMatch; job?: MatchJobMeta }>(
+      const res = await api.get<{ match: JobMatch; job?: MatchJobMeta }>(
         `${API_BASE}/jobs/${jobId}/match`
       );
       setMatch(res.data.match);

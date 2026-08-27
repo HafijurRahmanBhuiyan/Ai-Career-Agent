@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
+import api from "../api/client";
+import DashboardLayout from "../components/DashboardLayout";
 
 interface GitHubStatus {
   connected: boolean;
@@ -61,7 +63,7 @@ interface AnalysisData {
   analyzedAt: string;
 }
 
-const API_BASE = "http://localhost:5001/api";
+const API_BASE = "";
 
 function GitHubIntegrations() {
   const [searchParams] = useSearchParams();
@@ -82,7 +84,7 @@ function GitHubIntegrations() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await axios.get<GitHubStatus>(`${API_BASE}/github/status`);
+      const res = await api.get<GitHubStatus>(`${API_BASE}/github/status`);
       setStatus(res.data);
       if (res.data.connected) {
         await Promise.all([fetchRepos(), fetchImported()]);
@@ -107,7 +109,7 @@ function GitHubIntegrations() {
   const fetchRepos = async () => {
     setReposLoading(true);
     try {
-      const res = await axios.get<{ repositories: GitHubRepo[] }>(
+      const res = await api.get<{ repositories: GitHubRepo[] }>(
         `${API_BASE}/github/repositories`
       );
       setRepos(res.data.repositories);
@@ -120,7 +122,7 @@ function GitHubIntegrations() {
 
   const fetchImported = async () => {
     try {
-      const res = await axios.get<{ repositories: ImportedRepo[] }>(
+      const res = await api.get<{ repositories: ImportedRepo[] }>(
         `${API_BASE}/github/repositories/imported`
       );
       setImportedRepos(res.data.repositories);
@@ -131,7 +133,7 @@ function GitHubIntegrations() {
 
   const handleConnect = async () => {
     try {
-      const res = await axios.get<{ authorizeUrl: string }>(
+      const res = await api.get<{ authorizeUrl: string }>(
         `${API_BASE}/github/connect`
       );
       window.location.href = res.data.authorizeUrl;
@@ -142,7 +144,7 @@ function GitHubIntegrations() {
 
   const handleDisconnect = async () => {
     try {
-      await axios.post(`${API_BASE}/github/disconnect`);
+      await api.post(`${API_BASE}/github/disconnect`);
       setStatus({ connected: false });
       setRepos([]);
       setImportedRepos([]);
@@ -157,7 +159,7 @@ function GitHubIntegrations() {
   const handleImport = async (repoId: number) => {
     setImportLoading(String(repoId));
     try {
-      await axios.post(`${API_BASE}/github/repositories/${repoId}/import`);
+      await api.post(`${API_BASE}/github/repositories/${repoId}/import`);
       await fetchImported();
     } catch {
       setError("Failed to import repository");
@@ -169,7 +171,7 @@ function GitHubIntegrations() {
   const handleSync = async (repoId: number) => {
     setSyncLoading(repoId);
     try {
-      await axios.post(`${API_BASE}/github/repositories/${repoId}/sync`);
+      await api.post(`${API_BASE}/github/repositories/${repoId}/sync`);
       await fetchImported();
     } catch {
       setError("Failed to sync repository");
@@ -180,7 +182,7 @@ function GitHubIntegrations() {
 
   const handleDelete = async (repoId: number) => {
     try {
-      await axios.delete(`${API_BASE}/github/repositories/${repoId}`);
+      await api.delete(`${API_BASE}/github/repositories/${repoId}`);
       await fetchImported();
       if (selectedRepo?.githubRepositoryId === repoId) {
         setSelectedRepo(null);
@@ -196,7 +198,7 @@ function GitHubIntegrations() {
     setAnalyzeLoading(repoId);
     setError(null);
     try {
-      const res = await axios.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
+      const res = await api.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
         `${API_BASE}/github/repositories/${repoId}/analyze`
       );
       setAnalysis(res.data.analysis);
@@ -218,7 +220,7 @@ function GitHubIntegrations() {
     setAnalyzeLoading(repoId);
     setError(null);
     try {
-      const res = await axios.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
+      const res = await api.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
         `${API_BASE}/github/repositories/${repoId}/reanalyze`
       );
       setAnalysis(res.data.analysis);
@@ -241,7 +243,7 @@ function GitHubIntegrations() {
 
   const fetchAnalysisHistory = async (repoId: number) => {
     try {
-      const res = await axios.get<{ analyses: AnalysisData[] }>(
+      const res = await api.get<{ analyses: AnalysisData[] }>(
         `${API_BASE}/github/repositories/${repoId}/analyses`
       );
       setAnalysisHistory(res.data.analyses);
@@ -256,7 +258,7 @@ function GitHubIntegrations() {
     setAnalysisHistory([]);
     setAnalysisLoading(true);
     try {
-      const res = await axios.get<{ analysis: AnalysisData }>(
+      const res = await api.get<{ analysis: AnalysisData }>(
         `${API_BASE}/github/repositories/${repo.githubRepositoryId}/analysis`
       );
       setAnalysis(res.data.analysis);
@@ -281,35 +283,8 @@ function GitHubIntegrations() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200 flex flex-col">
-        <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-200">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-            AC
-          </div>
-          <span className="text-lg font-bold text-slate-900">Career Agent</span>
-        </div>
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          <NavItem label="Dashboard" />
-          <NavItem label="GitHub Projects" active />
-          <NavItem label="LinkedIn Posts" />
-          <NavItem label="Jobs" />
-          <NavItem label="Applications" />
-          <NavItem label="Emails" />
-          <NavItem label="Settings" />
-        </nav>
-        <div className="px-3 py-4 border-t border-slate-200">
-          <Link
-            to="/"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            Back to Home
-          </Link>
-        </div>
-      </aside>
-
-      <main className="ml-64 p-8">
-        <div className="max-w-7xl mx-auto">
+    <DashboardLayout active="GitHub Projects">
+      <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-slate-900">
               GitHub Integration
@@ -697,8 +672,7 @@ function GitHubIntegrations() {
             </>
           )}
         </div>
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }
 
@@ -767,20 +741,6 @@ function AnalysisSection({
         ))}
       </div>
     </div>
-  );
-}
-
-function NavItem({ label, active }: { label: string; active?: boolean }) {
-  return (
-    <button
-      className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors ${
-        active
-          ? "bg-blue-50 text-blue-700 font-medium"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 
