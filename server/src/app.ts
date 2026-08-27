@@ -12,7 +12,12 @@ import skillRoutes from "./routes/skill";
 import projectRoutes from "./routes/project";
 import resumeRoutes from "./routes/resume";
 import githubRoutes from "./routes/github";
+import jobsRoutes from "./routes/jobs";
+import { registerJobSource } from "./integrations/jobs/jobSourceRegistry";
+import { MockJobSource } from "./integrations/jobs/sources/mockJobSource";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+
+registerJobSource(() => new MockJobSource());
 
 dotenv.config();
 
@@ -49,6 +54,7 @@ app.use("/api/skills", skillRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/resumes", resumeRoutes);
 app.use("/api/github", githubRoutes);
+app.use("/api/jobs", jobsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

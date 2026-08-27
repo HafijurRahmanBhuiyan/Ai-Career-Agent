@@ -16,21 +16,21 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
-**Milestone 5: Claude AI Integration and GitHub Project Analysis**
+**Milestone 6: Job Discovery Platform**
 
-- Anthropic Claude API integration
-- Structured AI project analysis with Zod validation
-- Project analysis storage with versioned prompt history
-- Re-analysis preserving historical versions
-- GitHub → Claude data pipeline (metadata + languages + README)
-- Prompt versioning (`v1`)
-- Cost/token safeguards (README limits, max tokens, no auto re-analysis)
-- Frontend analysis UI with history and re-analysis
-- 152 automated tests passing
+- Provider-agnostic `JobSource` abstraction with a bundled deterministic `MockJobSource`
+- Job normalization: title/company/location cleaning, `http(s)`-only URL validation, description capped at 10,000 chars, enum coercion
+- Two-level deduplication: unique `source + sourceJobId` compound index, plus deterministic SHA-256 fingerprint fallback
+- Atomic upsert-backed discovery (`bulkWrite`) that updates mutable fields and keeps `discoveredAt` stable; per-source failure isolation with source reports
+- Global/shared job store (not user-scoped) but all job APIs are authentication-required
+- Filters: keywords (regex-escaped to prevent NoSQL/regex injection), location, remote type, employment type, experience level; page/limit with `limit` max 50
+- Per-user discovery throttle on `POST /discover`
+- Frontend Jobs dashboard with search, discovery, pagination, and job detail view
+- 25 new automated tests (177 total passing)
 
-**Claude AI project analysis is implemented.**
+**Milestone 6 (Job Discovery) is implemented.**
 
-LinkedIn, Gmail, job matching and job automation are **NOT** yet implemented.
+LinkedIn, Gmail, job matching/scoring and job automation are **NOT** yet implemented.
 
 ## Project Structure
 
@@ -190,6 +190,47 @@ cd server && npm test
 | GET    | `/api/github/repositories/:id/analysis`         | Get latest analysis            | Yes           |
 | GET    | `/api/github/repositories/:id/analyses`         | Get analysis history           | Yes           |
 | POST   | `/api/github/repositories/:id/reanalyze`        | Re-analyze (new version)       | Yes           |
+
+### Jobs
+
+| Method | Endpoint              | Description                            | Auth Required |
+|--------|-----------------------|----------------------------------------|---------------|
+| GET    | `/api/jobs`           | Search/filter jobs (pagination)        | Yes           |
+| POST   | `/api/jobs/discover`  | Fetch new jobs from sources            | Yes           |
+| GET    | `/api/jobs/:id`       | Get a single job by id                 | Yes           |
+
+## Job Discovery
+
+### Architecture
+
+Jobs are fetched through a provider-agnostic `JobSource` interface, registered in a central registry. A deterministic `MockJobSource` is bundled for local development and testing; real providers (e.g. Adzuna, Remotive, Greenhouse) can be added later by implementing the same interface.
+
+```
+JobSource (interface)
+  └─ MockJobSource        # bundled deterministic source, id = "mock"
+
+discoverJobs(params, sources)
+  ├─ per-source isolation -> SourceReport[] (success/error + counts)
+  ├─ normalizeJob(...)     # cleaning, URL safety, description cap, enum coercion
+  ├─ deduplicateJobs(...)  # source+sourceJobId, then SHA-256 fingerprint
+  └─ Job.bulkWrite(upsert) # persist atomically, update mutable fields + lastSeenAt
+```
+
+### Deduplication
+
+- **Level 1:** unique compound index on `source + sourceJobId` — the primary identity for a job.
+- **Level 2:** deterministic SHA-256 fingerprint (source, company, title, location, apply URL) used to collapse duplicates that share a source within a single discovery run.
+- `discoveredAt` is preserved on re-discovery via `$setOnInsert`; `lastSeenAt` is refreshed each run.
+
+### Security & Limits
+
+- All job endpoints require authentication; the job store itself is global/shared, NOT user-scoped.
+- `keywords` and location inputs are regex-escaped before use against MongoDB to prevent NoSQL/regex injection.
+- Only `http`/`https` URLs are persisted for job/apply links; other schemes are stripped.
+- `description` is truncated to 10,000 characters.
+- `limit` is capped at 50; pagination via `page`/`limit`.
+- `POST /discover` is rate-limited per user to prevent abuse.
+
 
 ## Claude AI Project Analysis
 
