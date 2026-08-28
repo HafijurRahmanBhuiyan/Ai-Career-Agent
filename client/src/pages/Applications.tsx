@@ -8,6 +8,8 @@ import {
   ApplicationPagination,
   ApplicationStatus,
   ApplicationDetail,
+  ActionSummary,
+  PreparationSummary,
   TimelineEvent,
   TimelineEventType,
   TimelineResponse,
@@ -24,6 +26,10 @@ import {
   FollowUpAction,
   FOLLOW_UP_ACTIONS,
   FOLLOW_UP_ACTION_LABELS,
+  FOLLOW_UP_PRIORITIES,
+  FOLLOW_UP_PRIORITIES_LABELS,
+  FollowUpPriority,
+  FollowUpSuggestion,
   formatDueUrgency,
 } from "../types/followUp";
 import { getErrorMessage } from "../utils/apiError";
@@ -79,6 +85,18 @@ function Applications() {
   const [editing, setEditing] = useState<Application | null>(null);
   const [deleting, setDeleting] = useState<Application | null>(null);
   const [viewing, setViewing] = useState<Application | null>(null);
+
+  // Deep-link support: /dashboard/applications?id=... opens the detail modal.
+  const urlId = searchParams.get("id");
+  useEffect(() => {
+    if (urlId && applications.length > 0) {
+      const target = applications.find((a) => a._id === urlId);
+      if (target) {
+        setViewing(target);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlId, applications]);
 
   // Keep the filter in sync with the URL query parameter (e.g. from dashboard links).
   useEffect(() => {
@@ -511,6 +529,8 @@ function ApplicationDetailModal({
 
   const [preparation, setPreparation] = useState<InterviewPreparation | null>(null);
   const [followUps, setFollowUps] = useState<ApplicationFollowUp[]>([]);
+  const [actionSummary, setActionSummary] = useState<ActionSummary | null>(null);
+  const [preparationSummary, setPreparationSummary] = useState<PreparationSummary | null>(null);
   const [prepSaving, setPrepSaving] = useState(false);
 
   const loadDetail = useCallback(async () => {
@@ -526,6 +546,8 @@ function ApplicationDetailModal({
       setSummary(d.data.aiSummary as Record<string, unknown> | null);
       setPreparation((d.data.preparation as InterviewPreparation) ?? null);
       setFollowUps(d.data.followUps ?? []);
+      setActionSummary(d.data.actionSummary ?? null);
+      setPreparationSummary(d.data.preparationSummary ?? null);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to load application details"));
     } finally {
@@ -844,6 +866,12 @@ function ApplicationDetailModal({
                 </div>
               )}
 
+              <ActionCenter
+                actionSummary={actionSummary}
+                preparationSummary={preparationSummary}
+                applicationStatus={detail?.application?.status || application.status}
+              />
+
               <PreparationSection
                 applicationId={application._id}
                 preparation={preparation}
@@ -856,7 +884,10 @@ function ApplicationDetailModal({
               <FollowUpsSection
                 applicationId={application._id}
                 followUps={followUps}
-                onReload={reloadFollowUps}
+                onReload={async () => {
+                  await reloadFollowUps();
+                  await loadDetail();
+                }}
                 setError={setError}
               />
 
@@ -1285,6 +1316,12 @@ const URGENCY_STYLES: Record<string, string> = {
   Inactive: "bg-slate-100 text-slate-500",
 };
 
+const PRIORITY_STYLES: Record<string, string> = {
+  high: "bg-red-50 text-red-700",
+  medium: "bg-amber-50 text-amber-700",
+  low: "bg-slate-100 text-slate-600",
+};
+
 function FollowUpsSection({
   applicationId,
   followUps,
@@ -1293,30 +1330,34 @@ function FollowUpsSection({
 }: {
   applicationId: string;
   followUps: ApplicationFollowUp[];
-  onReload: () => Promise<void>;
+  onReload: () => void | Promise<void>;
   setError: (msg: string | null) => void;
 }) {
   const [action, setAction] = useState<FollowUpAction>("recruiter_follow_up");
   const [note, setNote] = useState("");
   const [dueDate, setDueDate] = useState(toTodayInputValue());
+  const [priority, setPriority] = useState<FollowUpPriority>("medium");
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<ApplicationFollowUp | null>(null);
+  const [editAction, setEditAction] = useState<FollowUpAction>("custom");
+  const [editNote, setEditNote] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editPriority, setEditPriority] = useState<FollowUpPriority>("medium");
   const [confirmDelete, setConfirmDelete] = useState<ApplicationFollowUp | null>(null);
+  const [assistLoading, setAssistLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<FollowUpSuggestion[]>([]);
 
-  const sorted = [...followUps].sort((a, b) => {
-    const order = (f: ApplicationFollowUp) => {
-      if (f.completed) return 4;
-      if (new Date(f.dueAt).getTime() < Date.now()) return 0;
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const due = new Date(f.dueAt).getTime();
-      if (due >= todayStart.getTime() && due < todayStart.getTime() + 86400000)
-        return 1;
-      return 2;
-    };
-    const rankDiff = order(a) - order(b);
-    if (rankDiff !== 0) return rankDiff;
-    return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
-  });
+  const open = followUps.filter((f) => !f.completed);
+  const completed = followUps.filter((f) => f.completed);
+
+  const sortOpen = (list: ApplicationFollowUp[]) =>
+    [...list].sort((a, b) => {
+      const order = (f: ApplicationFollowUp) =>
+        new Date(f.dueAt).getTime() < Date.now() ? 0 : 1;
+      const rankDiff = order(a) - order(b);
+      if (rankDiff !== 0) return rankDiff;
+      return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
+    });
 
   const handleAdd = async () => {
     setAdding(true);
@@ -1326,6 +1367,7 @@ function FollowUpsSection({
         action,
         note: note.trim() || null,
         dueAt: new Date(dueDate).toISOString(),
+        priority,
       });
       setNote("");
       await onReload();
@@ -1333,6 +1375,34 @@ function FollowUpsSection({
       setError(getErrorMessage(err, "Failed to add follow-up"));
     } finally {
       setAdding(false);
+    }
+  };
+
+  const openEdit = (f: ApplicationFollowUp) => {
+    setEditing(f);
+    setEditAction(f.action);
+    setEditNote(f.note ?? "");
+    setEditPriority(f.priority ?? "medium");
+    setEditDueDate(toDateInputValue(f.dueAt));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editing) return;
+    setError(null);
+    try {
+      await api.patch(
+        `${API_BASE}/applications/${applicationId}/follow-ups/${editing.id}`,
+        {
+          action: editAction,
+          note: editNote.trim() || null,
+          dueAt: new Date(editDueDate).toISOString(),
+          priority: editPriority,
+        }
+      );
+      setEditing(null);
+      await onReload();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to update follow-up"));
     }
   };
 
@@ -1363,62 +1433,180 @@ function FollowUpsSection({
     }
   };
 
+  const handleAssist = async () => {
+    setAssistLoading(true);
+    setError(null);
+    try {
+      const res = await api.post<{ suggestions: FollowUpSuggestion[] }>(
+        `${API_BASE}/applications/${applicationId}/follow-ups/assist`
+      );
+      setSuggestions(res.data.suggestions ?? []);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to generate follow-up suggestions"));
+    } finally {
+      setAssistLoading(false);
+    }
+  };
+
+  const addSuggestion = async (s: FollowUpSuggestion) => {
+    setAdding(true);
+    setError(null);
+    try {
+      await api.post(`${API_BASE}/applications/${applicationId}/follow-ups`, {
+        action: s.action,
+        note: s.note?.trim() || null,
+        dueAt: s.dueDate
+          ? new Date(s.dueDate).toISOString()
+          : new Date(dueDate).toISOString(),
+        priority: s.priority,
+      });
+      setSuggestions((prev) => prev.filter((x) => x !== s));
+      await onReload();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to save suggestion"));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const renderFollowUp = (f: ApplicationFollowUp) => {
+    const urgency = formatDueUrgency(f.dueAt, f.completed, undefined);
+    return (
+      <div
+        key={f.id}
+        className="flex items-start justify-between gap-2 border border-slate-100 rounded-lg p-2.5"
+      >
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-slate-900">
+              {FOLLOW_UP_ACTION_LABELS[f.action]}
+            </span>
+            <span
+              className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                f.completed
+                  ? URGENCY_STYLES.Completed
+                  : URGENCY_STYLES[urgency] || URGENCY_STYLES.Upcoming
+              }`}
+            >
+              {f.completed ? "Completed" : urgency}
+            </span>
+            <span
+              className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                PRIORITY_STYLES[f.priority] || PRIORITY_STYLES.medium
+              }`}
+            >
+              {FOLLOW_UP_PRIORITIES_LABELS[f.priority]}
+            </span>
+          </div>
+          {f.note && (
+            <p className="text-xs text-slate-600 mt-0.5 truncate">{f.note}</p>
+          )}
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Due {formatDateTime(f.dueAt)}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => openEdit(f)}
+            className="text-xs px-2 py-1 text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => toggleComplete(f)}
+            className="text-xs px-2 py-1 text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            {f.completed ? "Reopen" : "Complete"}
+          </button>
+          <button
+            onClick={() => setConfirmDelete(f)}
+            className="text-xs px-2 py-1 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
-      <h3 className="text-sm font-semibold text-slate-800 mb-2">Follow-ups</h3>
-      <div className="border border-slate-200 rounded-lg p-3 space-y-2">
-        {sorted.length === 0 ? (
-          <p className="text-sm text-slate-400">No follow-ups yet.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {sorted.map((f) => {
-              const urgency = formatDueUrgency(f.dueAt, f.completed);
-              return (
-                <div
-                  key={f.id}
-                  className="flex items-start justify-between gap-2 border border-slate-100 rounded-lg p-2.5"
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <h3 className="text-sm font-semibold text-slate-800">Follow-ups</h3>
+        <button
+          onClick={handleAssist}
+          disabled={assistLoading}
+          className="px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors disabled:opacity-50"
+        >
+          {assistLoading ? "Generating..." : "Ask AI for follow-up suggestions"}
+        </button>
+      </div>
+
+      {suggestions.length > 0 && (
+        <div className="mb-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+          <p className="text-xs font-semibold text-emerald-800">
+            AI follow-up suggestions (review and click to add)
+          </p>
+          {suggestions.map((s, idx) => (
+            <div
+              key={idx}
+              className="bg-white border border-emerald-300 rounded-lg p-2.5"
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-medium text-slate-900">
+                  {FOLLOW_UP_ACTION_LABELS[s.action]}
+                </span>
+                <span
+                  className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                    PRIORITY_STYLES[s.priority] || PRIORITY_STYLES.medium
+                  }`}
                 >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-slate-900">
-                        {FOLLOW_UP_ACTION_LABELS[f.action]}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
-                          f.completed
-                            ? URGENCY_STYLES.Completed
-                            : URGENCY_STYLES[urgency] || URGENCY_STYLES.Upcoming
-                        }`}
-                      >
-                        {f.completed ? "Completed" : urgency}
-                      </span>
-                    </div>
-                    {f.note && (
-                      <p className="text-xs text-slate-600 mt-0.5 truncate">{f.note}</p>
-                    )}
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Due {formatDateTime(f.dueAt)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => toggleComplete(f)}
-                      className="text-xs px-2 py-1 text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
-                    >
-                      {f.completed ? "Reopen" : "Complete"}
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete(f)}
-                      className="text-xs px-2 py-1 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                  {FOLLOW_UP_PRIORITIES_LABELS[s.priority]}
+                </span>
+                {s.dueDate && (
+                  <span className="text-[10px] text-slate-400">
+                    Due {formatDate(s.dueDate)}
+                  </span>
+                )}
+              </div>
+              {s.note && (
+                <p className="text-xs text-slate-700 mt-1">{s.note}</p>
+              )}
+              <p className="text-[11px] text-slate-500 mt-1">{s.reason}</p>
+              <button
+                onClick={() => addSuggestion(s)}
+                disabled={adding}
+                className="mt-2 px-3 py-1 text-xs text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              >
+                Add suggestion
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="border border-slate-200 rounded-lg p-3 space-y-3">
+        <div>
+          <p className="text-xs font-semibold text-slate-600 mb-1.5">
+            Open ({open.length})
+          </p>
+          {sortOpen(open).length === 0 ? (
+            <p className="text-sm text-slate-400">No open follow-ups.</p>
+          ) : (
+            <div className="space-y-1.5">{sortOpen(open).map(renderFollowUp)}</div>
+          )}
+        </div>
+
+        <div className="border-t border-slate-100 pt-3">
+          <p className="text-xs font-semibold text-slate-600 mb-1.5">
+            Completed ({completed.length})
+          </p>
+          {completed.length === 0 ? (
+            <p className="text-sm text-slate-400">No completed follow-ups.</p>
+          ) : (
+            <div className="space-y-1.5">{completed.map(renderFollowUp)}</div>
+          )}
+        </div>
 
         <div className="border-t border-slate-100 pt-2 space-y-2">
           <p className="text-xs font-medium text-slate-600">Add follow-up</p>
@@ -1440,6 +1628,17 @@ function FollowUpsSection({
               onChange={(e) => setDueDate(e.target.value)}
               className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as FollowUpPriority)}
+              className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {FOLLOW_UP_PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {FOLLOW_UP_PRIORITIES_LABELS[p]}
+                </option>
+              ))}
+            </select>
           </div>
           <input
             type="text"
@@ -1457,6 +1656,89 @@ function FollowUpsSection({
           </button>
         </div>
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-2">
+              Edit follow-up
+            </h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Action
+                </label>
+                <select
+                  value={editAction}
+                  onChange={(e) => setEditAction(e.target.value as FollowUpAction)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {FOLLOW_UP_ACTIONS.map((a) => (
+                    <option key={a} value={a}>
+                      {FOLLOW_UP_ACTION_LABELS[a]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Due date
+                </label>
+                <input
+                  type="date"
+                  value={editDueDate}
+                  onChange={(e) => setEditDueDate(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Priority
+                </label>
+                <select
+                  value={editPriority}
+                  onChange={(e) =>
+                    setEditPriority(e.target.value as FollowUpPriority)
+                  }
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {FOLLOW_UP_PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {FOLLOW_UP_PRIORITIES_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Note
+                </label>
+                <input
+                  type="text"
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  placeholder="Optional note"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setEditing(null)}
+                  className="flex-1 px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -1485,6 +1767,85 @@ function FollowUpsSection({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ActionCenter({
+  actionSummary,
+  preparationSummary,
+  applicationStatus,
+}: {
+  actionSummary: ActionSummary | null;
+  preparationSummary: PreparationSummary | null;
+  applicationStatus: string;
+}) {
+  const inactive =
+    applicationStatus === "rejected" || applicationStatus === "withdrawn";
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-800 mb-2">
+        Action Center
+      </h3>
+      <div className="border border-slate-200 rounded-lg p-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+          <div className="bg-slate-50 rounded-lg p-3">
+            <p className="text-2xl font-bold text-slate-900">
+              {actionSummary?.open ?? 0}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Open actions</p>
+          </div>
+          <div className="bg-red-50 rounded-lg p-3">
+            <p className="text-2xl font-bold text-red-700">
+              {actionSummary?.overdue ?? 0}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Overdue</p>
+          </div>
+          <div className="bg-amber-50 rounded-lg p-3">
+            <p className="text-2xl font-bold text-amber-700">
+              {actionSummary?.dueToday ?? 0}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Due today</p>
+          </div>
+          <div className="bg-emerald-50 rounded-lg p-3">
+            <p className="text-2xl font-bold text-emerald-700">
+              {actionSummary?.completed ?? 0}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Completed</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 mt-3 text-xs text-slate-600">
+          <span>Upcoming: {actionSummary?.upcoming ?? 0}</span>
+          <span>High priority open: {actionSummary?.highPriorityOpen ?? 0}</span>
+          <span>Total: {actionSummary?.total ?? 0}</span>
+          {inactive && (
+            <span className="text-slate-400">
+              Application is {applicationStatus} — follow-ups not counted as urgent.
+            </span>
+          )}
+        </div>
+        {preparationSummary && preparationSummary.totalChecklistItems > 0 && (
+          <div className="mt-3 border-t border-slate-100 pt-2">
+            <p className="text-xs font-medium text-slate-600 mb-1">
+              Preparation
+            </p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-600 rounded-full transition-all"
+                  style={{ width: `${preparationSummary.completionPercent}%` }}
+                />
+              </div>
+              <span className="text-xs text-slate-600 shrink-0">
+                {preparationSummary.completedChecklistItems}/
+                {preparationSummary.totalChecklistItems} (
+                {preparationSummary.completionPercent}%)
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

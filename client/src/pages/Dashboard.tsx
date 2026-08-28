@@ -6,12 +6,14 @@ import { getErrorMessage } from "../utils/apiError";
 import {
   AttentionItem,
   CareerIntelligence,
+  DashboardFollowUp,
   NextAction,
   RecentActivityItem,
   RecentCareerEmail,
   UpcomingInterview,
 } from "../types/dashboard";
 import { ApplicationStatus } from "../types/application";
+import { FOLLOW_UP_ACTION_LABELS } from "../types/followUp";
 
 const API_BASE = "/dashboard";
 
@@ -265,6 +267,42 @@ function Dashboard() {
               </section>
             </div>
 
+            <section className="bg-white border border-slate-200 rounded-xl p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Follow-ups
+                </h2>
+                {data && data.followUps && data.followUps.length > 0 && (
+                  <button
+                    onClick={() => navigate("/dashboard/follow-ups")}
+                    className="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                  >
+                    View all
+                  </button>
+                )}
+              </div>
+              {!data || !data.followUps || data.followUps.length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  No follow-ups to show right now.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {data.followUps
+                    .filter((f) => !f.completed)
+                    .slice(0, 8)
+                    .map((item) => (
+                      <FollowUpRow
+                        key={item.id}
+                        item={item}
+                        onOpen={() =>
+                          navigate(`/dashboard/applications?id=${item.application?._id}`)
+                        }
+                      />
+                    ))}
+                </ul>
+              )}
+            </section>
+
             <section className="bg-white border border-slate-200 rounded-xl p-6">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">
                 Recent Activity
@@ -455,6 +493,69 @@ function EmailRow({
           className="px-3 py-1.5 text-xs text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
         >
           View Email
+        </button>
+      </div>
+    </li>
+  );
+}
+
+const FOLLOW_UP_URGENCY_STYLES: Record<string, string> = {
+  overdue: "bg-red-50 text-red-700",
+  due_today: "bg-amber-50 text-amber-700",
+  upcoming: "bg-blue-50 text-blue-700",
+  completed: "bg-emerald-50 text-emerald-700",
+  inactive: "bg-slate-100 text-slate-500",
+};
+
+const FOLLOW_UP_PRIORITY_STYLES: Record<string, string> = {
+  high: "bg-red-50 text-red-700",
+  medium: "bg-amber-50 text-amber-700",
+  low: "bg-slate-100 text-slate-600",
+};
+
+function FollowUpRow({
+  item,
+  onOpen,
+}: {
+  item: DashboardFollowUp;
+  onOpen: () => void;
+}) {
+  return (
+    <li className="border border-slate-200 rounded-lg p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-semibold text-slate-900">
+              {FOLLOW_UP_ACTION_LABELS[item.action as keyof typeof FOLLOW_UP_ACTION_LABELS] || item.action}
+            </p>
+            <span
+              className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                FOLLOW_UP_URGENCY_STYLES[item.urgency] || FOLLOW_UP_URGENCY_STYLES.upcoming
+              }`}
+            >
+              {item.urgency.replace("_", " ")}
+            </span>
+            <span
+              className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                FOLLOW_UP_PRIORITY_STYLES[item.priority] || FOLLOW_UP_PRIORITY_STYLES.medium
+              }`}
+            >
+              {item.priority}
+            </span>
+          </div>
+          {item.note && (
+            <p className="text-xs text-slate-700 mt-1 truncate">{item.note}</p>
+          )}
+          <p className="text-xs text-slate-400 mt-1">
+            Due {formatDate(item.dueAt)} ·{" "}
+            {item.application ? `${companyLabel(item.application)} · ${jobLabel(item.application)}` : "Application"}
+          </p>
+        </div>
+        <button
+          onClick={onOpen}
+          className="shrink-0 px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+        >
+          View Application
         </button>
       </div>
     </li>

@@ -16,6 +16,11 @@ import {
   InterviewPrepAssistInput,
 } from "./interviewPrepAssistPrompts";
 import {
+  FOLLOW_UP_ASSIST_SYSTEM_PROMPT,
+  buildFollowUpAssistUserMessage,
+  FollowUpAssistInput,
+} from "./followUpAssistPrompts";
+import {
   ProjectAnalysisInput,
   ProjectAnalysisResult,
 } from "./claude.types";
@@ -98,6 +103,17 @@ export class ClaudeService {
 
     const rawResponse = await analyzeProject(
       INTERVIEW_PREP_ASSIST_SYSTEM_PROMPT,
+      userMessage
+    );
+
+    return this.parseResponse(rawResponse);
+  }
+
+  async assistFollowUps(input: FollowUpAssistInput): Promise<unknown> {
+    const userMessage = buildFollowUpAssistUserMessage(input);
+
+    const rawResponse = await analyzeProject(
+      FOLLOW_UP_ASSIST_SYSTEM_PROMPT,
       userMessage
     );
 

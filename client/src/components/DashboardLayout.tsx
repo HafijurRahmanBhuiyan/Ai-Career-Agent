@@ -7,6 +7,7 @@ const NAV_ITEMS: { label: string; to: string }[] = [
   { label: "GitHub Projects", to: "/dashboard/integrations" },
   { label: "Jobs", to: "/dashboard/jobs" },
   { label: "My Applications", to: "/dashboard/applications" },
+  { label: "Follow-ups", to: "/dashboard/follow-ups" },
   { label: "My Job Matches", to: "/dashboard/job-matches" },
   { label: "Career Emails", to: "/dashboard/emails" },
 ];

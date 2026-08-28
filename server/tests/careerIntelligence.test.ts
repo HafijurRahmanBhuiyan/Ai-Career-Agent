@@ -748,3 +748,120 @@ describe("Career intelligence - follow-ups", () => {
     expect(body).not.toContain("recruiter_follow_up");
   });
 });
+
+describe("Career intelligence - follow-up deterministic ordering", () => {
+  test("orders overdue high priority before overdue medium/low", async () => {
+    const { token, user } = await registerUser();
+
+    const overdueLow = await createApplication(
+      user.id as string,
+      (await createJob())._id as Types.ObjectId,
+      "applied"
+    );
+    const overdueHigh = await createApplication(
+      user.id as string,
+      (await createJob())._id as Types.ObjectId,
+      "applied"
+    );
+
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: overdueLow._id as Types.ObjectId,
+      action: "custom",
+      dueAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      priority: "low",
+      completed: false,
+    });
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: overdueHigh._id as Types.ObjectId,
+      action: "custom",
+      dueAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      priority: "high",
+      completed: false,
+    });
+
+    const res = await getDashboard(token);
+    expect(res.status).toBe(200);
+    expect(res.body.followUps[0].priority).toBe("high");
+    expect(res.body.followUps[0].application._id).toBe(String(overdueHigh._id));
+    expect(res.body.followUps[1].priority).toBe("low");
+  });
+
+  test("orders upcoming high priority before upcoming medium/low", async () => {
+    const { token, user } = await registerUser();
+
+    const upcomingLow = await createApplication(
+      user.id as string,
+      (await createJob())._id as Types.ObjectId,
+      "applied"
+    );
+    const upcomingHigh = await createApplication(
+      user.id as string,
+      (await createJob())._id as Types.ObjectId,
+      "applied"
+    );
+
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: upcomingLow._id as Types.ObjectId,
+      action: "custom",
+      dueAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+      priority: "low",
+      completed: false,
+    });
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: upcomingHigh._id as Types.ObjectId,
+      action: "custom",
+      dueAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      priority: "high",
+      completed: false,
+    });
+
+    const res = await getDashboard(token);
+    expect(res.body.followUps[0].priority).toBe("high");
+    expect(res.body.followUps[0].application._id).toBe(String(upcomingHigh._id));
+    expect(res.body.followUps[1].priority).toBe("low");
+  });
+
+  test("places overdue/due-today before upcoming and completed last", async () => {
+    const { token, user } = await registerUser();
+
+    const aOverdue = await createApplication(user.id as string, (await createJob())._id as Types.ObjectId, "applied");
+    const aUpcoming = await createApplication(user.id as string, (await createJob())._id as Types.ObjectId, "applied");
+    const aCompleted = await createApplication(user.id as string, (await createJob())._id as Types.ObjectId, "applied");
+
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: aUpcoming._id as Types.ObjectId,
+      action: "custom",
+      dueAt: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000),
+      priority: "high",
+      completed: false,
+    });
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: aCompleted._id as Types.ObjectId,
+      action: "custom",
+      dueAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+      priority: "high",
+      completed: true,
+      completedAt: new Date(),
+    });
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: aOverdue._id as Types.ObjectId,
+      action: "custom",
+      dueAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+      priority: "medium",
+      completed: false,
+    });
+
+    const res = await getDashboard(token);
+    expect(res.body.followUps[0].application._id).toBe(String(aOverdue._id));
+    expect(res.body.followUps[1].application._id).toBe(String(aUpcoming._id));
+    expect(res.body.followUps[2].application._id).toBe(String(aCompleted._id));
+    expect(res.body.followUps[0].urgency).toBe("overdue");
+  });
+});

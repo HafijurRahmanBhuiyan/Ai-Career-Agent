@@ -17,6 +17,10 @@ import {
   createApplicationCreatedEvent,
   createStatusChangedEvent,
 } from "../services/applicationTimeline";
+import {
+  buildFollowUpActionSummary,
+  buildPreparationSummary,
+} from "../services/followUpClassification";
 
 const JOB_POPULATE_FIELDS =
   "title companyName location locations remoteType employmentType source";
@@ -191,6 +195,16 @@ export const getApplication = async (
     const interview =
       buildInterviewFromEmails(emails as unknown as EmailLike[]);
 
+    const actionSummary = buildFollowUpActionSummary(
+      followUps as unknown as {
+        completed: boolean;
+        dueAt: Date;
+        priority?: string;
+      }[],
+      application
+    );
+    const preparationSummary = buildPreparationSummary(prep);
+
     res.status(200).json({
       application: toSafeApplication(application),
       timeline: {
@@ -204,6 +218,8 @@ export const getApplication = async (
       aiSummary: aiSummary ? toSafeSummary(aiSummary) : null,
       preparation: prep ? toSafePreparation(prep) : null,
       followUps: followUps.map(toSafeFollowUp),
+      actionSummary,
+      preparationSummary,
     });
   } catch (error) {
     next(error);

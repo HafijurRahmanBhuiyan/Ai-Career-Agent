@@ -68,11 +68,45 @@ export const listFollowUps = async (
     if (parsed.data.completed !== undefined) {
       filter.completed = parsed.data.completed === "true";
     }
+    if (parsed.data.priority !== undefined) {
+      filter.priority = parsed.data.priority;
+    }
+
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    switch (parsed.data.due) {
+      case "overdue":
+        filter.completed = false;
+        filter.dueAt = { $lt: now };
+        break;
+      case "due_today":
+        filter.completed = false;
+        filter.dueAt = { $gte: todayStart, $lt: todayEnd };
+        break;
+      case "upcoming":
+        filter.completed = false;
+        filter.dueAt = { $gte: todayEnd };
+        break;
+      case "completed":
+        filter.completed = true;
+        break;
+      default:
+        break;
+    }
+
+    const page = parsed.data.page ?? 1;
+    const limit = parsed.data.limit;
+    const skip = (page - 1) * limit;
 
     const [followUps, total] = await Promise.all([
       ApplicationFollowUp.find(filter)
         .sort({ dueAt: 1 })
-        .limit(parsed.data.limit)
+        .skip(skip)
+        .limit(limit)
         .lean(),
       ApplicationFollowUp.countDocuments(filter),
     ]);
@@ -80,9 +114,10 @@ export const listFollowUps = async (
     res.status(200).json({
       followUps: followUps.map(toSafeFollowUp),
       pagination: {
-        limit: parsed.data.limit,
+        page,
+        limit,
         total,
-        totalPages: Math.ceil(total / parsed.data.limit),
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {
@@ -106,6 +141,7 @@ export const createFollowUp = async (
       action: body.action,
       note: body.note ?? null,
       dueAt: new Date(body.dueAt),
+      priority: body.priority ?? "medium",
       completed: false,
       completedAt: null,
     });
@@ -146,6 +182,7 @@ export const updateFollowUp = async (
     if (body.action !== undefined) update.action = body.action;
     if (body.note !== undefined) update.note = body.note;
     if (body.dueAt !== undefined) update.dueAt = new Date(body.dueAt);
+    if (body.priority !== undefined) update.priority = body.priority;
 
     if (body.completed !== undefined && body.completed !== existing.completed) {
       update.completed = body.completed;

@@ -16,26 +16,21 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
-**Milestone 12: Interview Preparation Hub & Follow-up Actions**
+**Milestone 13: Career Application Action Center & Follow-up Intelligence**
 
-- **Interview Preparation** per application (one record per application per user, unique index `user + application`):
-  - `notes`, `goals`, `talkingPoints`, `questionsToAsk`, `companyResearchNotes`, `rolePreparationNotes`
-  - A 7-item **checklist** (`resume_reviewed`, `job_description_reviewed`, `company_researched`, `star_stories_prepared`, `technical_topics_prepared`, `behavioral_topics_prepared`, `interviewer_questions_prepared`) with per-item `completed` / `completedAt` tracked server-side
-  - Endpoints: `GET /api/applications/:id/preparation` (returns a default empty preparation without persisting), `PUT` / `PATCH /api/applications/:id/preparation` (upsert, `.strict()` validation)
-  - Frontend: an "Interview preparation" section in the application detail modal with editable fields, a checklist toggler, an explicit **Save Preparation** button (no autosave)
-- **AI assist (explicit user action only):** `POST /api/applications/:id/preparation/assist` uses Claude to suggest goals, talking points, questions to ask, and checklist highlights. Suggestions are validated with Zod and returned for review only — **they are never auto-saved**; the user intentionally adds each one.
-- **Follow-ups** per application (`recruiter_follow_up`, `interview_follow_up`, `application_follow_up`, `thank_you_note`, `custom`):
-  - `action`, `note`, `dueAt`, `completed` / `completedAt` (server-set)
-  - Endpoints: `GET` (bounded, optional `completed` filter), `POST`, `PATCH`, `DELETE` at `/api/applications/:id/follow-ups[/:followUpId]`
-  - Frontend: add / mark complete / reopen / delete with confirmation; badges clearly distinguish **Overdue**, **Due today**, **Upcoming**, and **Completed**. Manual creation only; nothing is auto-created, and due dates are only compared to the current time.
-- **Career intelligence dashboard** now also returns `preparationInsights` and `followUps`:
-  - Incomplete prep on an interview-stage or upcoming-interview application is surfaced (high priority if there is an upcoming interview, medium otherwise, low when fully prepared)
-  - Follow-ups are bucketed by urgency (`overdue` / `due_today` / `upcoming` / `inactive` / `completed`); rejected/withdrawn applications' follow-ups are marked inactive, never urgent
-- Everything is JWT-protected, strictly user-scoped (cross-user → 404), `.strict()`-validated (422 with `{ error, statusCode, details }`), bounded to avoid unbounded queries, and read-only with respect to Gmail. No application status is auto-changed and no email is sent by this milestone.
+- **Follow-up priority** — every follow-up has a strict `priority` enum (`low` / `medium` / `high`, default `medium`). Existing fields (`action`, `note`, `dueAt`, `completed`, `completedAt`) are unchanged and existing records remain compatible.
+  - Extendable validation: `create` accepts `action`/`note`/`dueAt`/`priority`; `update` accepts those plus `completed`. `.strict()` rejects unknown fields, client-controlled `user`/`application`/`createdAt`/`updatedAt`/`completedAt`. `completedAt` is always set/cleared server-side.
+  - List filtering is bounded (`limit` max 100, optional `priority`, `completed`, `due` buckets, and `page`).
+- **Deterministic follow-up classification** — an application-specific view and dashboard classify follow-ups as `OVERDUE`, `DUE_TODAY`, `UPCOMING`, `COMPLETED`, or `INACTIVE` (rejected/withdrawn applications' follow-ups are never urgent).
+- **Application Action Center** — the application detail modal now includes an **Action Center** combining interview preparation, open follow-ups, completed follow-ups, and an action summary (`total`, `open`, `overdue`, `dueToday`, `upcoming`, `completed`, `highPriorityOpen`) plus a preparation summary (`totalChecklistItems`, `completedChecklistItems`, `completionPercent`). All values are computed from persisted data.
+- **Global Follow-ups page** — new `/dashboard/follow-ups` page lists the user's follow-ups across all applications with `priority` / `completed` / `due`-bucket filters, bounded pagination, and a "View Application" deep link. Never exposes another user's applications.
+- **Dashboard integration** — the Career Intelligence dashboard surfaces **Follow-ups** with deterministic ordering (overdue high → overdue medium/low → due today → upcoming high → upcoming medium/low → inactive → completed). The dashboard remains read-only and never calls Claude on load.
+- **AI follow-up assistance (explicit user action only):** `POST /api/applications/:id/follow-ups/assist` uses Claude to propose follow-up suggestions (`action`, `note`, `dueDate`, `priority`, `reason`). Suggestions are Zod-validated and returned for review only — they are **never auto-saved**. The user clicks **"Add suggestion"** for each suggestion they want to persist. Claude only uses facts already present in the application context and never invents recruiters, dates, or company facts.
+- Everything is JWT-protected, strictly user-scoped (cross-user → 404), `.strict()`-validated (422 with `{ error, statusCode, details }`), bounded to avoid unbounded queries, and read-only with respect to Gmail. No application status is auto-changed, no email is sent, and no background worker/cron/notification is introduced by this milestone.
 
-**Milestone 11 (Career Intelligence Dashboard & Action Center), Milestone 10 (Career Application Timeline & Interview Intelligence), Milestone 9 (Gmail / Career Email Intelligence), Milestone 8 (Job Application Tracking), Milestone 7.5 (Frontend Authentication), Milestone 7 (AI Job Matching), and Milestones 1–6 remain implemented.**
+**Milestone 12 (Interview Preparation Hub & Follow-up Actions), Milestone 11 (Career Intelligence Dashboard & Action Center), Milestone 10 (Career Application Timeline & Interview Intelligence), Milestone 9 (Gmail / Career Email Intelligence), Milestone 8 (Job Application Tracking), Milestone 7.5 (Frontend Authentication), Milestone 7 (AI Job Matching), and Milestones 1–6 remain implemented.**
 
-LinkedIn and job automation (auto-application / POST-apply) are **NOT** yet implemented. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status, and the dashboard never changes any application or email. Interview preparation and follow-ups never auto-create records or auto-change application status.
+LinkedIn and job automation (auto-application / POST-apply) are **NOT** yet implemented. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status, and the dashboard never changes any application or email. Interview preparation, follow-ups, and AI follow-up assistance never auto-create records, never auto-send emails, never auto-change application status, and never run background workers/cron/notifications.
 
 ## Project Structure
 
@@ -221,7 +216,7 @@ cd server && npm test
 |--------|-------------------------------|--------------------------------------------------------|---------------|
 | POST   | `/api/applications`           | Create an application for a job (body: `jobId`, optional `status`/`appliedAt`/`notes`) | Yes |
 | GET    | `/api/applications`           | List the user's applications (`page`, `limit`, `status`) | Yes |
-| GET    | `/api/applications/:id`       | Get an application detail (job, timeline summary, related emails, job match, interview, cached AI summary) | Yes |
+| GET    | `/api/applications/:id`       | Get an application detail (job, timeline summary, related emails, job match, interview, cached AI summary, preparation, follow-ups, `actionSummary`, `preparationSummary`) | Yes |
 | PATCH  | `/api/applications/:id`       | Update status/appliedAt/notes                          | Yes |
 | DELETE | `/api/applications/:id`       | Delete an application                                  | Yes |
 | GET    | `/api/applications/:id/timeline` | List timeline events (`page`, `limit`, newest first) | Yes |
@@ -231,6 +226,15 @@ cd server && npm test
 | GET    | `/api/applications/:id/summary` | Get the cached AI application summary (or `null`)  | Yes |
 | POST   | `/api/applications/:id/summary` | Generate (or return cached) AI application summary | Yes |
 | PUT    | `/api/applications/:id/summary` | Regenerate the AI summary (force fresh)            | Yes |
+| GET    | `/api/applications/:id/preparation` | Get interview preparation (default empty, non-persisting) | Yes |
+| PUT / PATCH | `/api/applications/:id/preparation` | Upsert interview preparation (notes/goals/talkingPoints/questionsToAsk/companyResearchNotes/rolePreparationNotes/checklist) | Yes |
+| POST   | `/api/applications/:id/preparation/assist` | Claude interview-prep suggestions (returns for review, never auto-saves) | Yes |
+| GET    | `/api/applications/:id/follow-ups` | List an application's follow-ups (`page`, `limit`, `completed`, `priority`, `due`) | Yes |
+| POST   | `/api/applications/:id/follow-ups` | Create a follow-up (`action`, `dueAt`, optional `note`/`priority`) | Yes |
+| POST   | `/api/applications/:id/follow-ups/assist` | Claude follow-up suggestions (returns for review, never auto-saves) | Yes |
+| PATCH  | `/api/applications/:id/follow-ups/:followUpId` | Update/edit/complete/reopen a follow-up | Yes |
+| DELETE | `/api/applications/:id/follow-ups/:followUpId` | Delete a follow-up (client must confirm in UI) | Yes |
+| GET    | `/api/applications/follow-ups` | Global follow-up view across the user's applications (`page`, `limit`, `priority`, `completed`, `due`) — registered before `/:id` | Yes |
 
 - Application statuses: `saved`, `applied`, `screening`, `interview`, `offer`, `rejected`, `withdrawn`
 - One application per user per job; duplicates return `409`
@@ -277,6 +281,8 @@ cd server && npm test
 ### Frontend filter navigation
 
 - `/dashboard/applications?status=interview` — the My Applications page initializes its status filter from the URL
+- `/dashboard/applications?id=...` — deep-links straight into an application's detail modal (used by dashboard follow-ups and the global Follow-ups page)
+- `/dashboard/follow-ups` — the Global Follow-ups page lists the user's follow-ups across all applications with priority / completion / date-bucket filters
 - `/dashboard/emails?category=interview` and `/dashboard/emails?applicationStatus=interview` — the Career Emails page initializes its category/suggested-status filters from the URL
 - Dashboard cards and action buttons deep-link to these filtered pages
 
@@ -610,6 +616,9 @@ Security: no JWT secrets, `ANTHROPIC_API_KEY`, GitHub client secrets, or passwor
 ## Status
 
 This project is under active development. Features are being implemented incrementally through milestones.
+
+- **Implemented:** Milestones 1–13 (GitHub analysis, LinkedIn generation, job discovery/matching, Gmail career email intelligence, application tracking + timeline + interview intelligence, career intelligence dashboard, interview preparation, and the career application action center & follow-up intelligence).
+- **Not yet implemented:** LinkedIn/job auto-application, and any outbound email (Gmail remains read-only). No background workers, cron, queues, or notifications exist.
 
 ## License
 

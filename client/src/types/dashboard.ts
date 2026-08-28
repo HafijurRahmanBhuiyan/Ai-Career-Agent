@@ -86,6 +86,33 @@ export interface NextAction {
   priority: "high" | "medium" | "low";
 }
 
+export type FollowUpUrgency =
+  | "overdue"
+  | "due_today"
+  | "upcoming"
+  | "completed"
+  | "inactive";
+
+export interface PreparationInsight {
+  application: DashboardApplicationRef;
+  reason: string;
+  priority: "high" | "medium" | "low";
+  preparedCount: number;
+  totalChecklistItems: number;
+}
+
+export interface DashboardFollowUp {
+  id: string;
+  action: string;
+  note?: string | null;
+  dueAt: string;
+  priority: "low" | "medium" | "high";
+  completed: boolean;
+  completedAt?: string | null;
+  application: DashboardApplicationRef | null;
+  urgency: FollowUpUrgency;
+}
+
 export interface CareerIntelligence {
   overview: DashboardOverview;
   attention: AttentionItem[];
@@ -94,5 +121,7 @@ export interface CareerIntelligence {
   recentCareerEmails: RecentCareerEmail[];
   recentActivity: RecentActivityItem[];
   nextActions: NextAction[];
+  preparationInsights?: PreparationInsight[];
+  followUps?: DashboardFollowUp[];
   generatedAt: string;
 }

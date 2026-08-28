@@ -77,6 +77,22 @@ export interface ApplicationAI {
   nextActions: string[];
 }
 
+export interface ActionSummary {
+  total: number;
+  open: number;
+  overdue: number;
+  dueToday: number;
+  upcoming: number;
+  completed: number;
+  highPriorityOpen: number;
+}
+
+export interface PreparationSummary {
+  totalChecklistItems: number;
+  completedChecklistItems: number;
+  completionPercent: number;
+}
+
 export interface ApplicationDetail {
   application: Application;
   timeline: { count: number; latest: TimelineEvent | null };
@@ -86,6 +102,8 @@ export interface ApplicationDetail {
   aiSummary: { [key: string]: unknown } | null;
   preparation?: import("./interviewPreparation").InterviewPreparation | null;
   followUps?: import("./followUp").ApplicationFollowUp[];
+  actionSummary?: ActionSummary;
+  preparationSummary?: PreparationSummary;
 }
 
 export interface CareerEmailRef {

@@ -4,6 +4,10 @@ import { CareerEmail } from "../models/CareerEmail";
 import ApplicationEvent from "../models/ApplicationEvent";
 import { InterviewPreparation } from "../models/InterviewPreparation";
 import { ApplicationFollowUp } from "../models/ApplicationFollowUp";
+import {
+  classifyFollowUp,
+  urgencyRank,
+} from "./followUpClassification";
 
 export interface DashboardOverview {
   totalApplications: number;
@@ -77,6 +81,7 @@ export interface FollowUpItem {
   action: string;
   note?: string | null;
   dueAt: string;
+  priority: "low" | "medium" | "high";
   completed: boolean;
   completedAt?: string | null;
   application: Record<string, unknown> | null;
@@ -176,6 +181,7 @@ type LeanFollowUp = {
   action: string;
   note?: string | null;
   dueAt: Date;
+  priority: "low" | "medium" | "high";
   completed: boolean;
   completedAt?: Date | null;
 };
@@ -583,41 +589,19 @@ function buildFollowUps(
   followUps: LeanFollowUp[],
   appById: Map<string, LeanApplication>
 ): FollowUpItem[] {
-  const now = new Date();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(todayStart);
-  todayEnd.setDate(todayEnd.getDate() + 1);
-
   return followUps
     .map((followUp) => {
       const appId = String(followUp.application);
       const app = appById.get(appId) ?? null;
 
-      let urgency: FollowUpItem["urgency"];
-      const inactive =
-        !app || app.status === "rejected" || app.status === "withdrawn";
-
-      if (followUp.completed) {
-        urgency = "completed";
-      } else if (inactive) {
-        urgency = "inactive";
-      } else if (followUp.dueAt.getTime() < now.getTime()) {
-        urgency = "overdue";
-      } else if (
-        followUp.dueAt.getTime() >= todayStart.getTime() &&
-        followUp.dueAt.getTime() < todayEnd.getTime()
-      ) {
-        urgency = "due_today";
-      } else {
-        urgency = "upcoming";
-      }
+      const urgency = classifyFollowUp(followUp, app);
 
       return {
         id: String(followUp._id),
         action: followUp.action,
         note: followUp.note ?? null,
         dueAt: followUp.dueAt.toISOString(),
+        priority: followUp.priority,
         completed: followUp.completed,
         completedAt: followUp.completedAt
           ? followUp.completedAt.toISOString()
@@ -627,14 +611,8 @@ function buildFollowUps(
       };
     })
     .sort((a, b) => {
-      const order: Record<FollowUpItem["urgency"], number> = {
-        overdue: 0,
-        due_today: 1,
-        upcoming: 2,
-        inactive: 3,
-        completed: 4,
-      };
-      const rankDiff = order[a.urgency] - order[b.urgency];
+      const rankDiff =
+        urgencyRank(a.urgency, a.priority) - urgencyRank(b.urgency, b.priority);
       if (rankDiff !== 0) return rankDiff;
       return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
     });

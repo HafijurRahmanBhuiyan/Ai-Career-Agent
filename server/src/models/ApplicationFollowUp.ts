@@ -10,12 +10,17 @@ export const FOLLOW_UP_ACTIONS = [
 
 export type FollowUpAction = (typeof FOLLOW_UP_ACTIONS)[number];
 
+export const FOLLOW_UP_PRIORITIES = ["low", "medium", "high"] as const;
+
+export type FollowUpPriority = (typeof FOLLOW_UP_PRIORITIES)[number];
+
 export interface IApplicationFollowUp extends Document {
   user: Types.ObjectId;
   application: Types.ObjectId;
   action: FollowUpAction;
   note?: string;
   dueAt: Date;
+  priority: FollowUpPriority;
   completed: boolean;
   completedAt?: Date | null;
   createdAt: Date;
@@ -50,6 +55,12 @@ const applicationFollowUpSchema = new Schema<IApplicationFollowUp>(
       type: Date,
       required: true,
     },
+    priority: {
+      type: String,
+      enum: FOLLOW_UP_PRIORITIES,
+      default: "medium",
+      required: true,
+    },
     completed: {
       type: Boolean,
       default: false,
@@ -67,6 +78,7 @@ const applicationFollowUpSchema = new Schema<IApplicationFollowUp>(
 
 applicationFollowUpSchema.index({ user: 1, application: 1, dueAt: 1 });
 applicationFollowUpSchema.index({ user: 1, completed: 1, dueAt: 1 });
+applicationFollowUpSchema.index({ user: 1, priority: 1, completed: 1, dueAt: 1 });
 
 export const ApplicationFollowUp =
   mongoose.model<IApplicationFollowUp>(

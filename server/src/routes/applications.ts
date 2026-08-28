@@ -28,6 +28,8 @@ import {
   updateFollowUp,
   deleteFollowUp,
 } from "../controllers/applicationFollowUp";
+import { assistFollowUps } from "../controllers/applicationFollowUpAssist";
+import { listGlobalFollowUps } from "../controllers/globalFollowUps";
 import { authenticate } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import {
@@ -54,6 +56,10 @@ router.use(authenticate);
 router.get("/", getApplications);
 router.post("/", validate(createApplicationSchema), createApplication);
 
+// Global follow-up view across the user's applications. Registered BEFORE
+// "/:id" so it is not swallowed by the application detail route.
+router.get("/follow-ups", listGlobalFollowUps);
+
 router.get("/:id/timeline", getTimeline);
 router.post("/:id/timeline", validate(createTimelineEventSchema), addTimelineEvent);
 router.patch(
@@ -74,6 +80,7 @@ router.post("/:id/preparation/assist", assistPreparation);
 
 router.get("/:id/follow-ups", listFollowUps);
 router.post("/:id/follow-ups", validate(createFollowUpSchema), createFollowUp);
+router.post("/:id/follow-ups/assist", assistFollowUps);
 router.patch(
   "/:id/follow-ups/:followUpId",
   validate(updateFollowUpSchema),
