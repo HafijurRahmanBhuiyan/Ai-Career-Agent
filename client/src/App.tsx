@@ -9,6 +9,7 @@ import GitHubIntegrations from "./pages/GitHubIntegrations";
 import ProfessionalContent from "./pages/ProfessionalContent";
 import Jobs from "./pages/Jobs";
 import JobMatches from "./pages/JobMatches";
+import Opportunities from "./pages/Opportunities";
 import Applications from "./pages/Applications";
 import CareerEmails from "./pages/CareerEmails";
 import FollowUps from "./pages/FollowUps";
@@ -58,6 +59,14 @@ function App() {
           element={
             <ProtectedRoute>
               <JobMatches />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/opportunities"
+          element={
+            <ProtectedRoute>
+              <Opportunities />
             </ProtectedRoute>
           }
         />

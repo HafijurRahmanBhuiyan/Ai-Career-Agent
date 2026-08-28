@@ -16,20 +16,33 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
+**Milestone 17: Career Opportunity Feed & Profession Matching**
+
+A user-scoped career opportunity feed with **extensible, real job-source ingestion** and a **fully deterministic, explainable match** computed against the user's existing profile data (skills, experience, roles, location/remote/salary preferences, and M15 professional evidence). The feed **never calls Claude on load** and reuses the existing matcher payload builders (`prepareMatchProfile` / `prepareMatchJob`) plus the shared `applyCapability` classifier and `matchLevelFromScore` thresholds — it does **not** create a second matcher. Each opportunity carries a score, a match level (`strong/good/partial/weak`), a plain-language **match explanation**, matching/missing skills and technologies, an apply capability (`external_url | supported_api | manual_required`) with a **real** handoff URL, and whether the user has already saved/applied to it.
+
+- **Real, data-driven ingestion (no fake source).** `POST /api/jobs/ingest` accepts strictly-validated job listings (strict Zod → unknown fields such as `userId`/`ownerId`/`accountId` are rejected with 422; only real `http(s)` URLs are persisted). Jobs are normalized with the existing `normalizeJob`, deduplicated with the existing `deduplicateJobs` (primary identity `source + sourceJobId`, plus SHA-256 fingerprint), and upserted atomically via `Job.bulkWrite`. `applyCapability` is classified at write time, and sensitive keys (tokens, API keys, secrets) are **stripped from `rawSource`** before persistence. No OAuth tokens are accepted or stored.
+- **Deterministic matching (extended matcher, no second AI).** `server/src/services/deterministicMatch.ts` computes a deterministic score from the existing `JobMatchProfilePayload` and `JobMatchJobPayload` (skills, technologies, role alignment, location, remote, employment type, and experience seniority) and reuses `matchLevelFromScore` from `validators/jobMatch.ts`. It is pure and reproducible — same profile + job always yields the same score and explanation.
+- **User-scoped feed.** `GET /api/jobs/opportunities` filters active jobs (optional `keywords`, `remote`, `employmentType`, `experienceLevel`, `source`), ranks them **match score desc → freshness desc → `_id` tie-breaker**, and paginates (default 20, max 100). It returns only the **authenticated user's** applied-status (per job), never another user's. `GET /api/jobs/opportunities/:id` returns a single opportunity detail (match explanation + apply capability + `alreadyApplied`). Safe DTOs strip `rawSource`/metadata.
+- **Connects to the existing application flow.** `POST /api/applications` (already built) saves an opportunity as an application (`saved`); the M16 review → handoff → explicit-confirmation → `applied` flow then applies unchanged. `alreadyApplied` is derived per-user; the feed never auto-applies or auto-changes status.
+- **Claude boundaries.** The feed and detail routes are **fully deterministic — Claude is never called on load** and no `JobMatch` record is created by browsing the feed. The existing cached Claude `/:id/match` endpoint remains available for on-demand deep analysis. No background workers, cron, or queues.
+- **Security & constraints** — JWT-protected, user-scoped (`req.user!.id` only; cross-user/invalid ObjectId → 404), strict Zod (`opportunityQuerySchema` and `jobIngestSchema` are `.strict()` → unknown query/body fields → 422), safe DTOs, no token/secrets leakage, rate-limited ingestion, no scraping, no browser automation, no auto-apply, no auto status changes.
+- **API** — `GET /api/jobs/opportunities`, `GET /api/jobs/opportunities/:id`, `POST /api/jobs/ingest` (all user-scoped, JWT; registered before the `/:id` job-detail catch-all). No new environment variables.
+- **Frontend** — new **Opportunities** page at `/dashboard/opportunities` (nav item between **Jobs** and **My Applications**): filterable, score-ranked feed cards, match-level badges, plain-language explanation, matching/missing skills, apply capability + real handoff button, "Track / Save" (creates a `saved` application), and an empty/incomplete-profile state. Uses existing Tailwind conventions; no new dependencies.
+- **Testing** — new `opportunities.test.ts` (32 tests): deterministic matcher unit tests, feed auth/flow/sorting/filters/pagination, strict 422 validation, **no-Claude-on-load** (no `JobMatch` created), user-scoped `alreadyApplied`, ingestion normalization/dedup/strict-schema/sensitive-field-stripping/URL validation. Full server suite **28 suites / 552 tests pass**, typecheck passes on both server and client, client build passes.
+
+**Milestone 16 (LinkedIn Publishing & Career Opportunity Execution Layer)** remains implemented (see below).
+
 **Milestone 16: LinkedIn Publishing & Career Opportunity Execution Layer**
 
 A human-in-the-loop publishing and application-execution layer built on Milestone 15. **Track A** turns an approved, reviewed LinkedIn post draft into a **real member post on LinkedIn** via the official LinkedIn Posts API (`w_member_social`), and **Track B** turns a saved application into a **review-and-handoff + explicit-confirmation execution** flow. Claude stays strictly advisory. Nothing is published or applied to without explicit human action and a real external success.
 
 - **Track A — real LinkedIn member publishing (official API).** A user OAuth-connects their LinkedIn account (`/api/linkedin/connect`, `callback`, `status`, `disconnect`). Credentials are encrypted with the existing `aes-256-gcm` scheme (`encryptToken`/`decryptToken`, key `GITHUB_TOKEN_ENCRYPTION_KEY`, consistent with Gmail) and stored `select:false`. Publishing uses `POST https://api.linkedin.com/rest/posts` with `w_member_social`, headers `Authorization: Bearer`, `X-Restli-Protocol-Version: 2.0.0`, and `Linkedin-Version: YYYYMM` (default `202605`); success is only a **201/200/204** with a real `urn:li:` post id in the `x-restli-id` header. No scheduling parameter exists upstream, so none is claimed.
-- **Draft lifecycle extended for real publishing.** Statuses are now `draft | reviewed | approved | publishing | published | publish_failed | archived`. `published` is ONLY set after a real external API success and stores `publishedAt`, `linkedinPostUrn`, `lastPublishAttemptAt`, `publishErrorCode`, and `publishErrorMessageSafe`. On any publish failure the draft is set to `publish_failed` **preserving its content**, the error is categorized (`NOT_CONNECTED`, typed `LinkedInError` codes like `HTTP_429`, retryable `429/500/503`), and **no automatic retry** is performed. Only `approved` drafts can be published; archived/published drafts are rejected (400).
-- **Claude stays advisory for publishing.** Claude recommends draft **content** only; it never publishes, re-publishes, or auto-sends to LinkedIn. Publishing requires the user to explicitly connect their account and click **Publish**, and the post is created by a real API call, not by the assistant.
 - **Track B — application review & handoff layer.** `GET /api/applications/:id/execution` (read-only capability view), `POST .../execution/prepare` (review instructions + the real handoff URL), `POST .../execution` (handoff + explicit completion confirmation), and `POST .../fit-assist` (advisory Claude job-fit assessment). `applyCapability` is classified as `external_url | supported_api | manual_required` **without ever inventing a URL** and **without** classifying a LinkedIn job as automated just because it is LinkedIn; `supported_api` requires an explicitly-declared `applyApi === "supported_api"` in source metadata/rawSource.
-- **Status only changes on explicit confirmation.** Reviewing, opening a URL, preparing, or running fit-assist **never** changes application status. The status advances to `applied` and `appliedAt` is set **only** when the user posts `{ submitted: true }` (explicit confirmation they completed the external application). For `supported_api`, the status still advances only on explicit confirmation, with a message clarifying that no automated API submission occurred this milestone. Re-confirming an already-applied application is idempotent.
-- **Job-fit assist is advisory only.** `POST /api/applications/:id/fit-assist` returns `{ assessment, advisoryOnly: true, statusUnchanged: true }`. The assessment is validated against a strict Zod schema (`overallFit strong|moderate|weak|uncertain`, `summary`, `highlights`, `gaps`, `uncertainties`, `suggestedQuestionsToAskEmployer`); unknown/extra fields and malformed output → 422. The assistant never fabricates qualifications, skills, experience, or certifications, and never changes status. The matcher adapter surfaces `professionalEvidence` (from M15 fields) in `JobMatchProfilePayload` — one shared adapter, no second matcher/model.
-- **Security & constraints** — JWT-protected, user-scoped (cross-user → 404, invalid ObjectId → 404), safe DTOs strip `user`/`__v`/tokens/raw provider metadata, no OAuth tokens or member IDs accepted from or leaked to the client, strict Zod on requests (422), no scraping, no browser automation (Puppeteer/Playwright), no background workers/cron, no raw token storage or exposure, Gmail remains read-only.
+- **Status only changes on explicit confirmation.** The status advances to `applied` and `appliedAt` is set **only** when the user posts `{ submitted: true }`. Job-fit assist is advisory only (`advisoryOnly: true`, `statusUnchanged: true`). The matcher adapter surfaces `professionalEvidence` (from M15 fields) in `JobMatchProfilePayload` — one shared adapter, no second matcher/model.
+- **Security & constraints** — JWT-protected, user-scoped (cross-user → 404, invalid ObjectId → 404), safe DTOs, no OAuth tokens accepted from or leaked to the client, strict Zod (422), no scraping, no browser automation, no background workers/cron, Gmail remains read-only.
 - **API** — LinkedIn OAuth `/api/linkedin/...`; publish `POST /api/projects/linkedin-drafts/:draftId/publish`; execution `/api/applications/:id/execution` (+ `/prepare`), `POST .../fit-assist`. `.env.example` gains `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_CALLBACK_URL`, `LINKEDIN_API_VERSION`, `LINKEDIN_SCOPES`.
-- **Frontend** — `/dashboard/professional-content` gains a **LinkedIn Publishing** panel (connect/disconnect, status, Publish/Retry, published + post-URN display, publish confirmation modal); `/dashboard/applications` detail modal gains an **Apply & Track** section (capability, review & prepare, open handoff site, confirm-applied modal) and a **Job-fit assist** section (advisory assessment, no status change). Uses existing Tailwind conventions; no new dependencies.
-- **Testing** — new suites for LinkedIn OAuth/publish (`linkedinPublish.test.ts`), `applyCapability` classification + execution endpoints (`applicationExecution.test.ts`), and job-fit assist (`jobFitAssist.test.ts`); M15 lifecycle tests updated for the new statuses. 520 tests pass, typecheck passes on both server and client.
+- **Frontend** — `/dashboard/professional-content` gains a **LinkedIn Publishing** panel; `/dashboard/applications` detail modal gains an **Apply & Track** section and a **Job-fit assist** section. Existing Tailwind conventions; no new dependencies.
+- **Testing** — `linkedinPublish.test.ts`, `applicationExecution.test.ts`, `jobFitAssist.test.ts`; M15 lifecycle tests updated. 520 tests passed at M16.
 
 **Milestone 15 (Professional Content & Career Opportunity Workflow)** remains implemented (see below); its draft lifecycle now includes the M16 publishing statuses.
 
@@ -69,7 +82,7 @@ A deterministic, user-scoped application analytics and career performance intell
 
 **Milestone 13 (Career Application Action Center & Follow-up Intelligence), Milestone 12 (Interview Preparation Hub & Follow-up Actions), Milestone 11 (Career Intelligence Dashboard & Action Center), Milestone 10 (Career Application Timeline & Interview Intelligence), Milestone 9 (Gmail / Career Email Intelligence), Milestone 8 (Job Application Tracking), Milestone 7.5 (Frontend Authentication), Milestone 7 (AI Job Matching), and Milestones 1–6 remain implemented.**
 
-Milestone 16 adds **real LinkedIn publishing** (official Posts API via `w_member_social`) and an **application execution/handoff layer** (review → handoff → explicit-confirmation → `applied`), but these remain human-in-the-loop: the agent never auto-publishes, never auto-submits an application (no POST-apply to arbitrary LinkedIn jobs — no such API exists and none is faked), and never auto-changes status. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status, and the dashboard never changes any application or email. Interview preparation, follow-ups, AI assistance, professional content, publishing, and analytics never auto-create records, never auto-send emails, never auto-publish, never auto-change application status, and never run background workers/cron/queues/notifications.
+Milestone 17 adds a **user-scoped career opportunity feed** with **deterministic, explainable profession matching** (`GET /api/jobs/opportunities`, `GET /api/jobs/opportunities/:id`), real **data-driven job ingestion** (`POST /api/jobs/ingest`, strict Zod, URL safety, sensitive-key stripping, deduplication) and an **Opportunities** client page. The feed is **fully deterministic** — browsing it never calls Claude, never creates a `JobMatch` record, never auto-applies, and never changes status; it reuses the existing matcher payload builders and `applyCapability` classifier. Milestone 16 adds **real LinkedIn publishing** (official Posts API via `w_member_social`) and an **application execution/handoff layer** (review → handoff → explicit-confirmation → `applied`), but these remain human-in-the-loop: the agent never auto-publishes, never auto-submits an application (no POST-apply to arbitrary LinkedIn jobs — no such API exists and none is faked), and never auto-changes status. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status, and the dashboard never changes any application or email. Interview preparation, follow-ups, AI assistance, professional content, publishing, analytics, and the opportunity feed never auto-create records, never auto-send emails, never auto-publish, never auto-change application status, and never run background workers/cron/queues/notifications.
 
 ## Project Structure
 
@@ -280,6 +293,9 @@ cd server && npm test
 |--------|---------------------------|----------------------------------------|---------------|
 | GET    | `/api/jobs`               | Search/filter jobs (pagination)        | Yes           |
 | POST   | `/api/jobs/discover`      | Fetch new jobs from sources            | Yes           |
+| POST   | `/api/jobs/ingest`        | Ingest validated job listings (strict Zod, URL-safe, sensitive-key-stripped, deduplicated) | Yes |
+| GET    | `/api/jobs/opportunities` | User-scoped opportunity feed: deterministic scored ranking + plain-language match explanation (filters: `keywords`, `remote`, `employmentType`, `experienceLevel`, `source`; pagination; no Claude on load) | Yes |
+| GET    | `/api/jobs/opportunities/:id` | Single opportunity detail (match explanation + apply capability + `alreadyApplied`) | Yes |
 | GET    | `/api/jobs/:id`           | Get a single job by id                 | Yes           |
 | POST   | `/api/jobs/:id/match`     | Analyze match (cached or fresh)        | Yes           |
 | GET    | `/api/jobs/:id/match`     | Get existing match for a job           | Yes           |
@@ -366,24 +382,33 @@ cd server && npm test
 - `/dashboard/follow-ups` — the Global Follow-ups page lists the user's follow-ups across all applications with priority / completion / date-bucket filters
 - `/dashboard/analytics` — the Career Analytics page shows KPIs, funnel, conversion rates, trends, follow-up/preparation performance, company insights, and attention items with a time-range selector
 - `/dashboard/emails?category=interview` and `/dashboard/emails?applicationStatus=interview` — the Career Emails page initializes its category/suggested-status filters from the URL
+- `/dashboard/opportunities` — the Opportunities page shows the score-ranked career opportunity feed with match badges, explanations, apply capability, and Track/Save actions (nav item between **Jobs** and **My Applications**)
 - Dashboard cards and action buttons deep-link to these filtered pages
 
 ## Job Discovery
 
 ### Architecture
 
-Jobs are fetched through a provider-agnostic `JobSource` interface, registered in a central registry. A deterministic `MockJobSource` is bundled for local development and testing; real providers (e.g. Adzuna, Remotive, Greenhouse) can be added later by implementing the same interface.
+Jobs are fetched through a provider-agnostic `JobSource` interface, registered in a central registry. A deterministic `MockJobSource` is bundled for local development and testing; real providers (e.g. Adzuna, Remotive, Greenhouse) can be added later by implementing the same interface. Milestone 17 adds a **real, data-driven ingestion path** (`POST /api/jobs/ingest`) that accepts validated job listings directly — no fabricated source, no scraping — and reuses the same normalization, deduplication, and persistence pipeline as discovery.
 
 ```
 JobSource (interface)
   └─ MockJobSource        # bundled deterministic source, id = "mock"
 
+ingestJobs(jobs)          # M17: validated listings -> normalize -> dedup -> bulkWrite(upsert)
 discoverJobs(params, sources)
   ├─ per-source isolation -> SourceReport[] (success/error + counts)
   ├─ normalizeJob(...)     # cleaning, URL safety, description cap, enum coercion
   ├─ deduplicateJobs(...)  # source+sourceJobId, then SHA-256 fingerprint
   └─ Job.bulkWrite(upsert) # persist atomically, update mutable fields + lastSeenAt
 ```
+
+### Opportunity Feed & Deterministic Matching (Milestone 17)
+
+- **Deterministic, no AI on load.** `server/src/services/opportunityFeed.ts` rank-orders active jobs by a pure deterministic score (reusing `prepareMatchProfile` / `prepareMatchJob` payloads + `matchLevelFromScore` thresholds). Browsing the feed never calls Claude and never creates a `JobMatch` record.
+- **Explainable.** Each card/row includes a `score`, `matchLevel` (`strong/good/partial/weak`), a plain-language `explanation[]`, matching/missing `skills` and `technologies`, an `applyCapability`, and the real `handoffUrl`.
+- **User-scoped.** Queries filter by `req.user!.id`; `alreadyApplied` is computed per user from the authenticated user's `Application` records. Cross-user or invalid ObjectId → 404. Safe DTOs strip `rawSource`.
+- **Save & apply.** `POST /api/applications` saves an opportunity as a `saved` application; the M16 review → handoff → explicit-confirmation → `applied` flow applies unchanged. The feed never auto-applies or changes status.
 
 ### Deduplication
 
@@ -393,12 +418,13 @@ discoverJobs(params, sources)
 
 ### Security & Limits
 
-- All job endpoints require authentication; the job store itself is global/shared, NOT user-scoped.
+- All job endpoints require authentication; the job store itself is global/shared, NOT user-scoped. **Exception (M17):** the opportunity feed and detail endpoints ARE user-scoped (`GET /api/jobs/opportunities...`).
 - `keywords` and location inputs are regex-escaped before use against MongoDB to prevent NoSQL/regex injection.
 - Only `http`/`https` URLs are persisted for job/apply links; other schemes are stripped.
 - `description` is truncated to 10,000 characters.
-- `limit` is capped at 50; pagination via `page`/`limit`.
-- `POST /discover` is rate-limited per user to prevent abuse.
+- `limit` is capped at 50 (opportunity feed: default 20, max 100); pagination via `page`/`limit`.
+- `POST /discover` and `POST /jobs/ingest` are rate-limited per user to prevent abuse.
+- `opportunityQuerySchema` and `jobIngestSchema` are strict Zod → unknown query/body fields (e.g. `userId`, `ownerId`, `accountId`) → 422; sensitive keys are stripped from `rawSource` before persistence.
 
 
 ## Claude AI Project Analysis
@@ -699,7 +725,7 @@ Security: no JWT secrets, `ANTHROPIC_API_KEY`, GitHub client secrets, or passwor
 
 This project is under active development. Features are being implemented incrementally through milestones.
 
-- **Implemented:** Milestones 1–14 (GitHub analysis, LinkedIn generation, job discovery/matching, Gmail career email intelligence, application tracking + timeline + interview intelligence, career intelligence dashboard, interview preparation, career application action center & follow-up intelligence, and career application analytics & performance intelligence).
+- **Implemented:** Milestones 1–17 (GitHub analysis, LinkedIn generation, job discovery/matching, **career opportunity feed & deterministic profession matching**, Gmail career email intelligence, application tracking + timeline + interview intelligence, career intelligence dashboard, interview preparation, career application action center & follow-up intelligence, career application analytics & performance intelligence, professional content workflow, LinkedIn publishing & application execution layer).
 - **Not yet implemented:** LinkedIn/job auto-application, and any outbound email (Gmail remains read-only). No background workers, cron, queues, or notifications exist.
 
 ## License
