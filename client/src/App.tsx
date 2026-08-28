@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import GitHubIntegrations from "./pages/GitHubIntegrations";
+import ProfessionalContent from "./pages/ProfessionalContent";
 import Jobs from "./pages/Jobs";
 import JobMatches from "./pages/JobMatches";
 import Applications from "./pages/Applications";
@@ -33,6 +34,14 @@ function App() {
           element={
             <ProtectedRoute>
               <GitHubIntegrations />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/professional-content"
+          element={
+            <ProtectedRoute>
+              <ProfessionalContent />
             </ProtectedRoute>
           }
         />

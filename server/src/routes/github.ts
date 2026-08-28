@@ -11,6 +11,7 @@ import {
   getLanguages,
   getReadme,
   getImportedRepositories,
+  setRepositoryApproved,
 } from "../controllers/github";
 import {
   analyze,
@@ -19,6 +20,14 @@ import {
   reanalyze,
 } from "../controllers/projectAnalysis";
 import { authenticate } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import {
+  generateEvidence,
+  getEvidence,
+  updateEvidence,
+  assistDraft,
+} from "../controllers/professionalContent";
+import { updateEvidenceSchema } from "../validators/professionalContent";
 
 const router = Router();
 
@@ -37,5 +46,30 @@ router.post("/repositories/:githubRepositoryId/analyze", authenticate, analyze);
 router.get("/repositories/:githubRepositoryId/analysis", authenticate, getAnalysis);
 router.get("/repositories/:githubRepositoryId/analyses", authenticate, history);
 router.post("/repositories/:githubRepositoryId/reanalyze", authenticate, reanalyze);
+router.post("/repositories/:githubRepositoryId/approve", authenticate, setRepositoryApproved);
+
+// Professional-content workflow (Milestone 15). All routes are user-scoped and
+// require the repository to be explicitly approved for professional use.
+router.post(
+  "/repositories/:githubRepositoryId/professional-evidence",
+  authenticate,
+  generateEvidence
+);
+router.get(
+  "/repositories/:githubRepositoryId/professional-evidence",
+  authenticate,
+  getEvidence
+);
+router.patch(
+  "/repositories/:githubRepositoryId/professional-evidence",
+  authenticate,
+  validate(updateEvidenceSchema),
+  updateEvidence
+);
+router.post(
+  "/repositories/:githubRepositoryId/linkedin-draft/assist",
+  authenticate,
+  assistDraft
+);
 
 export default router;

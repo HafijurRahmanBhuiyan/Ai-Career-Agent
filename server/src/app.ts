@@ -12,10 +12,12 @@ import skillRoutes from "./routes/skill";
 import projectRoutes from "./routes/project";
 import resumeRoutes from "./routes/resume";
 import githubRoutes from "./routes/github";
+import professionalContentRoutes from "./routes/professionalContent";
 import jobsRoutes from "./routes/jobs";
 import jobMatchRoutes from "./routes/jobMatch.routes";
 import applicationRoutes from "./routes/applications";
 import gmailRoutes from "./routes/gmail";
+import linkedinRoutes from "./routes/linkedin";
 import careerIntelligenceRoutes from "./routes/careerIntelligence";
 import { registerJobSource } from "./integrations/jobs/jobSourceRegistry";
 import { MockJobSource } from "./integrations/jobs/sources/mockJobSource";
@@ -61,6 +63,9 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/education", educationRoutes);
 app.use("/api/experience", experienceRoutes);
 app.use("/api/skills", skillRoutes);
+// Register the specific /api/projects/linkedin-drafts router BEFORE the generic
+// /api/projects router so the "/:id" catch-all does not swallow "linkedin-drafts".
+app.use("/api/projects/linkedin-drafts", professionalContentRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/resumes", resumeRoutes);
 app.use("/api/github", githubRoutes);
@@ -68,6 +73,7 @@ app.use("/api/jobs", jobsRoutes);
 app.use("/api/job-matches", jobMatchRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/gmail", gmailRoutes);
+app.use("/api/linkedin", linkedinRoutes);
 app.use("/api/dashboard", careerIntelligenceRoutes);
 
 app.use(notFoundHandler);

@@ -31,12 +31,19 @@ import {
 import { assistFollowUps } from "../controllers/applicationFollowUpAssist";
 import { listGlobalFollowUps } from "../controllers/globalFollowUps";
 import { getAnalytics } from "../controllers/applicationAnalytics";
+import {
+  getExecutionInfo,
+  prepareExecution,
+  executeApplication,
+  assistApplicationFit,
+} from "../controllers/applicationExecution";
 import { authenticate } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import {
   createApplicationSchema,
   updateApplicationSchema,
 } from "../validators/application";
+import { executeApplicationSchema, jobFitAssistSchema } from "../validators/applicationExecution";
 import {
   createTimelineEventSchema,
   updateTimelineEventSchema,
@@ -92,6 +99,14 @@ router.patch(
   updateFollowUp
 );
 router.delete("/:id/follow-ups/:followUpId", deleteFollowUp);
+
+// Application execution / review / handoff (Milestone 16 - Track B)
+router.get("/:id/execution", getExecutionInfo);
+router.post("/:id/execution/prepare", prepareExecution);
+router.post("/:id/execution", validate(executeApplicationSchema), executeApplication);
+
+// Claude job-fit assist (advisory only; never changes status or auto-submits)
+router.post("/:id/fit-assist", validate(jobFitAssistSchema), assistApplicationFit);
 
 router.get("/:id", getApplication);
 router.patch("/:id", validate(updateApplicationSchema), updateApplication);

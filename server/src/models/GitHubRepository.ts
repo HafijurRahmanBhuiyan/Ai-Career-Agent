@@ -20,6 +20,8 @@ export interface IGitHubRepository extends Document {
   updatedAtGithub: Date;
   pushedAtGithub: Date;
   importedAt: Date;
+  approvedForProfessionalUse: boolean;
+  approvedAt: Date | null;
   updatedAt: Date;
 }
 
@@ -103,6 +105,19 @@ const gitHubRepositorySchema = new Schema<IGitHubRepository>(
     importedAt: {
       type: Date,
       default: Date.now,
+    },
+    // Explicit user approval that this repository may be used professionally
+    // (analyzed, published about, shown to employers). Defaults to false; the
+    // user must explicitly opt a repository into the professional-content
+    // workflow. No repository is ever analyzed/targeted for publishing without
+    // this explicit approval.
+    approvedForProfessionalUse: {
+      type: Boolean,
+      default: false,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
     },
   },
   {

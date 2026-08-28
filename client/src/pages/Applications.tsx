@@ -13,6 +13,9 @@ import {
   TimelineEvent,
   TimelineEventType,
   TimelineResponse,
+  ExecutionInfo,
+  CapabilityInfo,
+  JobFitAssistResult,
 } from "../types/application";
 import {
   InterviewPreparation,
@@ -872,6 +875,20 @@ function ApplicationDetailModal({
                 applicationStatus={detail?.application?.status || application.status}
               />
 
+              <ApplicationExecutionSection
+                applicationId={application._id}
+                onApplied={async () => {
+                  await reloadTimeline();
+                  await loadDetail();
+                }}
+                setError={setError}
+              />
+
+              <JobFitAssistSection
+                applicationId={application._id}
+                setError={setError}
+              />
+
               <PreparationSection
                 applicationId={application._id}
                 preparation={preparation}
@@ -955,6 +972,305 @@ const EVENT_TYPE_OPTIONS: { value: TimelineEventType; label: string }[] = [
   { value: "rejection_received", label: "Rejection" },
   { value: "other", label: "Other" },
 ];
+
+const CAPABILITY_LABELS: Record<string, string> = {
+  external_url: "External site",
+  supported_api: "Supported API",
+  manual_required: "Manual required",
+};
+
+const CAPABILITY_STYLES: Record<string, string> = {
+  external_url: "bg-blue-50 text-blue-700",
+  supported_api: "bg-teal-50 text-teal-700",
+  manual_required: "bg-amber-50 text-amber-700",
+};
+
+const JOB_FIT_STYLES: Record<string, string> = {
+  strong: "bg-emerald-50 text-emerald-700",
+  moderate: "bg-blue-50 text-blue-700",
+  weak: "bg-amber-50 text-amber-700",
+  uncertain: "bg-slate-100 text-slate-600",
+};
+
+function ApplicationExecutionSection({
+  applicationId,
+  onApplied,
+  setError,
+}: {
+  applicationId: string;
+  onApplied: () => void;
+  setError: (msg: string | null) => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [info, setInfo] = useState<ExecutionInfo | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [preparedInstructions, setPreparedInstructions] = useState<string | null>(null);
+  const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmingOpen, setConfirmingOpen] = useState(false);
+
+  const loadInfo = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<ExecutionInfo>(
+        `${API_BASE}/applications/${applicationId}/execution`
+      );
+      setInfo(res.data);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to load application execution info"));
+    } finally {
+      setLoading(false);
+    }
+  }, [applicationId, setError]);
+
+  useEffect(() => {
+    loadInfo();
+  }, [loadInfo]);
+
+  const handlePrepare = async () => {
+    setPreparing(true);
+    setError(null);
+    try {
+      const res = await api.post<{
+        instructions: string;
+        capabilityInfo: CapabilityInfo;
+      }>(`${API_BASE}/applications/${applicationId}/execution/prepare`);
+      setPreparedInstructions(res.data.instructions);
+      setHandoffUrl(res.data.capabilityInfo.handoffUrl);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to prepare application"));
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  const handleConfirmApplied = async () => {
+    setConfirming(true);
+    setError(null);
+    try {
+      const res = await api.post<{ statusChanged: boolean; message: string }>(
+        `${API_BASE}/applications/${applicationId}/execution`,
+        { submitted: true }
+      );
+      setConfirmingOpen(false);
+      onApplied();
+      if (res.data.message) {
+        setPreparedInstructions(res.data.message);
+      }
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to confirm application"));
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const capability = info?.capabilityInfo;
+  const alreadyApplied = info?.application.status === "applied";
+
+  return (
+    <div className="border border-indigo-200 bg-indigo-50/40 rounded-lg p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-800">Apply & Track</h3>
+        {loading && <p className="text-xs text-slate-400">Loading...</p>}
+      </div>
+
+      {!loading && capability && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${CAPABILITY_STYLES[capability.capability] || "bg-slate-100 text-slate-600"}`}>
+              {capability.label || CAPABILITY_LABELS[capability.capability] || capability.capability}
+            </span>
+            {alreadyApplied && (
+              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-50 text-blue-700">
+                applied
+              </span>
+            )}
+          </div>
+
+          {!alreadyApplied && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handlePrepare}
+                disabled={preparing}
+                className="px-3 py-1.5 text-xs text-indigo-700 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors disabled:opacity-50"
+              >
+                {preparing ? "Preparing..." : "Review & prepare"}
+              </button>
+              <button
+                onClick={() => setConfirmingOpen(true)}
+                className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Confirm applied
+              </button>
+            </div>
+          )}
+
+          {handoffUrl && (
+            <div className="flex items-center gap-2">
+              <a
+                href={handoffUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block px-3 py-1.5 text-xs text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                Open application site
+              </a>
+            </div>
+          )}
+
+          {preparedInstructions && (
+            <p className="text-xs text-slate-600 whitespace-pre-wrap break-words">
+              {preparedInstructions}
+            </p>
+          )}
+
+          {!alreadyApplied && (
+            <p className="text-[10px] text-slate-500">
+              Applying is always completed on the employer's own site. Confirming
+              "applied" is the only action that records the application here.
+            </p>
+          )}
+        </>
+      )}
+
+      {confirmingOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl w-full max-w-sm p-5 space-y-3">
+            <h4 className="text-sm font-semibold text-slate-900">Confirm applied?</h4>
+            <p className="text-xs text-slate-600">
+              Confirm only if you actually completed and submitted the application on
+              the employer's site. This records the application as "applied".
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmingOpen(false)}
+                disabled={confirming}
+                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmApplied}
+                disabled={confirming}
+                className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {confirming ? "Confirming..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JobFitAssistSection({
+  applicationId,
+  setError,
+}: {
+  applicationId: string;
+  setError: (msg: string | null) => void;
+}) {
+  const [result, setResult] = useState<JobFitAssistResult | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleAssist = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.post<JobFitAssistResult>(
+        `${API_BASE}/applications/${applicationId}/fit-assist`
+      );
+      setResult(res.data);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to get job-fit assist"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const a = result?.assessment;
+
+  return (
+    <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-800">Job-fit assist</h3>
+        <button
+          onClick={handleAssist}
+          disabled={loading}
+          className="px-3 py-1.5 text-xs text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+        >
+          {loading ? "Analyzing..." : result ? "Re-run" : "Run assist"}
+        </button>
+      </div>
+
+      {result?.advisoryOnly && (
+        <p className="text-[10px] text-slate-500">
+          Advisory only — this never changes your application status.
+        </p>
+      )}
+
+      {a ? (
+        <div className="space-y-2 text-sm">
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${JOB_FIT_STYLES[a.overallFit] || "bg-slate-100 text-slate-600"}`}
+            >
+              {a.overallFit} fit
+            </span>
+          </div>
+          <p className="text-slate-700">{a.summary}</p>
+          {a.highlights.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-1">Highlights</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {a.highlights.map((h, i) => (
+                  <li key={i} className="text-xs text-slate-700">{h}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {a.gaps.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-1">Gaps</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {a.gaps.map((g, i) => (
+                  <li key={i} className="text-xs text-slate-700">{g}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {a.uncertainties.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-1">Uncertainties</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {a.uncertainties.map((u, i) => (
+                  <li key={i} className="text-xs text-slate-700">{u}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {a.suggestedQuestionsToAskEmployer.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-1">
+                Questions to ask the employer
+              </p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {a.suggestedQuestionsToAskEmployer.map((q, i) => (
+                  <li key={i} className="text-xs text-slate-700">{q}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-400">
+          Get an advisory assessment of how your profile matches this role.
+        </p>
+      )}
+    </div>
+  );
+}
 
 function PreparationSection({
   applicationId,

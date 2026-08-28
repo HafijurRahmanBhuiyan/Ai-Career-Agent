@@ -21,6 +21,16 @@ import {
   FollowUpAssistInput,
 } from "./followUpAssistPrompts";
 import {
+  LINKEDIN_ASSIST_SYSTEM_PROMPT,
+  buildLinkedInAssistUserMessage,
+  LinkedInAssistInput,
+} from "./linkedinPrompts";
+import {
+  JOB_FIT_ASSIST_SYSTEM_PROMPT,
+  buildJobFitAssistUserMessage,
+  JobFitAssistInput,
+} from "./jobFitAssistPrompts";
+import {
   ProjectAnalysisInput,
   ProjectAnalysisResult,
 } from "./claude.types";
@@ -114,6 +124,28 @@ export class ClaudeService {
 
     const rawResponse = await analyzeProject(
       FOLLOW_UP_ASSIST_SYSTEM_PROMPT,
+      userMessage
+    );
+
+    return this.parseResponse(rawResponse);
+  }
+
+  async assistLinkedInPost(input: LinkedInAssistInput): Promise<unknown> {
+    const userMessage = buildLinkedInAssistUserMessage(input);
+
+    const rawResponse = await analyzeProject(
+      LINKEDIN_ASSIST_SYSTEM_PROMPT,
+      userMessage
+    );
+
+    return this.parseResponse(rawResponse);
+  }
+
+  async assistJobFit(input: JobFitAssistInput): Promise<unknown> {
+    const userMessage = buildJobFitAssistUserMessage(input);
+
+    const rawResponse = await analyzeProject(
+      JOB_FIT_ASSIST_SYSTEM_PROMPT,
       userMessage
     );
 

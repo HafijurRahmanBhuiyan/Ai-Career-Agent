@@ -48,6 +48,15 @@ export interface JobMatchProfilePayload {
     weaknesses: string[];
     recommendations: string[];
   }>;
+  professionalEvidence: Array<{
+    projectName: string;
+    professionalSummary: string;
+    technicalSkills: string[];
+    technologies: string[];
+    roleRelevantKeywords: string[];
+    projectDomain: string;
+    senioritySignals: string[];
+  }>;
 }
 
 export interface JobMatchJobPayload {

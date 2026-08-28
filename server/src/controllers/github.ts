@@ -404,3 +404,44 @@ export const getImportedRepositories = async (
     next(error);
   }
 };
+
+export const setRepositoryApproved = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const repoId = parseRepoId(req.params.githubRepositoryId);
+    if (isNaN(repoId)) {
+      return next(new AppError("Invalid repository ID", 400));
+    }
+
+    const approved = req.body?.approved === true;
+
+    const imported = await GitHubRepositoryModel.findOneAndUpdate(
+      { user: req.user!.id, githubRepositoryId: repoId },
+      {
+        approvedForProfessionalUse: approved,
+        approvedAt: approved ? new Date() : null,
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!imported) {
+      return next(new AppError("Repository not imported", 404));
+    }
+
+    res.status(200).json({
+      repository: {
+        _id: imported._id,
+        githubRepositoryId: imported.githubRepositoryId,
+        name: imported.name,
+        fullName: imported.fullName,
+        approvedForProfessionalUse: imported.approvedForProfessionalUse,
+        approvedAt: imported.approvedAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -4,6 +4,7 @@ export type RemoteType = "remote" | "hybrid" | "onsite";
 export type EmploymentType = "full-time" | "part-time" | "contract" | "internship" | "temporary";
 export type ExperienceLevel = "entry" | "junior" | "mid" | "senior" | "lead" | "manager";
 export type SalaryPeriod = "yearly" | "monthly" | "hourly" | "contract";
+export type ApplyCapability = "external_url" | "supported_api" | "manual_required";
 
 export interface IJob extends Document {
   source: string;
@@ -26,6 +27,7 @@ export interface IJob extends Document {
   technologies: string[];
   jobUrl?: string | null;
   applyUrl?: string | null;
+  applyCapability?: ApplyCapability | null;
   postedAt?: Date | null;
   expiresAt?: Date | null;
   discoveredAt: Date;
@@ -122,6 +124,11 @@ const jobSchema = new Schema<IJob>(
     },
     applyUrl: {
       type: String,
+      default: null,
+    },
+    applyCapability: {
+      type: String,
+      enum: ["external_url", "supported_api", "manual_required"],
       default: null,
     },
     postedAt: {

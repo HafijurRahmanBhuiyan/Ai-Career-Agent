@@ -6,6 +6,7 @@ import Education from "../models/Education";
 import Project from "../models/Project";
 import GitHubRepositoryModel from "../models/GitHubRepository";
 import ProjectAnalysis, { IProjectAnalysis } from "../models/ProjectAnalysis";
+import ProfessionalEvidence from "../models/ProfessionalEvidence";
 import { JobMatchProfilePayload } from "./jobMatchTypes";
 
 const MAX_PROJECTS = 10;
@@ -13,6 +14,7 @@ const MAX_EXPERIENCE = 15;
 const MAX_EDUCATION = 10;
 const MAX_SKILLS = 50;
 const MAX_GITHUB_ANALYSES = 8;
+const MAX_PROFESSIONAL_EVIDENCE = 12;
 
 function coerceNull<T>(value: T | undefined | null): T | null {
   return typeof value === "undefined" ? null : (value as T | null);
@@ -42,6 +44,7 @@ export async function prepareMatchProfile(
     education,
     projects,
     githubRepositories,
+    professionalEvidences,
   ] = await Promise.all([
     Profile.findOne({ user: userIdObj }).lean(),
     Skill.find({ user: userIdObj }).limit(MAX_SKILLS).sort({ createdAt: -1 }).lean(),
@@ -54,6 +57,10 @@ export async function prepareMatchProfile(
     GitHubRepositoryModel.find({ user: userIdObj })
       .select("_id")
       .limit(MAX_GITHUB_ANALYSES)
+      .lean(),
+    ProfessionalEvidence.find({ user: userIdObj, status: "ready" })
+      .limit(MAX_PROFESSIONAL_EVIDENCE)
+      .sort({ updatedAt: -1 })
       .lean(),
   ]);
 
@@ -120,6 +127,15 @@ export async function prepareMatchProfile(
       strengths: a.skillsDemonstrated ?? [],
       weaknesses: a.developmentHighlights ?? [],
       recommendations: a.suggestedTags ?? [],
+    })),
+    professionalEvidence: professionalEvidences.map((e) => ({
+      projectName: e.projectName,
+      professionalSummary: e.professionalSummary,
+      technicalSkills: e.technicalSkills ?? [],
+      technologies: e.technologies ?? [],
+      roleRelevantKeywords: e.roleRelevantKeywords ?? [],
+      projectDomain: e.projectDomain,
+      senioritySignals: e.senioritySignals ?? [],
     })),
   };
 

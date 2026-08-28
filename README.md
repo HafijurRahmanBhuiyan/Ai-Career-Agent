@@ -16,6 +16,38 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
+**Milestone 16: LinkedIn Publishing & Career Opportunity Execution Layer**
+
+A human-in-the-loop publishing and application-execution layer built on Milestone 15. **Track A** turns an approved, reviewed LinkedIn post draft into a **real member post on LinkedIn** via the official LinkedIn Posts API (`w_member_social`), and **Track B** turns a saved application into a **review-and-handoff + explicit-confirmation execution** flow. Claude stays strictly advisory. Nothing is published or applied to without explicit human action and a real external success.
+
+- **Track A — real LinkedIn member publishing (official API).** A user OAuth-connects their LinkedIn account (`/api/linkedin/connect`, `callback`, `status`, `disconnect`). Credentials are encrypted with the existing `aes-256-gcm` scheme (`encryptToken`/`decryptToken`, key `GITHUB_TOKEN_ENCRYPTION_KEY`, consistent with Gmail) and stored `select:false`. Publishing uses `POST https://api.linkedin.com/rest/posts` with `w_member_social`, headers `Authorization: Bearer`, `X-Restli-Protocol-Version: 2.0.0`, and `Linkedin-Version: YYYYMM` (default `202605`); success is only a **201/200/204** with a real `urn:li:` post id in the `x-restli-id` header. No scheduling parameter exists upstream, so none is claimed.
+- **Draft lifecycle extended for real publishing.** Statuses are now `draft | reviewed | approved | publishing | published | publish_failed | archived`. `published` is ONLY set after a real external API success and stores `publishedAt`, `linkedinPostUrn`, `lastPublishAttemptAt`, `publishErrorCode`, and `publishErrorMessageSafe`. On any publish failure the draft is set to `publish_failed` **preserving its content**, the error is categorized (`NOT_CONNECTED`, typed `LinkedInError` codes like `HTTP_429`, retryable `429/500/503`), and **no automatic retry** is performed. Only `approved` drafts can be published; archived/published drafts are rejected (400).
+- **Claude stays advisory for publishing.** Claude recommends draft **content** only; it never publishes, re-publishes, or auto-sends to LinkedIn. Publishing requires the user to explicitly connect their account and click **Publish**, and the post is created by a real API call, not by the assistant.
+- **Track B — application review & handoff layer.** `GET /api/applications/:id/execution` (read-only capability view), `POST .../execution/prepare` (review instructions + the real handoff URL), `POST .../execution` (handoff + explicit completion confirmation), and `POST .../fit-assist` (advisory Claude job-fit assessment). `applyCapability` is classified as `external_url | supported_api | manual_required` **without ever inventing a URL** and **without** classifying a LinkedIn job as automated just because it is LinkedIn; `supported_api` requires an explicitly-declared `applyApi === "supported_api"` in source metadata/rawSource.
+- **Status only changes on explicit confirmation.** Reviewing, opening a URL, preparing, or running fit-assist **never** changes application status. The status advances to `applied` and `appliedAt` is set **only** when the user posts `{ submitted: true }` (explicit confirmation they completed the external application). For `supported_api`, the status still advances only on explicit confirmation, with a message clarifying that no automated API submission occurred this milestone. Re-confirming an already-applied application is idempotent.
+- **Job-fit assist is advisory only.** `POST /api/applications/:id/fit-assist` returns `{ assessment, advisoryOnly: true, statusUnchanged: true }`. The assessment is validated against a strict Zod schema (`overallFit strong|moderate|weak|uncertain`, `summary`, `highlights`, `gaps`, `uncertainties`, `suggestedQuestionsToAskEmployer`); unknown/extra fields and malformed output → 422. The assistant never fabricates qualifications, skills, experience, or certifications, and never changes status. The matcher adapter surfaces `professionalEvidence` (from M15 fields) in `JobMatchProfilePayload` — one shared adapter, no second matcher/model.
+- **Security & constraints** — JWT-protected, user-scoped (cross-user → 404, invalid ObjectId → 404), safe DTOs strip `user`/`__v`/tokens/raw provider metadata, no OAuth tokens or member IDs accepted from or leaked to the client, strict Zod on requests (422), no scraping, no browser automation (Puppeteer/Playwright), no background workers/cron, no raw token storage or exposure, Gmail remains read-only.
+- **API** — LinkedIn OAuth `/api/linkedin/...`; publish `POST /api/projects/linkedin-drafts/:draftId/publish`; execution `/api/applications/:id/execution` (+ `/prepare`), `POST .../fit-assist`. `.env.example` gains `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_CALLBACK_URL`, `LINKEDIN_API_VERSION`, `LINKEDIN_SCOPES`.
+- **Frontend** — `/dashboard/professional-content` gains a **LinkedIn Publishing** panel (connect/disconnect, status, Publish/Retry, published + post-URN display, publish confirmation modal); `/dashboard/applications` detail modal gains an **Apply & Track** section (capability, review & prepare, open handoff site, confirm-applied modal) and a **Job-fit assist** section (advisory assessment, no status change). Uses existing Tailwind conventions; no new dependencies.
+- **Testing** — new suites for LinkedIn OAuth/publish (`linkedinPublish.test.ts`), `applyCapability` classification + execution endpoints (`applicationExecution.test.ts`), and job-fit assist (`jobFitAssist.test.ts`); M15 lifecycle tests updated for the new statuses. 520 tests pass, typecheck passes on both server and client.
+
+**Milestone 15 (Professional Content & Career Opportunity Workflow)** remains implemented (see below); its draft lifecycle now includes the M16 publishing statuses.
+
+**Milestone 15: Professional Content & Career Opportunity Workflow**
+
+A human-in-the-loop workflow that turns an explicitly approved GitHub project into evidence-backed professional content (a LinkedIn post draft), with Claude as a suggestion engine only. The flow is: **APPROVED GITHUB PROJECT → CLAUDE PROFESSIONAL ANALYSIS → LINKEDIN DRAFT → HUMAN REVIEW → APPROVED (Ready to Publish)**. In Milestone 15 nothing was posted, emailed, applied to, or published externally — the workflow stopped at **Approved — Ready to Publish**. (Milestone 16 adds the real publishing step.)
+
+- **Explicit approval gate** — `approvedForProfessionalUse` (default `false`) and `approvedAt` were added to `GitHubRepository`. Unapproved repositories were previously analyzed with no approval gate; now a project must be explicitly approved before it can enter the professional-content workflow (`POST /api/github/repositories/:id/approve`). Revoking approval removes the evidence/suggestions from view.
+- **Professional evidence (deterministic, no fabrication)** — `ProfessionalEvidence` is derived **from the existing, already Claude-validated `ProjectAnalysis` plus verified repository facts — no second Claude call**, so no metrics/summaries can be invented. Fields with no supplied source (e.g., `measurableImpact`, `contributionEvidence`) are left as empty/"unknown" rather than fabricated. Exposes `technicalSkills`, `technologies`, `architecturePractices`, `roleRelevantKeywords`, `projectDomain`, and `senioritySignals` as career-connection metadata (feature F is surfaced deterministically, without a second job-matching system).
+- **Claude LinkedIn assist (suggestions only, never auto-saves or publishes)** — a single assist endpoint calls Claude to propose 1–3 LinkedIn post ideas (hook/body/hashtags ≤10) reviewed against strict Zod output validation. Suggestions are returned to the user for review and are **never persisted, published, emailed, or sent to LinkedIn**. No scraping, no browser automation.
+- **LinkedIn draft lifecycle** — `LinkedInDraft` statuses are `draft | reviewed | approved | archived` (no `published` in M15). `approved` means **Approved — Ready to Publish** only. Full CRUD plus approve/archive endpoints, user-scoped, bounded to `MAX_DRAFTS_PER_EVIDENCE` (50) per evidence, and JWT-authenticated. Approved evidence is required to create a draft.
+- **Claude rule of only-explicit-user-assist** — Claude may analyze approved projects, summarize, suggest positioning, and generate LinkedIn drafts/skills, but may **not** publish, send email, apply to jobs, change statuses, create follow-ups, modify Gmail, or create any external side effect. No background workers/cron/queues.
+- **API** — evidence `POST/GET/PATCH /api/github/repositories/:id/professional-evidence`, assist `POST .../linkedin-draft/assist`, and drafts `GET/POST/PATCH/approve/archive /api/projects/linkedin-drafts/...` (mounted **before** the generic `/api/projects` router so the `/:id` catch-all does not swallow `linkedin-drafts`). Strict Zod validates bodies (422) and list queries (status enum, page, limit 1–100); invalid ObjectId → 404; cross-user access → 404; IDs are never taken from the client (always `req.user!.id`).
+- **Security** — JWT auth, user-scoped queries, safe DTOs strip `user`/`__v`/raw provider metadata; no user IDs, tokens, or OAuth data are accepted from or leaked to the client.
+- **Frontend** — new `/dashboard/professional-content` page (nav item **Professional Content**): repository list with approval toggles, approve-for-professional-use, generate/regenerate evidence, editable evidence fields, Claude LinkedIn suggestion generation with "Use this suggestion", a manual draft editor (hook/body/hashtags), save/update draft, mark reviewed & approve (Ready to Publish), and per-project draft list. Uses existing Tailwind conventions; no new dependencies.
+
+**Milestone 14 (Career Application Analytics & Performance Intelligence)** remains implemented (see below).
+
 **Milestone 14: Career Application Analytics & Performance Intelligence**
 
 A deterministic, user-scoped application analytics and career performance intelligence layer computed entirely from existing persisted data (Application, Job, ApplicationEvent, Interview, CareerEmail, InterviewPreparation, ApplicationFollowUp). No new analytics records are stored, and no AI is called to compute analytics.
@@ -37,7 +69,7 @@ A deterministic, user-scoped application analytics and career performance intell
 
 **Milestone 13 (Career Application Action Center & Follow-up Intelligence), Milestone 12 (Interview Preparation Hub & Follow-up Actions), Milestone 11 (Career Intelligence Dashboard & Action Center), Milestone 10 (Career Application Timeline & Interview Intelligence), Milestone 9 (Gmail / Career Email Intelligence), Milestone 8 (Job Application Tracking), Milestone 7.5 (Frontend Authentication), Milestone 7 (AI Job Matching), and Milestones 1–6 remain implemented.**
 
-LinkedIn and job automation (auto-application / POST-apply) are **NOT** yet implemented. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status, and the dashboard never changes any application or email. Interview preparation, follow-ups, AI assistance, and analytics never auto-create records, never auto-send emails, never auto-change application status, and never run background workers/cron/queues/notifications.
+Milestone 16 adds **real LinkedIn publishing** (official Posts API via `w_member_social`) and an **application execution/handoff layer** (review → handoff → explicit-confirmation → `applied`), but these remain human-in-the-loop: the agent never auto-publishes, never auto-submits an application (no POST-apply to arbitrary LinkedIn jobs — no such API exists and none is faked), and never auto-changes status. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status, and the dashboard never changes any application or email. Interview preparation, follow-ups, AI assistance, professional content, publishing, and analytics never auto-create records, never auto-send emails, never auto-publish, never auto-change application status, and never run background workers/cron/queues/notifications.
 
 ## Project Structure
 
@@ -92,6 +124,11 @@ Edit `server/.env` and set:
 - `ANTHROPIC_API_KEY` — Anthropic Claude API key (server-side only, never exposed)
 - `CLAUDE_MODEL` — Claude model (e.g., `claude-sonnet-4-20250514`)
 - `CLAUDE_MAX_TOKENS` — Max output tokens for analysis (default: `4096`)
+- `LINKEDIN_CLIENT_ID` — LinkedIn OAuth App client ID (for publishing)
+- `LINKEDIN_CLIENT_SECRET` — LinkedIn OAuth App client secret
+- `LINKEDIN_CALLBACK_URL` — LinkedIn OAuth callback URL (e.g., `http://localhost:5001/api/linkedin/callback`)
+- `LINKEDIN_API_VERSION` — LinkedIn API version `YYYYMM` (default `202605`)
+- `LINKEDIN_SCOPES` — LinkedIn OAuth scopes (default `openid profile email w_member_social`)
 
 See `server/.env.example` for the full list.
 
@@ -204,6 +241,38 @@ cd server && npm test
 | GET    | `/api/github/repositories/:id/analysis`         | Get latest analysis            | Yes           |
 | GET    | `/api/github/repositories/:id/analyses`         | Get analysis history           | Yes           |
 | POST   | `/api/github/repositories/:id/reanalyze`        | Re-analyze (new version)       | Yes           |
+| POST   | `/api/github/repositories/:id/approve`          | Approve/revoke project for professional use (`{ approved }`) | Yes |
+| POST   | `/api/github/repositories/:id/professional-evidence` | Generate (derive) professional evidence from existing analysis (requires approval) | Yes |
+| GET    | `/api/github/repositories/:id/professional-evidence` | Get evidence for a repo      | Yes           |
+| PATCH  | `/api/github/repositories/:id/professional-evidence` | Update/clarify evidence fields (user-entered only) | Yes |
+| POST   | `/api/github/repositories/:id/linkedin-draft/assist` | Claude suggests 1–3 LinkedIn post ideas (review only; never saved/published) | Yes |
+
+### Professional Content & LinkedIn Drafts
+
+| Method | Endpoint                                    | Description                                            | Auth Required |
+|--------|---------------------------------------------|--------------------------------------------------------|---------------|
+| GET    | `/api/projects/linkedin-drafts`             | List user's LinkedIn drafts (`status`, `page`, `limit` 1–100) | Yes |
+| POST   | `/api/projects/linkedin-drafts`             | Save a draft (requires approved evidence; max 50/evidence) | Yes |
+| GET    | `/api/projects/linkedin-drafts/:id`         | Get a single draft                                   | Yes           |
+| PATCH  | `/api/projects/linkedin-drafts/:id`         | Update a draft's hook/body/hashtags                 | Yes           |
+| POST   | `/api/projects/linkedin-drafts/:id/approve` | Approve a draft (workflow: draft → reviewed → approved = “Ready to Publish”) | Yes |
+| POST   | `/api/projects/linkedin-drafts/:id/archive` | Archive a draft                                     | Yes           |
+| POST   | `/api/projects/linkedin-drafts/:id/publish` | Publish an approved draft to LinkedIn via the official Posts API (sets `published` only on real external 201/200/204 success; on failure sets `publish_failed`) | Yes |
+
+**Draft lifecycle (M16):** `draft → reviewed → approved → publishing → published` (or `publish_failed` on failure; `archived`). `published` is only set after a real API success and records `publishedAt`, `linkedinPostUrn`, `lastPublishAttemptAt`, `publishErrorCode`, `publishErrorMessageSafe`. Publish failures preserve the draft content and never auto-retry.
+
+### LinkedIn Connection (OAuth)
+
+| Method | Endpoint                  | Description                                            | Auth Required |
+|--------|---------------------------|--------------------------------------------------------|---------------|
+| GET    | `/api/linkedin/connect`   | Get LinkedIn OAuth authorize URL + signed state         | Yes           |
+| GET    | `/api/linkedin/callback`  | LinkedIn OAuth callback (validates state, stores encrypted tokens, redirects to `/dashboard/integrations?linkedin=connected`) | Yes |
+| GET    | `/api/linkedin/status`    | Check LinkedIn connection status (connected/member/profile/expiry) | Yes |
+| POST   | `/api/linkedin/disconnect`| Disconnect the LinkedIn account                         | Yes           |
+
+- Publishing uses `w_member_social` and `POST https://api.linkedin.com/rest/posts`; success is only a real 201/200/204 with a `urn:li:` id; errors (401/403/404/422/429) are classified, `429/500/503` are marked retryable, and the note **~100 posts/day/member** applies — no auto-retry, no scheduling parameter.
+- Tokens are encrypted at rest (`select:false`) and never returned to the client; the agent never publishes automatically.
+
 
 ### Jobs
 
@@ -243,6 +312,10 @@ cd server && npm test
 | DELETE | `/api/applications/:id/follow-ups/:followUpId` | Delete a follow-up (client must confirm in UI) | Yes |
 | GET    | `/api/applications/follow-ups` | Global follow-up view across the user's applications (`page`, `limit`, `priority`, `completed`, `due`) — registered before `/:id` | Yes |
 | GET    | `/api/applications/analytics` | Career application analytics (`range` = `7d`/`30d`/`90d`/`180d`/`365d`/`all`, optional `limit` 1–20). Deterministic, read-only, no AI. Registered before `/:id` | Yes |
+| GET    | `/api/applications/:id/execution` | Read-only application execution view: `capabilityInfo` (capability `external_url`/`supported_api`/`manual_required`, `handoffUrl`, `statusUnchanged`) + safe job/application | Yes |
+| POST   | `/api/applications/:id/execution/prepare` | Review phase: instructions + the real handoff URL. **Never changes status.** | Yes |
+| POST   | `/api/applications/:id/execution` | Handoff + confirmation. Body `{ submitted: true }` explicitly records the application as `applied` (sets `appliedAt`); `{ submitted: false }` returns handoff info only. **No status change without explicit confirmation.** | Yes |
+| POST   | `/api/applications/:id/fit-assist` | Claude job-fit assessment (advisory). Body must be `{}` (strict). Returns `{ assessment, advisoryOnly: true, statusUnchanged: true }`; never changes status. | Yes |
 
 - Application statuses: `saved`, `applied`, `screening`, `interview`, `offer`, `rejected`, `withdrawn`
 - One application per user per job; duplicates return `409`

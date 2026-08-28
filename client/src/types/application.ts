@@ -125,3 +125,53 @@ export interface TimelineResponse {
   events: TimelineEvent[];
   pagination: ApplicationPagination;
 }
+
+export type ApplyCapability = "external_url" | "supported_api" | "manual_required";
+
+export interface CapabilityInfo {
+  capability: ApplyCapability;
+  label: string;
+  handoffUrl: string | null;
+  canApplyInline?: boolean;
+}
+
+export interface ExecutionInfo {
+  application: {
+    id: string;
+    job: string;
+    status: string;
+    appliedAt?: string | null;
+    notes?: string | null;
+    updatedAt?: string;
+  };
+  job: {
+    id?: string;
+    title?: string;
+    companyName?: string;
+    location?: string | null;
+    locations?: string[];
+    remoteType?: string;
+    employmentType?: string;
+    source?: string;
+    sourceJobId?: string | null;
+    jobUrl?: string | null;
+    applyUrl?: string | null;
+    applyCapability?: ApplyCapability | null;
+  };
+  capabilityInfo: CapabilityInfo & { statusUnchanged?: boolean };
+}
+
+export type JobFitOverall = "strong" | "moderate" | "weak" | "uncertain";
+
+export interface JobFitAssistResult {
+  assessment: {
+    overallFit: JobFitOverall;
+    summary: string;
+    highlights: string[];
+    gaps: string[];
+    uncertainties: string[];
+    suggestedQuestionsToAskEmployer: string[];
+  };
+  advisoryOnly: true;
+  statusUnchanged: true;
+}
