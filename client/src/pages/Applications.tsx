@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
@@ -11,6 +12,20 @@ import {
   TimelineEventType,
   TimelineResponse,
 } from "../types/application";
+import {
+  InterviewPreparation,
+  InterviewChecklistItem,
+  PrepAssistSuggestions,
+  CHECKLIST_KEYS,
+  ChecklistKey,
+} from "../types/interviewPreparation";
+import {
+  ApplicationFollowUp,
+  FollowUpAction,
+  FOLLOW_UP_ACTIONS,
+  FOLLOW_UP_ACTION_LABELS,
+  formatDueUrgency,
+} from "../types/followUp";
 import { getErrorMessage } from "../utils/apiError";
 
 const API_BASE = "";
@@ -494,6 +509,10 @@ function ApplicationDetailModal({
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
 
+  const [preparation, setPreparation] = useState<InterviewPreparation | null>(null);
+  const [followUps, setFollowUps] = useState<ApplicationFollowUp[]>([]);
+  const [prepSaving, setPrepSaving] = useState(false);
+
   const loadDetail = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -505,10 +524,23 @@ function ApplicationDetailModal({
       setDetail(d.data);
       setEvents(t.data.events);
       setSummary(d.data.aiSummary as Record<string, unknown> | null);
+      setPreparation((d.data.preparation as InterviewPreparation) ?? null);
+      setFollowUps(d.data.followUps ?? []);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to load application details"));
     } finally {
       setLoading(false);
+    }
+  }, [application._id]);
+
+  const reloadFollowUps = useCallback(async () => {
+    try {
+      const res = await api.get<{ followUps: ApplicationFollowUp[] }>(
+        `${API_BASE}/applications/${application._id}/follow-ups?limit=50`
+      );
+      setFollowUps(res.data.followUps);
+    } catch {
+      // ignore refresh errors in modal
     }
   }, [application._id]);
 
@@ -812,6 +844,22 @@ function ApplicationDetailModal({
                 </div>
               )}
 
+              <PreparationSection
+                applicationId={application._id}
+                preparation={preparation}
+                onPreparationChange={setPreparation}
+                saving={prepSaving}
+                setSaving={setPrepSaving}
+                setError={setError}
+              />
+
+              <FollowUpsSection
+                applicationId={application._id}
+                followUps={followUps}
+                onReload={reloadFollowUps}
+                setError={setError}
+              />
+
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-slate-800">
@@ -876,6 +924,570 @@ const EVENT_TYPE_OPTIONS: { value: TimelineEventType; label: string }[] = [
   { value: "rejection_received", label: "Rejection" },
   { value: "other", label: "Other" },
 ];
+
+function PreparationSection({
+  applicationId,
+  preparation,
+  onPreparationChange,
+  saving,
+  setSaving,
+  setError,
+}: {
+  applicationId: string;
+  preparation: InterviewPreparation | null;
+  onPreparationChange: (prep: InterviewPreparation) => void;
+  saving: boolean;
+  setSaving: (v: boolean) => void;
+  setError: (msg: string | null) => void;
+}) {
+  const [notes, setNotes] = useState(preparation?.notes ?? "");
+  const [goals, setGoals] = useState(preparation?.goals ?? []);
+  const [talkingPoints, setTalkingPoints] = useState(preparation?.talkingPoints ?? []);
+  const [questionsToAsk, setQuestionsToAsk] = useState(preparation?.questionsToAsk ?? []);
+  const [companyResearchNotes, setCompanyResearchNotes] = useState(
+    preparation?.companyResearchNotes ?? ""
+  );
+  const [rolePreparationNotes, setRolePreparationNotes] = useState(
+    preparation?.rolePreparationNotes ?? ""
+  );
+  const [checklist, setChecklist] = useState<InterviewChecklistItem[]>(
+    preparation?.checklist ??
+      CHECKLIST_KEYS.map((key) => ({
+        key,
+        label: CHECKLIST_LABELS[key],
+        completed: false,
+        completedAt: null,
+      }))
+  );
+
+  const [assistLoading, setAssistLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<PrepAssistSuggestions | null>(null);
+
+  // Sync local state when the loaded preparation changes.
+  useEffect(() => {
+    if (!preparation) return;
+    setNotes(preparation.notes ?? "");
+    setGoals(preparation.goals ?? []);
+    setTalkingPoints(preparation.talkingPoints ?? []);
+    setQuestionsToAsk(preparation.questionsToAsk ?? []);
+    setCompanyResearchNotes(preparation.companyResearchNotes ?? "");
+    setRolePreparationNotes(preparation.rolePreparationNotes ?? "");
+    if (preparation.checklist && preparation.checklist.length > 0) {
+      setChecklist(preparation.checklist);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preparation]);
+
+  const toggleChecklist = (key: ChecklistKey) => {
+    setChecklist((prev) =>
+      prev.map((item) =>
+        item.key === key
+          ? {
+              ...item,
+              completed: !item.completed,
+              completedAt: !item.completed ? new Date().toISOString() : null,
+            }
+          : item
+      )
+    );
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        notes: notes.trim() || null,
+        goals,
+        talkingPoints,
+        questionsToAsk,
+        companyResearchNotes: companyResearchNotes.trim() || null,
+        rolePreparationNotes: rolePreparationNotes.trim() || null,
+        checklist,
+      };
+      const res = await api.put<{ preparation: InterviewPreparation }>(
+        `${API_BASE}/applications/${applicationId}/preparation`,
+        payload
+      );
+      onPreparationChange(res.data.preparation);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to save preparation"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAssist = async () => {
+    setAssistLoading(true);
+    setError(null);
+    try {
+      const res = await api.post<{ suggestions: PrepAssistSuggestions }>(
+        `${API_BASE}/applications/${applicationId}/preparation/assist`
+      );
+      setSuggestions(res.data.suggestions);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to generate suggestions"));
+    } finally {
+      setAssistLoading(false);
+    }
+  };
+
+  const applySuggestion = (
+    field: "goals" | "talkingPoints" | "questionsToAsk",
+    value: string
+  ) => {
+    if (field === "goals") {
+      setGoals((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    } else if (field === "talkingPoints") {
+      setTalkingPoints((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    } else {
+      setQuestionsToAsk((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-slate-800">Interview preparation</h3>
+        <button
+          onClick={handleAssist}
+          disabled={assistLoading}
+          className="px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors disabled:opacity-50"
+        >
+          {assistLoading ? "Generating..." : "Ask AI for suggestions"}
+        </button>
+      </div>
+
+      <div className="border border-slate-200 rounded-lg p-3 space-y-4">
+        <div>
+          <p className="text-xs font-medium text-slate-600 mb-1">Checklist</p>
+          <div className="space-y-1.5">
+            {checklist.map((item) => (
+              <label
+                key={item.key}
+                className="flex items-center gap-2 text-sm cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={item.completed}
+                  onChange={() => toggleChecklist(item.key)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span
+                  className={
+                    item.completed ? "line-through text-slate-400" : "text-slate-700"
+                  }
+                >
+                  {item.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {suggestions && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+            <p className="text-xs font-semibold text-emerald-800">
+              AI suggestions (click to add)
+            </p>
+            {suggestions.suggestedGoals.length > 0 && (
+              <div>
+                <p className="text-[11px] font-medium text-emerald-700 mb-1">Goals</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestions.suggestedGoals.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => applySuggestion("goals", s)}
+                      className="text-xs px-2 py-0.5 bg-white border border-emerald-300 rounded-full hover:bg-emerald-100"
+                    >
+                      + {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {suggestions.suggestedTalkingPoints.length > 0 && (
+              <div>
+                <p className="text-[11px] font-medium text-emerald-700 mb-1">Talking points</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestions.suggestedTalkingPoints.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => applySuggestion("talkingPoints", s)}
+                      className="text-xs px-2 py-0.5 bg-white border border-emerald-300 rounded-full hover:bg-emerald-100"
+                    >
+                      + {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {suggestions.suggestedQuestionsToAsk.length > 0 && (
+              <div>
+                <p className="text-[11px] font-medium text-emerald-700 mb-1">Questions to ask</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestions.suggestedQuestionsToAsk.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => applySuggestion("questionsToAsk", s)}
+                      className="text-xs px-2 py-0.5 bg-white border border-emerald-300 rounded-full hover:bg-emerald-100"
+                    >
+                      + {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div>
+          <p className="text-xs font-medium text-slate-600 mb-1">General notes</p>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={2}
+            maxLength={10000}
+            placeholder="Overall preparation notes..."
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-slate-600 mb-1">Goals</p>
+          <StringListEditor
+            placeholder="Add a goal and press Enter"
+            items={goals}
+            onChange={setGoals}
+          />
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-slate-600 mb-1">Talking points</p>
+          <StringListEditor
+            placeholder="Add a talking point and press Enter"
+            items={talkingPoints}
+            onChange={setTalkingPoints}
+          />
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-slate-600 mb-1">Questions to ask</p>
+          <StringListEditor
+            placeholder="Add a question and press Enter"
+            items={questionsToAsk}
+            onChange={setQuestionsToAsk}
+          />
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-slate-600 mb-1">Company research notes</p>
+          <textarea
+            value={companyResearchNotes}
+            onChange={(e) => setCompanyResearchNotes(e.target.value)}
+            rows={2}
+            maxLength={10000}
+            placeholder="Notes about the company..."
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-slate-600 mb-1">Role preparation notes</p>
+          <textarea
+            value={rolePreparationNotes}
+            onChange={(e) => setRolePreparationNotes(e.target.value)}
+            rows={2}
+            maxLength={10000}
+            placeholder="Notes for this specific role..."
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full px-3 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
+          {saving ? "Saving..." : "Save Preparation"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StringListEditor({
+  items,
+  onChange,
+  placeholder,
+}: {
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder: string;
+}) {
+  const [input, setInput] = useState("");
+
+  const handleKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const value = input.trim();
+      if (value && !items.includes(value)) {
+        onChange([...items, value]);
+        setInput("");
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {items.map((item, index) => (
+            <button
+              key={`${item}-${index}`}
+              type="button"
+              onClick={() => onChange(items.filter((_, i) => i !== index))}
+              title="Remove"
+              className="text-xs px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-full hover:bg-red-50 hover:text-red-600"
+            >
+              {item} ×
+            </button>
+          ))}
+        </div>
+      )}
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+    </div>
+  );
+}
+
+const CHECKLIST_LABELS: Record<ChecklistKey, string> = {
+  resume_reviewed: "Resume reviewed",
+  job_description_reviewed: "Job description reviewed",
+  company_researched: "Company researched",
+  star_stories_prepared: "STAR stories prepared",
+  technical_topics_prepared: "Technical topics prepared",
+  behavioral_topics_prepared: "Behavioral topics prepared",
+  interviewer_questions_prepared: "Interviewer questions prepared",
+};
+
+const URGENCY_STYLES: Record<string, string> = {
+  Overdue: "bg-red-50 text-red-700",
+  "Due today": "bg-amber-50 text-amber-700",
+  Upcoming: "bg-blue-50 text-blue-700",
+  Completed: "bg-emerald-50 text-emerald-700",
+  Inactive: "bg-slate-100 text-slate-500",
+};
+
+function FollowUpsSection({
+  applicationId,
+  followUps,
+  onReload,
+  setError,
+}: {
+  applicationId: string;
+  followUps: ApplicationFollowUp[];
+  onReload: () => Promise<void>;
+  setError: (msg: string | null) => void;
+}) {
+  const [action, setAction] = useState<FollowUpAction>("recruiter_follow_up");
+  const [note, setNote] = useState("");
+  const [dueDate, setDueDate] = useState(toTodayInputValue());
+  const [adding, setAdding] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<ApplicationFollowUp | null>(null);
+
+  const sorted = [...followUps].sort((a, b) => {
+    const order = (f: ApplicationFollowUp) => {
+      if (f.completed) return 4;
+      if (new Date(f.dueAt).getTime() < Date.now()) return 0;
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const due = new Date(f.dueAt).getTime();
+      if (due >= todayStart.getTime() && due < todayStart.getTime() + 86400000)
+        return 1;
+      return 2;
+    };
+    const rankDiff = order(a) - order(b);
+    if (rankDiff !== 0) return rankDiff;
+    return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
+  });
+
+  const handleAdd = async () => {
+    setAdding(true);
+    setError(null);
+    try {
+      await api.post(`${API_BASE}/applications/${applicationId}/follow-ups`, {
+        action,
+        note: note.trim() || null,
+        dueAt: new Date(dueDate).toISOString(),
+      });
+      setNote("");
+      await onReload();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to add follow-up"));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const toggleComplete = async (followUp: ApplicationFollowUp) => {
+    setError(null);
+    try {
+      await api.patch(
+        `${API_BASE}/applications/${applicationId}/follow-ups/${followUp.id}`,
+        { completed: !followUp.completed }
+      );
+      await onReload();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to update follow-up"));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    setError(null);
+    try {
+      await api.delete(
+        `${API_BASE}/applications/${applicationId}/follow-ups/${confirmDelete.id}`
+      );
+      setConfirmDelete(null);
+      await onReload();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to delete follow-up"));
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-slate-800 mb-2">Follow-ups</h3>
+      <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+        {sorted.length === 0 ? (
+          <p className="text-sm text-slate-400">No follow-ups yet.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {sorted.map((f) => {
+              const urgency = formatDueUrgency(f.dueAt, f.completed);
+              return (
+                <div
+                  key={f.id}
+                  className="flex items-start justify-between gap-2 border border-slate-100 rounded-lg p-2.5"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-slate-900">
+                        {FOLLOW_UP_ACTION_LABELS[f.action]}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                          f.completed
+                            ? URGENCY_STYLES.Completed
+                            : URGENCY_STYLES[urgency] || URGENCY_STYLES.Upcoming
+                        }`}
+                      >
+                        {f.completed ? "Completed" : urgency}
+                      </span>
+                    </div>
+                    {f.note && (
+                      <p className="text-xs text-slate-600 mt-0.5 truncate">{f.note}</p>
+                    )}
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Due {formatDateTime(f.dueAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => toggleComplete(f)}
+                      className="text-xs px-2 py-1 text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+                    >
+                      {f.completed ? "Reopen" : "Complete"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(f)}
+                      className="text-xs px-2 py-1 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="border-t border-slate-100 pt-2 space-y-2">
+          <p className="text-xs font-medium text-slate-600">Add follow-up</p>
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={action}
+              onChange={(e) => setAction(e.target.value as FollowUpAction)}
+              className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {FOLLOW_UP_ACTIONS.map((a) => (
+                <option key={a} value={a}>
+                  {FOLLOW_UP_ACTION_LABELS[a]}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Optional note"
+            className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={handleAdd}
+            disabled={adding}
+            className="w-full px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            {adding ? "Adding..." : "Add follow-up"}
+          </button>
+        </div>
+      </div>
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl w-full max-w-sm p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-2">
+              Delete follow-up?
+            </h2>
+            <p className="text-sm text-slate-600 mb-6">
+              This will permanently remove the "
+              {FOLLOW_UP_ACTION_LABELS[confirmDelete.action]}" follow-up.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="flex-1 px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const EVENT_TYPE_STYLES: Record<string, string> = {
   application_created: "bg-slate-100 text-slate-600",

@@ -6,6 +6,8 @@ import { CareerEmail } from "../src/models/CareerEmail";
 import { ApplicationEvent } from "../src/models/ApplicationEvent";
 import Job from "../src/models/Job";
 import { Application } from "../src/models/Application";
+import { InterviewPreparation } from "../src/models/InterviewPreparation";
+import { ApplicationFollowUp } from "../src/models/ApplicationFollowUp";
 import { Types } from "mongoose";
 import { createStatusChangedEvent } from "../src/services/applicationTimeline";
 
@@ -525,5 +527,224 @@ describe("Career intelligence - edge cases", () => {
     expect(res.status).toBe(200);
     expect(res.body.upcomingInterviews).toEqual([]);
     expect(res.body.attention.length).toBe(0);
+  });
+});
+
+describe("Career intelligence - preparation insights", () => {
+  test("surfaces incomplete preparation for an interview-stage application", async () => {
+    const { token, user } = await registerUser();
+    const job = await createJob();
+    const app = await createApplication(user.id as string, job._id as Types.ObjectId, "interview");
+
+    await InterviewPreparation.create({
+      user: user.id,
+      application: app._id as Types.ObjectId,
+      checklist: [
+        { key: "resume_reviewed", label: "Resume reviewed", completed: true },
+        { key: "company_researched", label: "Company researched", completed: false },
+      ],
+    });
+
+    const res = await getDashboard(token);
+    expect(res.status).toBe(200);
+    expect(res.body.preparationInsights.length).toBe(1);
+    const insight = res.body.preparationInsights[0];
+    expect(insight.preparedCount).toBe(1);
+    expect(insight.totalChecklistItems).toBe(2);
+    expect(insight.priority).toBe("medium");
+  });
+
+  test("does not surface preparation for non-interview applications", async () => {
+    const { token, user } = await registerUser();
+    const job = await createJob();
+    await createApplication(user.id as string, job._id as Types.ObjectId, "applied");
+
+    const res = await getDashboard(token);
+    expect(res.status).toBe(200);
+    expect(res.body.preparationInsights).toEqual([]);
+  });
+
+  test("does not surface preparation for rejected or withdrawn applications", async () => {
+    const { token, user } = await registerUser();
+    const jobs = await Promise.all([
+      createJob(),
+      createJob({ title: "Role X" }),
+    ]);
+    await createApplication(user.id as string, jobs[0]._id as Types.ObjectId, "rejected");
+    await createApplication(user.id as string, jobs[1]._id as Types.ObjectId, "withdrawn");
+
+    const res = await getDashboard(token);
+    expect(res.body.preparationInsights).toEqual([]);
+  });
+
+  test("prep insight becomes low when the checklist is fully completed", async () => {
+    const { token, user } = await registerUser();
+    const job = await createJob();
+    const app = await createApplication(user.id as string, job._id as Types.ObjectId, "interview");
+
+    await InterviewPreparation.create({
+      user: user.id,
+      application: app._id as Types.ObjectId,
+      checklist: [
+        { key: "resume_reviewed", label: "Resume reviewed", completed: true },
+        { key: "company_researched", label: "Company researched", completed: true },
+      ],
+    });
+
+    const res = await getDashboard(token);
+    const insight = res.body.preparationInsights[0];
+    expect(insight.priority).toBe("low");
+    expect(insight.preparedCount).toBe(2);
+    expect(insight.totalChecklistItems).toBe(2);
+  });
+
+  test("prep insight is high priority for an upcoming interview with incomplete prep", async () => {
+    const { token, user } = await registerUser();
+    const job = await createJob();
+    const app = await createApplication(user.id as string, job._id as Types.ObjectId, "interview");
+
+    await CareerEmail.create({
+      user: user.id,
+      gmailMessageId: `msg-prep${Math.random()}`,
+      subject: "Interview Invitation",
+      from: "recruiter@acme.com",
+      receivedAt: new Date(),
+      category: "interview_invitation",
+      interview: {
+        type: "technical",
+        scheduledAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        interviewer: "Jane",
+        meetingUrl: "https://meet.example.com/prep",
+        location: null,
+      },
+      application: app._id as Types.ObjectId,
+    });
+
+    await InterviewPreparation.create({
+      user: user.id,
+      application: app._id as Types.ObjectId,
+      checklist: [
+        { key: "resume_reviewed", label: "Resume reviewed", completed: true },
+        { key: "company_researched", label: "Company researched", completed: false },
+      ],
+    });
+
+    const res = await getDashboard(token);
+    const insight = res.body.preparationInsights.find(
+      (i: { reason: string }) => /upcoming interview/i.test(i.reason)
+    );
+    expect(insight).toBeTruthy();
+    expect(insight.priority).toBe("high");
+  });
+});
+
+describe("Career intelligence - follow-ups", () => {
+  test("sorts an overdue follow-up to the top with overdue urgency", async () => {
+    const { token, user } = await registerUser();
+    const job = await createJob();
+    const app = await createApplication(user.id as string, job._id as Types.ObjectId, "applied");
+
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: app._id as Types.ObjectId,
+      action: "recruiter_follow_up",
+      dueAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      completed: false,
+    });
+
+    const res = await getDashboard(token);
+    expect(res.status).toBe(200);
+    expect(res.body.followUps).toHaveLength(1);
+    expect(res.body.followUps[0].urgency).toBe("overdue");
+    expect(res.body.followUps[0].application._id).toBe(String(app._id));
+  });
+
+  test("marks a follow-up due within today as due_today", async () => {
+    const { token, user } = await registerUser();
+    const job = await createJob();
+    const app = await createApplication(user.id as string, job._id as Types.ObjectId, "applied");
+
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: app._id as Types.ObjectId,
+      action: "interview_follow_up",
+      dueAt: new Date(Date.now() + 60 * 60 * 1000),
+      completed: false,
+    });
+
+    const res = await getDashboard(token);
+    expect(res.body.followUps[0].urgency).toBe("due_today");
+  });
+
+  test("marks a future follow-up as upcoming", async () => {
+    const { token, user } = await registerUser();
+    const job = await createJob();
+    const app = await createApplication(user.id as string, job._id as Types.ObjectId, "applied");
+
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: app._id as Types.ObjectId,
+      action: "custom",
+      dueAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      completed: false,
+    });
+
+    const res = await getDashboard(token);
+    expect(res.body.followUps[0].urgency).toBe("upcoming");
+  });
+
+  test("marks completed follow-ups as completed and does not treat them as urgent", async () => {
+    const { token, user } = await registerUser();
+    const job = await createJob();
+    const app = await createApplication(user.id as string, job._id as Types.ObjectId, "applied");
+
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: app._id as Types.ObjectId,
+      action: "thank_you_note",
+      dueAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      completed: true,
+      completedAt: new Date(),
+    });
+
+    const res = await getDashboard(token);
+    expect(res.body.followUps[0].urgency).toBe("completed");
+  });
+
+  test("marks follow-ups for rejected or withdrawn applications as inactive", async () => {
+    const { token, user } = await registerUser();
+    const job = await createJob();
+    const app = await createApplication(user.id as string, job._id as Types.ObjectId, "rejected");
+
+    await ApplicationFollowUp.create({
+      user: user.id,
+      application: app._id as Types.ObjectId,
+      action: "custom",
+      dueAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+      completed: false,
+    });
+
+    const res = await getDashboard(token);
+    expect(res.body.followUps[0].urgency).toBe("inactive");
+  });
+
+  test("does not surface another user's follow-ups", async () => {
+    const first = await registerUser();
+    const second = await registerSecondUser();
+
+    const job1 = await createJob();
+    const app1 = await createApplication(first.user.id as string, job1._id as Types.ObjectId, "applied");
+
+    await ApplicationFollowUp.create({
+      user: first.user.id,
+      application: app1._id as Types.ObjectId,
+      action: "recruiter_follow_up",
+      dueAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      completed: false,
+    });
+
+    const res = await getDashboard(second.token);
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain("recruiter_follow_up");
   });
 });

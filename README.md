@@ -16,24 +16,26 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
-**Milestone 11: Career Intelligence Dashboard & Action Center**
+**Milestone 12: Interview Preparation Hub & Follow-up Actions**
 
-- A user-scoped `GET /api/dashboard/career-intelligence` aggregation endpoint that turns the existing Applications + Gmail + Timeline + AI Summary data into one dashboard payload: `overview` (pipeline counts), `attention`, `upcomingInterviews`, `recentStatusChanges`, `recentCareerEmails`, `recentActivity`, `nextActions`, and `generatedAt`
-- **Pipeline statistics** — total/saved/applied/screening/interview/offer/rejected/withdrawn counts aggregated per user (a single `$group` query, no N+1)
-- **Deterministic attention & action rules** (no invented AI actions):
-  - Upcoming interview (explicit future `CareerEmail.interview.scheduledAt`) → high priority
-  - Active application with no activity for `APPLICATION_STALE_DAYS` (default 7) → "Follow up on stale application"
-  - A matched career email whose `suggestedApplicationStatus` differs from the current status → "Review email / update application status" (never auto-changes status)
-  - Offer stage → surfaced prominently; rejected/withdrawn are never surfaced as urgent follow-ups
-- **Upcoming interviews** use only the explicitly stored interview `scheduledAt` (never inferred from a received date); nullable interviewer/meeting URL/location stay nullable and no interview records are auto-created
-- **Recent activity** merges timeline events, status changes, and career emails ordered by their real `eventDate` (never `createdAt`), with bounded server-side limits
-- Frontend: the `Dashboard` page is now a polished Career Intelligence dashboard (pipeline cards, needs attention, upcoming interviews, next actions, recent emails, recent activity) with navigation that deep-links to My Applications and Career Emails with query-parameter filters
-- Query-parameter filtering: `/dashboard/applications?status=interview` and `/dashboard/emails?category=interview` initialize their respective pages' filters
-- Read-only with respect to Gmail, fully JWT-protected, strictly user-scoped and IDOR-safe, and it works without calling Claude (no expensive AI call on page load)
+- **Interview Preparation** per application (one record per application per user, unique index `user + application`):
+  - `notes`, `goals`, `talkingPoints`, `questionsToAsk`, `companyResearchNotes`, `rolePreparationNotes`
+  - A 7-item **checklist** (`resume_reviewed`, `job_description_reviewed`, `company_researched`, `star_stories_prepared`, `technical_topics_prepared`, `behavioral_topics_prepared`, `interviewer_questions_prepared`) with per-item `completed` / `completedAt` tracked server-side
+  - Endpoints: `GET /api/applications/:id/preparation` (returns a default empty preparation without persisting), `PUT` / `PATCH /api/applications/:id/preparation` (upsert, `.strict()` validation)
+  - Frontend: an "Interview preparation" section in the application detail modal with editable fields, a checklist toggler, an explicit **Save Preparation** button (no autosave)
+- **AI assist (explicit user action only):** `POST /api/applications/:id/preparation/assist` uses Claude to suggest goals, talking points, questions to ask, and checklist highlights. Suggestions are validated with Zod and returned for review only — **they are never auto-saved**; the user intentionally adds each one.
+- **Follow-ups** per application (`recruiter_follow_up`, `interview_follow_up`, `application_follow_up`, `thank_you_note`, `custom`):
+  - `action`, `note`, `dueAt`, `completed` / `completedAt` (server-set)
+  - Endpoints: `GET` (bounded, optional `completed` filter), `POST`, `PATCH`, `DELETE` at `/api/applications/:id/follow-ups[/:followUpId]`
+  - Frontend: add / mark complete / reopen / delete with confirmation; badges clearly distinguish **Overdue**, **Due today**, **Upcoming**, and **Completed**. Manual creation only; nothing is auto-created, and due dates are only compared to the current time.
+- **Career intelligence dashboard** now also returns `preparationInsights` and `followUps`:
+  - Incomplete prep on an interview-stage or upcoming-interview application is surfaced (high priority if there is an upcoming interview, medium otherwise, low when fully prepared)
+  - Follow-ups are bucketed by urgency (`overdue` / `due_today` / `upcoming` / `inactive` / `completed`); rejected/withdrawn applications' follow-ups are marked inactive, never urgent
+- Everything is JWT-protected, strictly user-scoped (cross-user → 404), `.strict()`-validated (422 with `{ error, statusCode, details }`), bounded to avoid unbounded queries, and read-only with respect to Gmail. No application status is auto-changed and no email is sent by this milestone.
 
-**Milestone 10 (Career Application Timeline & Interview Intelligence), Milestone 9 (Gmail / Career Email Intelligence), Milestone 8 (Job Application Tracking), Milestone 7.5 (Frontend Authentication), Milestone 7 (AI Job Matching), and Milestones 1–6 remain implemented.**
+**Milestone 11 (Career Intelligence Dashboard & Action Center), Milestone 10 (Career Application Timeline & Interview Intelligence), Milestone 9 (Gmail / Career Email Intelligence), Milestone 8 (Job Application Tracking), Milestone 7.5 (Frontend Authentication), Milestone 7 (AI Job Matching), and Milestones 1–6 remain implemented.**
 
-LinkedIn and job automation (auto-application / POST-apply) are **NOT** yet implemented. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status, and the dashboard never changes any application or email.
+LinkedIn and job automation (auto-application / POST-apply) are **NOT** yet implemented. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status, and the dashboard never changes any application or email. Interview preparation and follow-ups never auto-create records or auto-change application status.
 
 ## Project Structure
 

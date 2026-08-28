@@ -2,6 +2,8 @@ import { Types } from "mongoose";
 import { Application, APPLICATION_STATUSES } from "../models/Application";
 import { CareerEmail } from "../models/CareerEmail";
 import ApplicationEvent from "../models/ApplicationEvent";
+import { InterviewPreparation } from "../models/InterviewPreparation";
+import { ApplicationFollowUp } from "../models/ApplicationFollowUp";
 
 export interface DashboardOverview {
   totalApplications: number;
@@ -62,6 +64,25 @@ export interface NextAction {
   priority: "high" | "medium" | "low";
 }
 
+export interface PreparationInsight {
+  application: Record<string, unknown>;
+  reason: string;
+  priority: "high" | "medium" | "low";
+  preparedCount: number;
+  totalChecklistItems: number;
+}
+
+export interface FollowUpItem {
+  id: string;
+  action: string;
+  note?: string | null;
+  dueAt: string;
+  completed: boolean;
+  completedAt?: string | null;
+  application: Record<string, unknown> | null;
+  urgency: "overdue" | "due_today" | "upcoming" | "completed" | "inactive";
+}
+
 const JOB_POPULATE_FIELDS =
   "title companyName location locations remoteType employmentType source";
 
@@ -71,6 +92,8 @@ const MAX_EMAILS = 25;
 const MAX_ACTIVITY = 15;
 const MAX_STATUS_EVENTS = 200;
 const MAX_ATTENTION = 20;
+const MAX_FOLLOW_UPS = 100;
+const MAX_PREPARATIONS = 100;
 
 const ACTIVE_STATUSES = new Set(["applied", "screening", "interview", "offer"]);
 
@@ -82,6 +105,8 @@ export interface CareerIntelligenceResult {
   recentCareerEmails: RecentCareerEmail[];
   recentActivity: RecentActivityItem[];
   nextActions: NextAction[];
+  preparationInsights: PreparationInsight[];
+  followUps: FollowUpItem[];
   generatedAt: string;
 }
 
@@ -134,6 +159,27 @@ type LeanEvent = {
   createdAt: Date;
 };
 
+type LeanPreparation = {
+  _id: Types.ObjectId;
+  application: Types.ObjectId;
+  checklist?: {
+    key: string;
+    label: string;
+    completed: boolean;
+    completedAt?: Date | null;
+  }[];
+};
+
+type LeanFollowUp = {
+  _id: Types.ObjectId;
+  application: Types.ObjectId;
+  action: string;
+  note?: string | null;
+  dueAt: Date;
+  completed: boolean;
+  completedAt?: Date | null;
+};
+
 export async function buildCareerIntelligence(
   userId: string
 ): Promise<CareerIntelligenceResult> {
@@ -146,12 +192,16 @@ export async function buildCareerIntelligence(
     emails,
     recentStatusEvents,
     recentActivityEvents,
+    preparations,
+    rawFollowUps,
   ] = await Promise.all([
     countByStatus(userId),
     loadApplications(userId),
     loadRecentEmails(userId),
     loadStatusEvents(userId),
     loadRecentEvents(userId),
+    loadPreparations(userId),
+    loadFollowUps(userId),
   ]);
 
   const appById = new Map<string, LeanApplication>();
@@ -167,6 +217,11 @@ export async function buildCareerIntelligence(
       list.push(email);
       emailByApp.set(key, list);
     }
+  }
+
+  const prepByApp = new Map<string, LeanPreparation>();
+  for (const prep of preparations) {
+    prepByApp.set(String(prep.application), prep);
   }
 
   // Upcoming interviews: only explicit, stored future scheduledAt on emails.
@@ -210,6 +265,14 @@ export async function buildCareerIntelligence(
     appById
   );
 
+  const preparationInsights = buildPreparationInsights(
+    appById,
+    prepByApp,
+    upcomingInterviews
+  );
+
+  const followUps = buildFollowUps(rawFollowUps, appById);
+
   return {
     overview: buildOverview(statusCounts),
     attention,
@@ -218,6 +281,8 @@ export async function buildCareerIntelligence(
     recentCareerEmails,
     recentActivity,
     nextActions,
+    preparationInsights,
+    followUps,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -305,6 +370,20 @@ async function loadRecentEvents(userId: string): Promise<LeanEvent[]> {
     .sort({ eventDate: -1 })
     .limit(MAX_ACTIVITY)
     .lean()) as unknown as LeanEvent[];
+}
+
+async function loadPreparations(userId: string): Promise<LeanPreparation[]> {
+  return (await InterviewPreparation.find({ user: userId })
+    .sort({ updatedAt: -1 })
+    .limit(MAX_PREPARATIONS)
+    .lean()) as unknown as LeanPreparation[];
+}
+
+async function loadFollowUps(userId: string): Promise<LeanFollowUp[]> {
+  return (await ApplicationFollowUp.find({ user: userId })
+    .sort({ dueAt: 1 })
+    .limit(MAX_FOLLOW_UPS)
+    .lean()) as unknown as LeanFollowUp[];
 }
 
 type Insight = {
@@ -451,6 +530,114 @@ function toNextAction(insight: Insight): NextAction {
     reason: insight.actionExplanation,
     priority: insight.priority,
   };
+}
+
+function buildPreparationInsights(
+  appById: Map<string, LeanApplication>,
+  prepByApp: Map<string, LeanPreparation>,
+  upcomingInterviews: UpcomingInterview[]
+): PreparationInsight[] {
+  const upcomingAppIds = new Set(
+    upcomingInterviews.map((item) =>
+      String((item.application as { _id?: string })._id)
+    )
+  );
+
+  const insights: PreparationInsight[] = [];
+
+  for (const app of appById.values()) {
+    const appId = String(app._id);
+    const hasUpcomingInterview = upcomingAppIds.has(appId);
+    // Interview attention only applies to in-progress applications.
+    if (app.status === "rejected" || app.status === "withdrawn") continue;
+    if (!hasUpcomingInterview && app.status !== "interview") continue;
+
+    const prep = prepByApp.get(appId);
+    const checklist = prep?.checklist ?? [];
+    const total = checklist.length;
+    const preparedCount = checklist.filter((item) => item.completed).length;
+
+    let reason: string;
+    let priority: "high" | "medium" | "low";
+    if (hasUpcomingInterview) {
+      reason = "Upcoming interview — complete interview preparation checklist.";
+      priority = total > 0 && preparedCount === total ? "medium" : "high";
+    } else {
+      reason = "Application is in interview stage — review interview preparation.";
+      priority = total > 0 && preparedCount === total ? "low" : "medium";
+    }
+
+    insights.push({
+      application: toSafeApplication(app),
+      reason,
+      priority,
+      preparedCount,
+      totalChecklistItems: total,
+    });
+  }
+
+  return insights.slice(0, MAX_PREPARATIONS);
+}
+
+function buildFollowUps(
+  followUps: LeanFollowUp[],
+  appById: Map<string, LeanApplication>
+): FollowUpItem[] {
+  const now = new Date();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+
+  return followUps
+    .map((followUp) => {
+      const appId = String(followUp.application);
+      const app = appById.get(appId) ?? null;
+
+      let urgency: FollowUpItem["urgency"];
+      const inactive =
+        !app || app.status === "rejected" || app.status === "withdrawn";
+
+      if (followUp.completed) {
+        urgency = "completed";
+      } else if (inactive) {
+        urgency = "inactive";
+      } else if (followUp.dueAt.getTime() < now.getTime()) {
+        urgency = "overdue";
+      } else if (
+        followUp.dueAt.getTime() >= todayStart.getTime() &&
+        followUp.dueAt.getTime() < todayEnd.getTime()
+      ) {
+        urgency = "due_today";
+      } else {
+        urgency = "upcoming";
+      }
+
+      return {
+        id: String(followUp._id),
+        action: followUp.action,
+        note: followUp.note ?? null,
+        dueAt: followUp.dueAt.toISOString(),
+        completed: followUp.completed,
+        completedAt: followUp.completedAt
+          ? followUp.completedAt.toISOString()
+          : null,
+        application: toSafeApplication(app),
+        urgency,
+      };
+    })
+    .sort((a, b) => {
+      const order: Record<FollowUpItem["urgency"], number> = {
+        overdue: 0,
+        due_today: 1,
+        upcoming: 2,
+        inactive: 3,
+        completed: 4,
+      };
+      const rankDiff = order[a.urgency] - order[b.urgency];
+      if (rankDiff !== 0) return rankDiff;
+      return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
+    });
 }
 
 function buildUpcomingInterviews(

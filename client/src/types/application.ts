@@ -84,6 +84,8 @@ export interface ApplicationDetail {
   jobMatch: Record<string, unknown> | null;
   interview: ApplicationInterview | null;
   aiSummary: { [key: string]: unknown } | null;
+  preparation?: import("./interviewPreparation").InterviewPreparation | null;
+  followUps?: import("./followUp").ApplicationFollowUp[];
 }
 
 export interface CareerEmailRef {

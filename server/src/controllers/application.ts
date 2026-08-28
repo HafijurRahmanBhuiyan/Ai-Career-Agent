@@ -4,6 +4,8 @@ import Job from "../models/Job";
 import { CareerEmail } from "../models/CareerEmail";
 import { ApplicationEvent } from "../models/ApplicationEvent";
 import { ApplicationSummary } from "../models/ApplicationSummary";
+import { InterviewPreparation } from "../models/InterviewPreparation";
+import { ApplicationFollowUp } from "../models/ApplicationFollowUp";
 import JobMatch from "../models/JobMatch";
 import { AppError } from "../middleware/errorHandler";
 import {
@@ -160,22 +162,31 @@ export const getApplication = async (
       return next(new AppError("Application not found", 404));
     }
 
-    const [events, emails, jobMatch, aiSummary] = await Promise.all([
-      ApplicationEvent.find({ user: userId, application: appId })
-        .sort({ eventDate: -1 })
-        .limit(100)
-        .lean(),
-      CareerEmail.find({ user: userId, application: appId })
-        .sort({ receivedAt: -1 })
-        .limit(50)
-        .lean(),
-      JobMatch.findOne({ user: userId, job: application.job }).sort({
-        analyzedAt: -1,
-      }).lean(),
-      ApplicationSummary.findOne({ user: userId, application: appId }).sort({
-        analyzedAt: -1,
-      }).lean(),
-    ]);
+    const [events, emails, jobMatch, aiSummary, prep, followUps] =
+      await Promise.all([
+        ApplicationEvent.find({ user: userId, application: appId })
+          .sort({ eventDate: -1 })
+          .limit(100)
+          .lean(),
+        CareerEmail.find({ user: userId, application: appId })
+          .sort({ receivedAt: -1 })
+          .limit(50)
+          .lean(),
+        JobMatch.findOne({ user: userId, job: application.job }).sort({
+          analyzedAt: -1,
+        }).lean(),
+        ApplicationSummary.findOne({ user: userId, application: appId }).sort({
+          analyzedAt: -1,
+        }).lean(),
+        InterviewPreparation.findOne({
+          user: userId,
+          application: appId,
+        }).lean(),
+        ApplicationFollowUp.find({ user: userId, application: appId })
+          .sort({ dueAt: 1 })
+          .limit(50)
+          .lean(),
+      ]);
 
     const interview =
       buildInterviewFromEmails(emails as unknown as EmailLike[]);
@@ -191,6 +202,8 @@ export const getApplication = async (
       jobMatch: jobMatch ? toSafeJobMatch(jobMatch) : null,
       interview,
       aiSummary: aiSummary ? toSafeSummary(aiSummary) : null,
+      preparation: prep ? toSafePreparation(prep) : null,
+      followUps: followUps.map(toSafeFollowUp),
     });
   } catch (error) {
     next(error);
@@ -395,4 +408,35 @@ function toSafeSummary<T extends object>(summary: T): Record<string, unknown> {
   void __v;
   void user;
   return safe;
+}
+
+function toSafePreparation<T extends object>(
+  preparation: T
+): Record<string, unknown> {
+  const source =
+    preparation &&
+    typeof (preparation as { toObject?: unknown }).toObject === "function"
+      ? (preparation as unknown as { toObject: () => Record<string, unknown> }).toObject()
+      : preparation;
+  const { __v, user, _id, ...safe } = source as Record<string, unknown>;
+  void __v;
+  void user;
+  void _id;
+  return safe;
+}
+
+function toSafeFollowUp<T extends object>(followUp: T): Record<string, unknown> {
+  const source =
+    followUp &&
+    typeof (followUp as { toObject?: unknown }).toObject === "function"
+      ? (followUp as unknown as { toObject: () => Record<string, unknown> }).toObject()
+      : followUp;
+  const { __v, user, _id, application, ...safe } = source as Record<string, unknown>;
+  void __v;
+  void user;
+  return {
+    ...safe,
+    id: _id,
+    application: application ? String(application) : undefined,
+  };
 }
