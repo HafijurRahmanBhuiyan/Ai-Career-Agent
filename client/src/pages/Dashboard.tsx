@@ -303,6 +303,47 @@ function Dashboard() {
               )}
             </section>
 
+            <section className="bg-white border border-slate-200 rounded-xl p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Career Performance
+                </h2>
+                <button
+                  onClick={() => navigate("/dashboard/analytics")}
+                  className="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+                >
+                  View Analytics
+                </button>
+              </div>
+              {!data ? (
+                <p className="text-sm text-slate-400">No performance data yet.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  <PerformanceStat
+                    label="App → Interview"
+                    value={`${Math.round(
+                      (data.overview.interview + data.overview.offer) /
+                        Math.max(1, data.overview.totalApplications) *
+                        100
+                    )}%`}
+                  />
+                  <PerformanceStat
+                    label="Interview → Offer"
+                    value={`${Math.round(
+                      data.overview.offer /
+                        Math.max(1, data.overview.interview + data.overview.offer) *
+                        100
+                    )}%`}
+                  />
+                  <PerformanceStat
+                    label="Active"
+                    value={data.overview.screening + data.overview.interview}
+                  />
+                  <PerformanceStat label="Offers" value={data.overview.offer} />
+                </div>
+              )}
+            </section>
+
             <section className="bg-white border border-slate-200 rounded-xl p-6">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">
                 Recent Activity
@@ -512,6 +553,15 @@ const FOLLOW_UP_PRIORITY_STYLES: Record<string, string> = {
   medium: "bg-amber-50 text-amber-700",
   low: "bg-slate-100 text-slate-600",
 };
+
+function PerformanceStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="text-center">
+      <p className="text-2xl font-bold text-slate-900">{value}</p>
+      <p className="text-sm text-slate-500 mt-1">{label}</p>
+    </div>
+  );
+}
 
 function FollowUpRow({
   item,

@@ -30,6 +30,7 @@ import {
 } from "../controllers/applicationFollowUp";
 import { assistFollowUps } from "../controllers/applicationFollowUpAssist";
 import { listGlobalFollowUps } from "../controllers/globalFollowUps";
+import { getAnalytics } from "../controllers/applicationAnalytics";
 import { authenticate } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import {
@@ -59,6 +60,10 @@ router.post("/", validate(createApplicationSchema), createApplication);
 // Global follow-up view across the user's applications. Registered BEFORE
 // "/:id" so it is not swallowed by the application detail route.
 router.get("/follow-ups", listGlobalFollowUps);
+
+// Career application analytics. Registered BEFORE "/:id" so the literal
+// "analytics" path is not swallowed by the application detail catch-all.
+router.get("/analytics", getAnalytics);
 
 router.get("/:id/timeline", getTimeline);
 router.post("/:id/timeline", validate(createTimelineEventSchema), addTimelineEvent);

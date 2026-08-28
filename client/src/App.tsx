@@ -11,6 +11,7 @@ import JobMatches from "./pages/JobMatches";
 import Applications from "./pages/Applications";
 import CareerEmails from "./pages/CareerEmails";
 import FollowUps from "./pages/FollowUps";
+import Analytics from "./pages/Analytics";
 
 function App() {
   return (
@@ -72,6 +73,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CareerEmails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/analytics"
+          element={
+            <ProtectedRoute>
+              <Analytics />
             </ProtectedRoute>
           }
         />
