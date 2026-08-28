@@ -14,6 +14,7 @@ import Applications from "./pages/Applications";
 import CareerEmails from "./pages/CareerEmails";
 import FollowUps from "./pages/FollowUps";
 import Analytics from "./pages/Analytics";
+import Settings from "./pages/Settings";
 
 function App() {
   return (
@@ -99,6 +100,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Analytics />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
             </ProtectedRoute>
           }
         />

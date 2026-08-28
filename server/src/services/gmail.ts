@@ -4,6 +4,7 @@ import {
   getGmailScopes,
 } from "../integrations/gmail/gmailClient";
 import GmailConnection from "../models/GmailConnection";
+import Profile from "../models/Profile";
 import { CareerEmail, ICareerEmail } from "../models/CareerEmail";
 import { Application } from "../models/Application";
 import { AppError } from "../middleware/errorHandler";
@@ -42,6 +43,13 @@ const CAREER_KEYWORDS = [
   "role with",
   "we would like to move forward",
 ];
+
+const SELF_NOTIFY_CATEGORIES = new Set([
+  "interview_invitation",
+  "interview_reschedule",
+  "offer",
+  "recruiter_outreach",
+]);
 
 export class GmailService {
   private claude: ClaudeService;
@@ -245,6 +253,8 @@ export class GmailService {
             classification
           );
         }
+
+        await this.maybeSendSelfNotification(userId, careerEmail, connection);
       } catch {
         result.failed += 1;
       }
@@ -317,6 +327,70 @@ export class GmailService {
     }
 
     return email.toObject();
+  }
+
+  private async maybeSendSelfNotification(
+    userId: string,
+    email: ICareerEmail,
+    connection: import("mongoose").HydratedDocument<unknown>
+  ): Promise<void> {
+    try {
+      if (!email.category || !SELF_NOTIFY_CATEGORIES.has(email.category)) {
+        return;
+      }
+
+      const profile = await Profile.findOne({ user: userId });
+      if (profile && profile.gmailNotifyEnabled === false) {
+        return;
+      }
+
+      const conn = connection as unknown as {
+        googleAccountEmail?: string;
+      };
+      const recipient = profile?.notificationEmail?.trim() || conn.googleAccountEmail;
+      if (!recipient) {
+        return;
+      }
+
+      const accessToken = await this.ensureValidAccessToken(connection);
+      const client = new GmailClient(accessToken);
+
+      const subject = this.buildSelfNotificationSubject(email);
+      const body = this.buildSelfNotificationBody(email);
+
+      await client.sendMessage(recipient, subject, body);
+    } catch {
+      // Self-notification is best-effort and must never fail the sync.
+    }
+  }
+
+  private buildSelfNotificationSubject(email: ICareerEmail): string {
+    const milestone = (email.category || "").replace(/_/g, " ");
+    const company = email.companyName ? ` at ${email.companyName}` : "";
+    return `[Career Agent] ${milestone}${company}`;
+  }
+
+  private buildSelfNotificationBody(email: ICareerEmail): string {
+    const lines: string[] = [];
+    const category = (email.category || "").replace(/_/g, " ");
+
+    lines.push(`Career milestone detected: ${category}`);
+    if (email.companyName) lines.push(`Company: ${email.companyName}`);
+    if (email.jobTitle) lines.push(`Role: ${email.jobTitle}`);
+    if (email.interview?.scheduledAt) {
+      lines.push(
+        `Interview: ${this.parseIso(String(email.interview.scheduledAt))?.toUTCString() ?? email.interview.scheduledAt.toUTCString()}`
+      );
+    }
+    if (email.actionRequired) {
+      lines.push(`Action required: yes${email.actionDeadline ? ` (by ${email.actionDeadline.toUTCString()})` : ""}`);
+    }
+    if (email.summary) lines.push("");
+    if (email.summary) lines.push(email.summary.slice(0, 400));
+    lines.push("");
+    lines.push("This notification was sent by your Career Agent's automatic email sync.");
+
+    return lines.join("\n");
   }
 
   private async ensureValidAccessToken(

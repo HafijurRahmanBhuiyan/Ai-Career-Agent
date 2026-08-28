@@ -19,12 +19,20 @@ import applicationRoutes from "./routes/applications";
 import gmailRoutes from "./routes/gmail";
 import linkedinRoutes from "./routes/linkedin";
 import careerIntelligenceRoutes from "./routes/careerIntelligence";
+import notificationCenterRoutes from "./routes/notificationCenter";
+import settingsRoutes from "./routes/settings";
 import { registerJobSource } from "./integrations/jobs/jobSourceRegistry";
 import { MockJobSource } from "./integrations/jobs/sources/mockJobSource";
+import { AdzunaJobSource } from "./integrations/jobs/sources/adzunaJobSource";
+import { ArbeitnowJobSource } from "./integrations/jobs/sources/arbeitnowJobSource";
+import { RemoteOkJobSource } from "./integrations/jobs/sources/remoteOkJobSource";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { NODE_ENV } from "./config";
 
 registerJobSource(() => new MockJobSource());
+registerJobSource(() => new AdzunaJobSource());
+registerJobSource(() => new ArbeitnowJobSource());
+registerJobSource(() => new RemoteOkJobSource());
 
 dotenv.config();
 
@@ -75,6 +83,8 @@ app.use("/api/applications", applicationRoutes);
 app.use("/api/gmail", gmailRoutes);
 app.use("/api/linkedin", linkedinRoutes);
 app.use("/api/dashboard", careerIntelligenceRoutes);
+app.use("/api/notifications", notificationCenterRoutes);
+app.use("/api/settings", settingsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

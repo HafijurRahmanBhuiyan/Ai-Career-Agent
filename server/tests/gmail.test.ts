@@ -3,6 +3,7 @@ import { app } from "../src/app";
 import { connectTestDB, disconnectTestDB, clearTestDB } from "./setup";
 import { registerUser, registerSecondUser } from "./helpers";
 import GmailConnection from "../src/models/GmailConnection";
+import Profile from "../src/models/Profile";
 import { CareerEmail } from "../src/models/CareerEmail";
 import Job from "../src/models/Job";
 import { Application } from "../src/models/Application";
@@ -49,6 +50,7 @@ jest.mock("../src/integrations/gmail/gmailClient", () => {
       },
     })
   );
+  const sendMessage = jest.fn(() => Promise.resolve({ id: "sent1" }));
   return {
     getGmailScopes: jest.fn(
       () => "https://www.googleapis.com/auth/gmail.readonly"
@@ -59,6 +61,7 @@ jest.mock("../src/integrations/gmail/gmailClient", () => {
         listMessages,
         getMessageMeta,
         getMessageFull,
+        sendMessage,
       })),
       {
         getOAuthAuthorizeUrl,
@@ -74,6 +77,7 @@ jest.mock("../src/integrations/gmail/gmailClient", () => {
       listMessages: () => listMessages,
       getMessageMeta: () => getMessageMeta,
       getMessageFull: () => getMessageFull,
+      sendMessage: () => sendMessage,
     },
   };
 });
@@ -89,6 +93,7 @@ const mockGetProfile = () => gmailMocks().getProfile() as jest.Mock;
 const mockListMessages = () => gmailMocks().listMessages() as jest.Mock;
 const mockGetMessageMeta = () => gmailMocks().getMessageMeta() as jest.Mock;
 const mockGetMessageFull = () => gmailMocks().getMessageFull() as jest.Mock;
+const mockSendMessage = () => gmailMocks().sendMessage() as jest.Mock;
 
 jest.mock("../src/integrations/claude/claudeClient", () => {
   const analyze = jest.fn<Promise<string>, [string, string]>(() =>
@@ -352,6 +357,85 @@ describe("Gmail Sync", () => {
     expect(email!.suggestedApplicationStatus).toBe("interview");
     expect(email!.classificationStatus).toBe("classified");
   });
+
+  it("sends a self-notification email on an interview milestone", async () => {
+    const { token, user } = await registerUser();
+    const userId = (user as { id: string }).id;
+    await connectGmail(userId);
+    await Profile.create({
+      user: userId,
+      notificationEmail: "notify@example.com",
+      gmailNotifyEnabled: true,
+    });
+
+    mockListMessages().mockResolvedValue([{ id: "msg1", threadId: "thread1" }]);
+    mockClaudeAnalyze().mockResolvedValue(classificationJson());
+    mockSendMessage().mockClear();
+
+    const res = await request(app)
+      .post("/api/gmail/sync")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.classified).toBe(1);
+    expect(mockSendMessage()).toHaveBeenCalledTimes(1);
+    const [to, subject, body] = mockSendMessage().mock.calls[0] as [
+      string,
+      string,
+      string
+    ];
+    expect(to).toBe("notify@example.com");
+    expect(subject).toContain("interview invitation");
+    expect(body).toContain("Acme");
+  });
+
+  it("does not self-notify when the gmailNotifyEnabled toggle is off", async () => {
+    const { token, user } = await registerUser();
+    const userId = (user as { id: string }).id;
+    await connectGmail(userId);
+    await Profile.create({
+      user: userId,
+      notificationEmail: "notify@example.com",
+      gmailNotifyEnabled: false,
+    });
+
+    mockListMessages().mockResolvedValue([{ id: "msg1", threadId: "thread1" }]);
+    mockClaudeAnalyze().mockResolvedValue(classificationJson());
+    mockSendMessage().mockClear();
+
+    const res = await request(app)
+      .post("/api/gmail/sync")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.classified).toBe(1);
+    expect(mockSendMessage()).not.toHaveBeenCalled();
+  });
+
+  it("does not self-notify on a non-milestone category", async () => {
+    const { token, user } = await registerUser();
+    const userId = (user as { id: string }).id;
+    await connectGmail(userId);
+    await Profile.create({
+      user: userId,
+      notificationEmail: "notify@example.com",
+      gmailNotifyEnabled: true,
+    });
+
+    mockListMessages().mockResolvedValue([{ id: "msg1", threadId: "thread1" }]);
+    mockClaudeAnalyze().mockResolvedValue(
+      classificationJson({ category: "application_received" })
+    );
+    mockSendMessage().mockClear();
+
+    const res = await request(app)
+      .post("/api/gmail/sync")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(mockSendMessage()).not.toHaveBeenCalled();
+  });
+
 
   it("skips non-career emails without invoking Claude", async () => {
     const { token, user } = await registerUser();

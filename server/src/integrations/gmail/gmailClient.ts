@@ -4,7 +4,10 @@ const GMAIL_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_OAUTH_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1";
 
-const DEFAULT_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+const DEFAULT_SCOPE = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
+].join(" ");
 
 export interface GmailTokenResponse {
   access_token: string;
@@ -188,6 +191,36 @@ export class GmailClient {
       `/users/me/messages/${id}`,
       { params: { format: "full" } }
     );
+    return response.data;
+  }
+
+  private static buildRawMessage(
+    to: string,
+    subject: string,
+    bodyText: string
+  ): string {
+    const headers = [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "MIME-Version: 1.0",
+      "",
+      bodyText,
+      "",
+    ].join("\r\n");
+
+    return Buffer.from(headers, "utf8").toString("base64url");
+  }
+
+  async sendMessage(
+    to: string,
+    subject: string,
+    bodyText: string
+  ): Promise<{ id?: string }> {
+    const raw = GmailClient.buildRawMessage(to, subject, bodyText);
+    const response = await this.api.post<{ id?: string }>("/users/me/messages/send", {
+      raw,
+    });
     return response.data;
   }
 }

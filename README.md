@@ -16,6 +16,22 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
+**Milestone 18: Real Job Sources, Scheduled Ingestion, Notifications & Settings**
+
+Milestone 18 connects the existing discovery/opportunity pipeline to **real job-source connectors** (Adzuna + Arbeitnow + RemoteOK), adds a **scheduled ingestion** workflow for the n8n automation, enables **read + self-notify Gmail** (interview/shortlist detection emails the user's own address — never sends on their behalf), adds a **read-only notification center**, and ships a **`/dashboard/settings`** page backed by profile search/app notification preferences. It preserves every human-in-the-loop boundary from earlier milestones: **no LinkedIn scraping or headless automation, no fully-automatic applications, no auto-publish without approval, Gmail stays read + self-notify only**, and no second matcher / parallel Claude path for existing systems.
+
+- **Real job-source connectors (no scraping).** New `JobSource` implementations in `server/src/integrations/jobs/sources/`: `adzunaJobSource.ts` (keyed, keys normally required), `arbeitnowJobSource.ts` (keyless), and `remoteOkJobSource.ts` (keyless), all registered in the central `jobSourceRegistry` alongside the existing `MockJobSource`. All use a shared `http.ts` helper (global `fetch`, Node 26 — no new dependency, 15s timeout, `HttpFetchError`). Adzuna maps `remote` via a keyword heuristic, `employmentType`/`experienceLevel` from its `contract_time`/`contract_type`/title seniority fields; Arbeitnow maps `slug` id + remote/job-types; RemoteOK skips its metadata row and maps `apply_url`. An **unconfigured Adzuna throws** so `discoverJobs` reports `status: "error"` and skips it gracefully — the feed and the rest of the pipeline keep working. All results flow through the existing `normalizeJob` → `deduplicateJobs` → `Job.bulkWrite` pipeline, so nothing new was added to the matching or application path.
+- **Scheduled ingestion (n8n, no LinkedIn).** `n8n/workflows/job-ingestion-workflow.json` is a 2-node workflow (Schedule Trigger every **6 hours** → HTTP Request to `POST http://localhost:5001/api/jobs/discover` using an **HTTP Header Auth** credential with a JWT). The discovery endpoint is JWT-protected and rate-limited (20 req / 15 min), its body is validated by `jobDiscoverRequestSchema` (`keywords`, `roles`, `locations`, `remote`, `employmentType`, `experienceLevel`, `salaryMinimum`, `page`, `limit`). `docs/n8n-setup.md` documents setup, a manual run, the expected per-source `status: "success" | "error"` report, and troubleshooting. The workflow contains **no LinkedIn** — it only fetches job listings.
+- **Gmail read + self-notify only.** `gmailClient.ts` default scope is now `gmail.readonly` + `gmail.send`, and `services/gmail.ts` adds `sendMessage` (best-effort, never throws) plus `maybeSendSelfNotification` (Subject/body builders). When `syncEmails` detects a milestone (an **interview invitation** / **application upswing**), the service sends a notification **to the user's own** `Profile.notificationEmail` (falls back to the signed-in account) **only if** `gmailNotifyEnabled` (default `true`). It never sends or replies to a third party, never changes status, and a disable toggle or "send" failure never breaks a sync. New `Profile` fields: `jobSearchPreferences`, `notificationEmail`, `gmailNotifyEnabled`, `notificationsSeenAt`.
+- **Read-only notification center.** `GET /api/notification-center` / `POST /api/notification-center/seen` (`services/notificationCenter.ts`) aggregates, since `Profile.notificationsSeenAt`: high-match opportunities (`score >= 75`), LinkedIn drafts needing `reviewed`/`approved`, unconfirmed saved-application handoffs, and career emails in notify categories. It never mutates anything; the client marks "seen" on open (Feature 4). No background workers/cron/queues on the server.
+- **Settings.** `GET /api/settings` returns each job source's configured status (never revealing keys), the profile's `jobSearchPreferences`, and notification prefs. The new `/dashboard/settings` page shows source status, lets the user edit search preferences (roles, locations, remote, experience level, min salary) and notification email + `gmailNotifyEnabled`, saving via the existing `PATCH /api/profile`.
+- **Security & constraints** — JWT-protected, user-scoped, strict Zod, safe DTOs (Adzuna keys never returned/leaked), no scraping, no headless automation, no auto-apply, no auto status changes, no auto-publish without explicit approval, no second matcher, and no LinkedIn in the n8n workflow.
+- **API** — `POST /api/jobs/discover` (20/15min), `POST /api/jobs/ingest` (40/15min), `GET /api/settings`, `GET /api/notification-center`, `POST /api/notification-center/seen`. `.env.example` gains `ADZUNA_APP_ID`, `ADZUNA_APP_KEY`, `ADZUNA_COUNTRY` and documents the `gmail.send` self-notify scope.
+- **Frontend** — new **Settings** page at `/dashboard/settings` (nav item **Settings**); existing `professional-content` and `applications` human-in-the-loop flows (review → approve → publish confirmation, review → handoff → confirm-applied, advisory-only assist) are preserved and polished. Uses existing Tailwind conventions; no new dependencies.
+- **Testing** — new `jobSources.test.ts` (8), `notificationCenter.test.ts` (4), `settings.test.ts` (4); extended `gmail.test.ts` (38) and `jobs.test.ts` (25, discovery stubs `global.fetch` so unconfigured external connectors degrade gracefully to the deterministic mock). Full server suite **31 suites / 571 tests pass**, typecheck passes on both server and client.
+
+Milestone 17 remains implemented (see below).
+
 **Milestone 17: Career Opportunity Feed & Profession Matching**
 
 A user-scoped career opportunity feed with **extensible, real job-source ingestion** and a **fully deterministic, explainable match** computed against the user's existing profile data (skills, experience, roles, location/remote/salary preferences, and M15 professional evidence). The feed **never calls Claude on load** and reuses the existing matcher payload builders (`prepareMatchProfile` / `prepareMatchJob`) plus the shared `applyCapability` classifier and `matchLevelFromScore` thresholds — it does **not** create a second matcher. Each opportunity carries a score, a match level (`strong/good/partial/weak`), a plain-language **match explanation**, matching/missing skills and technologies, an apply capability (`external_url | supported_api | manual_required`) with a **real** handoff URL, and whether the user has already saved/applied to it.
@@ -131,8 +147,11 @@ Edit `server/.env` and set:
 - `GOOGLE_CLIENT_SECRET` — Google OAuth client secret (for Gmail)
 - `GOOGLE_REDIRECT_URI` — Google OAuth redirect URI
 - `GOOGLE_CALLBACK_URL` — Gmail OAuth callback URL (e.g., `http://localhost:5001/api/gmail/callback`)
-- `GOOGLE_GMAIL_SCOPES` — Gmail OAuth scopes (default `https://www.googleapis.com/auth/gmail.readonly`)
+- `GOOGLE_GMAIL_SCOPES` — Gmail OAuth scopes (default `https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.send` — the `send` scope is used **only** for read + self-notify, never to send on the user's behalf)
 - `GMAIL_SYNC_MAX_RESULTS` — Max emails fetched per sync (default `25`)
+- `ADZUNA_APP_ID` — Adzuna App ID (optional; Adzuna is skipped gracefully when missing)
+- `ADZUNA_APP_KEY` — Adzuna App Key (optional)
+- `ADZUNA_COUNTRY` — Adzuna country code (default `gb`)
 - `APPLICATION_STALE_DAYS` — Days without activity before an active application is flagged as "stale" (default `7`, used by the Career Intelligence dashboard)
 - `ANTHROPIC_API_KEY` — Anthropic Claude API key (server-side only, never exposed)
 - `CLAUDE_MODEL` — Claude model (e.g., `claude-sonnet-4-20250514`)
@@ -562,7 +581,7 @@ GmailController / routes (8 endpoints)
 - `GET /api/gmail/connect` returns an authorize URL and a single-use in-memory state (reusing `oauthState.ts`).
 - The Google authorize URL uses `access_type=offline` + `prompt=consent` so a **refresh token** is obtained (required for later read-only syncs).
 - `GET /api/gmail/callback` validates the state, exchanges the code for tokens, persists an encrypted `GmailConnection`, and redirects the browser back to the client.
-- The default scope is `https://www.googleapis.com/auth/gmail.readonly` (overridable via `GOOGLE_GMAIL_SCOPES` / `getGmailScopes()`).
+- The default scopes are `https://www.googleapis.com/auth/gmail.readonly` + `https://www.googleapis.com/auth/gmail.send` (overridable via `GOOGLE_GMAIL_SCOPES` / `getGmailScopes()`). The `send` scope is used **only** for self-notification (see below), never to send/reply on the user's behalf.
 - Access tokens are auto-refreshed when expired; if the refresh token has been revoked the connection is marked `isActive=false`.
 
 ### Sync Pipeline
@@ -584,7 +603,7 @@ By default, **syncing never changes an application's status**. AI classification
 
 ### Security
 
-- The Gmail integration is **read-only**: no email sending, replying, deletion, or auto-apply is implemented.
+- The Gmail integration is **read + self-notify only**: no replying, deletion, auto-apply, or sending to any third party is implemented. The only `send` use is a best-effort self-notification email to the user's own address when an interview/upswing is detected (gated by `Profile.gmailNotifyEnabled`).
 - OAuth tokens are encrypted at rest with AES-256-GCM and stored with `select:false`; they are never returned to the frontend and never logged.
 - Both access and refresh tokens are stripped from all responses; `toSafeEmail`/`toSafeApplication` remove `user` and raw metadata.
 - All Gmail endpoints require authentication; all queries are scoped by `user`, and IDOR-protected (reading/updating another user's email or application returns 404).
@@ -600,7 +619,7 @@ By default, **syncing never changes an application's status**. AI classification
 
 ### What Milestone 9 does NOT do
 
-- It does **not** implement sending, replying to, or deleting emails.
+- It does **not** implement replying to or deleting emails, and no sending to any third party. The only `send` (Milestone 18) is a self-notification email to the user's own address on interview/upswing detection, gated by `gmailNotifyEnabled`.
 - It does **not** implement automatic job application or POST-apply automation.
 - It does **not** auto-update application statuses (human-in-the-loop only).
 

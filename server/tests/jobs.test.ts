@@ -215,6 +215,17 @@ describe("Jobs API - search page", () => {
 });
 
 describe("Jobs API - discovery endpoint", () => {
+  let originalFetch: typeof global.fetch;
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    global.fetch = jest.fn().mockRejectedValue(
+      new Error("network disabled in unit test")
+    ) as unknown as typeof fetch;
+  });
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
   test("requires authentication", async () => {
     const res = await request(app).post("/api/jobs/discover").send({});
     expect(res.status).toBe(401);

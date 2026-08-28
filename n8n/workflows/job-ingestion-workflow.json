@@ -1,0 +1,61 @@
+{
+  "name": "Job Ingestion - Scheduled Discovery",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Every 6 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5001/api/jobs/discover",
+        "sendBody": true,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"roles\": [\"Software Engineer\", \"Full Stack Developer\"],\n  \"locations\": [],\n  \"remote\": \"any\",\n  \"experienceLevel\": \"mid\",\n  \"salaryMinimum\": 60000,\n  \"limit\": 20,\n  \"page\": 1\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Trigger job discovery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Every 6 hours": {
+      "main": [
+        [
+          {
+            "node": "Trigger job discovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "ai-career-agent-scheduled-ingestion"
+  }
+}

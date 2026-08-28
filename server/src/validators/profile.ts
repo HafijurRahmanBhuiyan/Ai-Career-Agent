@@ -16,6 +16,27 @@ export const createProfileSchema = z.object({
       currency: z.string().max(3).trim().optional(),
     })
     .optional(),
+  jobSearchPreferences: z
+    .object({
+      roles: z.array(z.string().trim().max(200)).optional(),
+      locations: z.array(z.string().trim().max(200)).optional(),
+      remote: z.enum(["remote", "hybrid", "onsite", "any"]).optional(),
+      experienceLevel: z.enum(["entry", "junior", "mid", "senior", "lead", "manager", ""]).optional(),
+      salaryMinimum: z.number().nonnegative().optional(),
+    })
+    .strict()
+    .optional(),
+  notificationEmail: z
+    .string()
+    .max(320)
+    .trim()
+    .toLowerCase()
+    .refine((v) => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+      message: "Notification email must be a valid email address",
+    })
+    .optional()
+    .or(z.literal("")),
+  gmailNotifyEnabled: z.boolean().optional(),
 });
 
 export const updateProfileSchema = createProfileSchema.partial();
