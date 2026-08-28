@@ -4,20 +4,24 @@ import ProjectAnalysis from "../models/ProjectAnalysis";
 import { decryptToken } from "../utils/encryption";
 import { GitHubService } from "../integrations/github/github.service";
 import { ClaudeService } from "../integrations/claude/claude.service";
-import { getModel, truncateReadme } from "../integrations/claude/claudeClient";
 import { PROJECT_ANALYSIS_PROMPT_VERSION } from "../integrations/claude/prompts";
 import { validateAnalysisResult } from "../validators/projectAnalysis";
 import { AppError } from "../middleware/errorHandler";
+import { AIProvider } from "../integrations/ai/ai.types";
 
 const claudeService = new ClaudeService();
 
 interface AnalysisInput {
   userId: string;
   githubRepositoryId: number;
+  provider?: AIProvider;
 }
 
 async function verifyOwnership(userId: string, githubRepositoryId: number) {
-  const connection = await GitHubConnection.findOne({ user: userId }).select("+accessToken");
+  const connection = await GitHubConnection.findOne({ user: userId }).select(
+    "+accessToken"
+  );
+
   if (!connection) {
     throw new AppError("GitHub account not connected", 400);
   }
@@ -26,6 +30,7 @@ async function verifyOwnership(userId: string, githubRepositoryId: number) {
     user: userId,
     githubRepositoryId,
   });
+
   if (!repository) {
     throw new AppError("Repository not imported", 404);
   }
@@ -39,6 +44,7 @@ async function verifyOwnership(userId: string, githubRepositoryId: number) {
 export async function analyzeGitHubRepository({
   userId,
   githubRepositoryId,
+  provider,
 }: AnalysisInput) {
   const { repository, githubService } = await verifyOwnership(
     userId,
@@ -49,39 +55,53 @@ export async function analyzeGitHubRepository({
     githubService.getRepositoryLanguages(repository.fullName),
     githubService
       .getRepositoryReadme(repository.fullName)
-      .then((r) => Buffer.from(r.content, r.encoding as BufferEncoding).toString("utf8"))
+      .then((r) =>
+        Buffer.from(r.content, r.encoding as BufferEncoding).toString("utf8")
+      )
       .catch(() => null),
   ]);
 
-  const { content: readme, truncated } = truncateReadme(
-    readmeRaw || ""
+  const MAX_README_CHARS = 15000;
+
+  const readme =
+    readmeRaw && readmeRaw.length > MAX_README_CHARS
+      ? readmeRaw.slice(0, MAX_README_CHARS) +
+        "\n\n[README truncated at 15000 characters]"
+      : readmeRaw || null;
+
+  const readmeTruncated =
+    !!readmeRaw && readmeRaw.length > MAX_README_CHARS;
+
+  const {
+    result: analysisResult,
+    model,
+  } = await claudeService.analyzeProject(
+    {
+      repository: {
+        name: repository.name,
+        fullName: repository.fullName,
+        description: repository.description,
+        language: repository.language,
+        topics: repository.topics,
+        defaultBranch: repository.defaultBranch,
+        stars: repository.stars,
+        forks: repository.forks,
+        size: repository.size,
+      },
+      languages,
+      readme,
+    },
+    provider
   );
 
-  const analysisResult = await claudeService.analyzeProject({
-    repository: {
-      name: repository.name,
-      fullName: repository.fullName,
-      description: repository.description,
-      language: repository.language,
-      topics: repository.topics,
-      defaultBranch: repository.defaultBranch,
-      stars: repository.stars,
-      forks: repository.forks,
-      size: repository.size,
-    },
-    languages,
-    readme: readmeRaw ? readme : null,
-  });
-
   const validation = validateAnalysisResult(analysisResult);
+
   if (!validation.success) {
     throw new AppError(
       `Analysis validation failed: ${validation.error}`,
       422
     );
   }
-
-  const model = getModel();
 
   const saved = await ProjectAnalysis.create({
     user: userId,
@@ -108,7 +128,7 @@ export async function analyzeGitHubRepository({
     analyzedAt: new Date(),
   });
 
-  return { analysis: saved, readmeTruncated: truncated };
+  return { analysis: saved, readmeTruncated };
 }
 
 export async function getLatestAnalysis({
@@ -119,6 +139,7 @@ export async function getLatestAnalysis({
     user: userId,
     githubRepositoryId,
   });
+
   if (!repository) {
     throw new AppError("Repository not imported", 404);
   }
@@ -143,6 +164,7 @@ export async function getAnalysisHistory({
     user: userId,
     githubRepositoryId,
   });
+
   if (!repository) {
     throw new AppError("Repository not imported", 404);
   }
@@ -158,6 +180,11 @@ export async function getAnalysisHistory({
 export async function reanalyzeRepository({
   userId,
   githubRepositoryId,
+  provider,
 }: AnalysisInput) {
-  return analyzeGitHubRepository({ userId, githubRepositoryId });
+  return analyzeGitHubRepository({
+    userId,
+    githubRepositoryId,
+    provider,
+  });
 }

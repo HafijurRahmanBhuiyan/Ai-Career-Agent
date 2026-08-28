@@ -52,7 +52,7 @@ export class ClaudeService {
   async analyzeProject(
     input: ProjectAnalysisInput,
     provider?: AIProvider
-  ): Promise<{ result: ProjectAnalysisResult; model: string }> {
+  ): Promise<ProjectAnalysisResult> {
     const userMessage = buildProjectAnalysisUserMessage(
       input.repository.name,
       input.repository.description,
@@ -73,10 +73,7 @@ export class ClaudeService {
       provider
     );
 
-    return {
-      result: this.parseResponse(rawResponse.text) as ProjectAnalysisResult,
-      model: rawResponse.model,
-    };
+    return this.parseResponse(rawResponse.text) as ProjectAnalysisResult;
   }
 
   async analyzeJobMatch(
@@ -112,6 +109,7 @@ export class ClaudeService {
         systemPrompt: EMAIL_SYSTEM_PROMPT,
         userMessage,
       },
+      provider
     );
 
     const parsed = this.parseResponse(rawResponse.text) as EmailClassification;

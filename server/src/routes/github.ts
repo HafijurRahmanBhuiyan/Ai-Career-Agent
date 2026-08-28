@@ -32,7 +32,7 @@ import { updateEvidenceSchema } from "../validators/professionalContent";
 const router = Router();
 
 router.get("/connect", authenticate, connect);
-router.get("/callback", authenticate, callback);
+router.get("/callback", callback);
 router.post("/disconnect", authenticate, disconnect);
 router.get("/status", authenticate, getStatus);
 router.get("/repositories", authenticate, getRepositories);

@@ -30,9 +30,8 @@ export function generateOAuthState(userId: string): string {
 }
 
 export function validateOAuthState(
-  state: string,
-  userId: string
-): { valid: boolean; error?: string } {
+  state: string
+): { valid: boolean; userId?: string; error?: string } {
   const stored = stateStore.get(state);
 
   if (!stored) {
@@ -49,13 +48,12 @@ export function validateOAuthState(
     return { valid: false, error: "OAuth state expired" };
   }
 
-  if (stored.userId !== userId) {
-    return { valid: false, error: "OAuth state does not match user" };
-  }
-
   stored.used = true;
 
-  return { valid: true };
+  return {
+    valid: true,
+    userId: stored.userId,
+  };
 }
 
 function cleanupExpiredStates(): void {

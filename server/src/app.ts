@@ -21,6 +21,7 @@ import linkedinRoutes from "./routes/linkedin";
 import careerIntelligenceRoutes from "./routes/careerIntelligence";
 import notificationCenterRoutes from "./routes/notificationCenter";
 import settingsRoutes from "./routes/settings";
+import aiRoutes from "./routes/ai";
 import { registerJobSource } from "./integrations/jobs/jobSourceRegistry";
 import { MockJobSource } from "./integrations/jobs/sources/mockJobSource";
 import { AdzunaJobSource } from "./integrations/jobs/sources/adzunaJobSource";
@@ -85,6 +86,7 @@ app.use("/api/linkedin", linkedinRoutes);
 app.use("/api/dashboard", careerIntelligenceRoutes);
 app.use("/api/notifications", notificationCenterRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

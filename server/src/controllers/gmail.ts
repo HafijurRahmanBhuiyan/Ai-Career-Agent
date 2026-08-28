@@ -39,7 +39,7 @@ export const callback = async (
       return next(new AppError("Missing authorization code or state", 400));
     }
 
-    const stateValidation = validateOAuthState(state, req.user!.id);
+    const stateValidation = validateOAuthState(state);
     if (!stateValidation.valid) {
       return next(new AppError(stateValidation.error || "Invalid OAuth state", 400));
     }

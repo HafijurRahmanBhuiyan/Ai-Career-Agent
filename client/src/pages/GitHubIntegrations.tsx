@@ -67,6 +67,12 @@ interface AnalysisData {
 
 const API_BASE = "";
 
+interface AIProviderOption {
+  provider: "claude" | "gemini" | "openai";
+  model: string;
+  available: boolean;
+}
+
 function GitHubIntegrations() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<GitHubStatus | null>(null);
@@ -83,6 +89,10 @@ function GitHubIntegrations() {
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [analysisHistory, setAnalysisHistory] = useState<AnalysisData[]>([]);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+
+  const [aiProviders, setAiProviders] = useState<AIProviderOption[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<string>("");
+  const [providersError, setProvidersError] = useState<string | null>(null);
 
   const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null);
   const [gmailLoading, setGmailLoading] = useState(true);
@@ -173,6 +183,31 @@ function GitHubIntegrations() {
       setGmailSyncLoading(false);
     }
   };
+
+    const fetchAIProviders = async () => {
+    try {
+      const res = await api.get<{
+        providers: AIProviderOption[];
+        defaultProvider: string | null;
+      }>(`${API_BASE}/ai/providers`);
+      setAiProviders(res.data.providers);
+      const enabled = res.data.providers.filter((p) => p.available);
+      const fallback =
+        res.data.defaultProvider &&
+        res.data.providers.find(
+          (p) => p.provider === res.data.defaultProvider && p.available
+        );
+      setSelectedProvider(
+        (fallback || enabled[0] || res.data.providers[0])?.provider || ""
+      );
+    } catch {
+      setProvidersError("Failed to load AI providers");
+    }
+  };
+
+  useEffect(() => {
+    fetchAIProviders();
+  }, []);
 
   const fetchRepos = async () => {
     setReposLoading(true);
@@ -267,9 +302,20 @@ function GitHubIntegrations() {
     setError(null);
     try {
       const res = await api.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
-        `${API_BASE}/github/repositories/${repoId}/analyze`
+        `${API_BASE}/github/repositories/${repoId}/analyze`,
+        { provider: selectedProvider || undefined }
       );
       setAnalysis(res.data.analysis);
+
+      const repo = importedRepos.find(
+        (r) => r.githubRepositoryId === repoId
+      );
+
+      if (repo) {
+        setSelectedRepo(repo);
+        await fetchAnalysisHistory(repoId);
+      }
+
       if (res.data.readmeTruncated) {
         setError("README was truncated due to size limits");
       }
@@ -289,7 +335,8 @@ function GitHubIntegrations() {
     setError(null);
     try {
       const res = await api.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
-        `${API_BASE}/github/repositories/${repoId}/reanalyze`
+        `${API_BASE}/github/repositories/${repoId}/reanalyze`,
+        { provider: selectedProvider || undefined }
       );
       setAnalysis(res.data.analysis);
       if (selectedRepo) {
@@ -595,9 +642,44 @@ function GitHubIntegrations() {
 
               {importedRepos.length > 0 && (
                 <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
-                  <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                    Imported Repositories
-                  </h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-slate-900">
+                      Imported Repositories
+                    </h2>
+                    <div className="flex items-center gap-2 text-sm">
+                      <label
+                        htmlFor="ai-provider"
+                        className="text-xs text-slate-500"
+                      >
+                        AI Model
+                      </label>
+                      <select
+                        id="ai-provider"
+                        value={selectedProvider}
+                        onChange={(e) => setSelectedProvider(e.target.value)}
+                        disabled={analyzeLoading !== null}
+                        className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 disabled:opacity-50"
+                      >
+                        {aiProviders.map((p) => (
+                          <option
+                            key={p.provider}
+                            value={p.provider}
+                            disabled={!p.available}
+                          >
+                            {p.provider === "claude"
+                              ? "Claude"
+                              : p.provider === "gemini"
+                                ? "Gemini"
+                                : "OpenAI"}
+                            {p.available ? "" : " (not configured)"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {providersError && (
+                    <p className="mb-3 text-xs text-red-600">{providersError}</p>
+                  )}
                   <div className="space-y-3">
                     {importedRepos.map((repo) => (
                       <div
