@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
 import {
@@ -40,6 +41,12 @@ const STATUS_STYLES: Record<ApplicationStatus, string> = {
 };
 
 function Applications() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlStatus = searchParams.get("status");
+  const isValidStatus = urlStatus
+    ? STATUS_OPTIONS.some((opt) => opt.value === urlStatus)
+    : false;
+
   const [applications, setApplications] = useState<Application[]>([]);
   const [pagination, setPagination] = useState<ApplicationPagination>({
     page: 1,
@@ -48,13 +55,35 @@ function Applications() {
     totalPages: 0,
   });
 
-  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "">("");
+  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "">(
+    isValidStatus ? (urlStatus as ApplicationStatus) : ""
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<Application | null>(null);
   const [deleting, setDeleting] = useState<Application | null>(null);
   const [viewing, setViewing] = useState<Application | null>(null);
+
+  // Keep the filter in sync with the URL query parameter (e.g. from dashboard links).
+  useEffect(() => {
+    const current = searchParams.get("status");
+    const next = current && STATUS_OPTIONS.some((o) => o.value === current)
+      ? (current as ApplicationStatus)
+      : "";
+    setStatusFilter(next);
+  }, [searchParams]);
+
+  const handleStatusSelect = (value: ApplicationStatus | "") => {
+    setStatusFilter(value);
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set("status", value);
+    } else {
+      params.delete("status");
+    }
+    setSearchParams(params);
+  };
 
   const buildQuery = useCallback((page: number) => {
     const params = new URLSearchParams();
@@ -134,7 +163,9 @@ function Applications() {
               </label>
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "")}
+                onChange={(e) =>
+                  handleStatusSelect(e.target.value as ApplicationStatus | "")
+                }
                 className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {STATUS_OPTIONS.map((opt) => (

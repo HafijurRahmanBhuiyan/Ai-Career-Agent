@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
 import {
@@ -67,6 +68,10 @@ function formatDate(value?: string): string {
 }
 
 function CareerEmails() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlCategory = searchParams.get("category");
+  const urlStatus = searchParams.get("applicationStatus");
+
   const [emails, setEmails] = useState<CareerEmail[]>([]);
   const [pagination, setPagination] = useState<CareerEmailPagination>({
     page: 1,
@@ -75,13 +80,58 @@ function CareerEmails() {
     totalPages: 0,
   });
 
-  const [categoryFilter, setCategoryFilter] = useState<CareerEmailCategory | "">("");
-  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "">("");
+  const [categoryFilter, setCategoryFilter] = useState<CareerEmailCategory | "">(
+    urlCategory && CATEGORY_OPTIONS.some((o) => o.value === urlCategory)
+      ? (urlCategory as CareerEmailCategory)
+      : ""
+  );
+  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "">(
+    urlStatus && STATUS_OPTIONS.some((o) => o.value === urlStatus)
+      ? (urlStatus as ApplicationStatus)
+      : ""
+  );
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [viewing, setViewing] = useState<CareerEmail | null>(null);
+
+  // Keep the category/status filters in sync with URL query parameters
+  // (e.g. when navigating from the dashboard).
+  useEffect(() => {
+    const cat = searchParams.get("category");
+    const nextCat = cat && CATEGORY_OPTIONS.some((o) => o.value === cat)
+      ? (cat as CareerEmailCategory)
+      : "";
+    const st = searchParams.get("applicationStatus");
+    const nextSt = st && STATUS_OPTIONS.some((o) => o.value === st)
+      ? (st as ApplicationStatus)
+      : "";
+    setCategoryFilter(nextCat);
+    setStatusFilter(nextSt);
+  }, [searchParams]);
+
+  const handleCategorySelect = (value: CareerEmailCategory | "") => {
+    setCategoryFilter(value);
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set("category", value);
+    } else {
+      params.delete("category");
+    }
+    setSearchParams(params);
+  };
+
+  const handleStatusSelect = (value: ApplicationStatus | "") => {
+    setStatusFilter(value);
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set("applicationStatus", value);
+    } else {
+      params.delete("applicationStatus");
+    }
+    setSearchParams(params);
+  };
 
   const buildQuery = useCallback(
     (page: number) => {
@@ -160,7 +210,7 @@ function CareerEmails() {
               <select
                 value={categoryFilter}
                 onChange={(e) =>
-                  setCategoryFilter(e.target.value as CareerEmailCategory | "")
+                  handleCategorySelect(e.target.value as CareerEmailCategory | "")
                 }
                 className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
@@ -178,7 +228,7 @@ function CareerEmails() {
               <select
                 value={statusFilter}
                 onChange={(e) =>
-                  setStatusFilter(e.target.value as ApplicationStatus | "")
+                  handleStatusSelect(e.target.value as ApplicationStatus | "")
                 }
                 className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >

@@ -16,20 +16,24 @@ AI Career Agent automates career-related workflows including GitHub project anal
 
 ## Current Milestone
 
-**Milestone 10: Career Application Timeline & Interview Intelligence**
+**Milestone 11: Career Intelligence Dashboard & Action Center**
 
-- Unified per-application timeline: `ApplicationEvent` records every milestone (`application_created`, `status_changed`, `interview_scheduled`, `recruiter_contact`, `assessment`, `offer_received`, `rejection_received`, `note`, `other`) with a strict `source` enum (`user | gmail | system`), all user-scoped and indexed
-- Automatic status-history events: creating an application records `application_created`; explicit status changes via the Applications API or the Gmail `apply-status` (human-approved) endpoint record `status_changed` — never duplicated for an unchanged status
-- Timeline API: `GET/POST /api/applications/:id/timeline` and `PATCH/DELETE /api/applications/:id/timeline/:eventId`, with bounded pagination, Zod validation that rejects unknown fields, and source security (only `user`-sourced events can be edited/deleted; Gmail/system events are immutable)
-- Gmail-derived events are created idempotently during sync (unique `application + source + sourceId` index keyed on the Gmail message id) – category → event mapping (interview invitations → `interview_scheduled`, offers → `offer_received`, etc.) with no auto status change, preserving the human-in-the-loop model
-- Interview intelligence: `CareerEmail` gains an optional structured `interview` object (`type`, `scheduledAt`, `interviewer`, `meetingUrl`, `location`, `notes`), conservatively extracted by Claude only from the email (never invented; null when absent)
-- AI application summary: `GET/POST/PUT /api/applications/:id/summary` produces `{summary, currentSituation, strengths, risks, nextActions}` from the job, application, timeline, related emails, latest job match, and profile — no invented facts, recommendations phrased as suggestions, with state-hash caching to avoid repeated Claude calls for unchanged state
-- Expanded detail API `GET /api/applications/:id` returns the application + job, timeline summary, related emails, latest job match, interview intelligence, and cached AI summary in one response (no N+1), fully sanitized
-- Frontend: an application "Details" experience on the Applications page showing the timeline (add/delete user events), related emails, upcoming interview, and a one-click AI summary generator — all reusing existing styling and the shared `api` client
+- A user-scoped `GET /api/dashboard/career-intelligence` aggregation endpoint that turns the existing Applications + Gmail + Timeline + AI Summary data into one dashboard payload: `overview` (pipeline counts), `attention`, `upcomingInterviews`, `recentStatusChanges`, `recentCareerEmails`, `recentActivity`, `nextActions`, and `generatedAt`
+- **Pipeline statistics** — total/saved/applied/screening/interview/offer/rejected/withdrawn counts aggregated per user (a single `$group` query, no N+1)
+- **Deterministic attention & action rules** (no invented AI actions):
+  - Upcoming interview (explicit future `CareerEmail.interview.scheduledAt`) → high priority
+  - Active application with no activity for `APPLICATION_STALE_DAYS` (default 7) → "Follow up on stale application"
+  - A matched career email whose `suggestedApplicationStatus` differs from the current status → "Review email / update application status" (never auto-changes status)
+  - Offer stage → surfaced prominently; rejected/withdrawn are never surfaced as urgent follow-ups
+- **Upcoming interviews** use only the explicitly stored interview `scheduledAt` (never inferred from a received date); nullable interviewer/meeting URL/location stay nullable and no interview records are auto-created
+- **Recent activity** merges timeline events, status changes, and career emails ordered by their real `eventDate` (never `createdAt`), with bounded server-side limits
+- Frontend: the `Dashboard` page is now a polished Career Intelligence dashboard (pipeline cards, needs attention, upcoming interviews, next actions, recent emails, recent activity) with navigation that deep-links to My Applications and Career Emails with query-parameter filters
+- Query-parameter filtering: `/dashboard/applications?status=interview` and `/dashboard/emails?category=interview` initialize their respective pages' filters
+- Read-only with respect to Gmail, fully JWT-protected, strictly user-scoped and IDOR-safe, and it works without calling Claude (no expensive AI call on page load)
 
-**Milestone 9 (Gmail / Career Email Intelligence), Milestone 8 (Job Application Tracking), Milestone 7.5 (Frontend Authentication), Milestone 7 (AI Job Matching), and Milestones 1–6 remain implemented.**
+**Milestone 10 (Career Application Timeline & Interview Intelligence), Milestone 9 (Gmail / Career Email Intelligence), Milestone 8 (Job Application Tracking), Milestone 7.5 (Frontend Authentication), Milestone 7 (AI Job Matching), and Milestones 1–6 remain implemented.**
 
-LinkedIn and job automation (auto-application / POST-apply) are **NOT** yet implemented. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status.
+LinkedIn and job automation (auto-application / POST-apply) are **NOT** yet implemented. Gmail is read-only only — sending, replying, deleting, or auto-apply is intentionally out of scope. Timeline sync never auto-changes an application's status, and the dashboard never changes any application or email.
 
 ## Project Structure
 
@@ -80,6 +84,7 @@ Edit `server/.env` and set:
 - `GOOGLE_CALLBACK_URL` — Gmail OAuth callback URL (e.g., `http://localhost:5001/api/gmail/callback`)
 - `GOOGLE_GMAIL_SCOPES` — Gmail OAuth scopes (default `https://www.googleapis.com/auth/gmail.readonly`)
 - `GMAIL_SYNC_MAX_RESULTS` — Max emails fetched per sync (default `25`)
+- `APPLICATION_STALE_DAYS` — Days without activity before an active application is flagged as "stale" (default `7`, used by the Career Intelligence dashboard)
 - `ANTHROPIC_API_KEY` — Anthropic Claude API key (server-side only, never exposed)
 - `CLAUDE_MODEL` — Claude model (e.g., `claude-sonnet-4-20250514`)
 - `CLAUDE_MAX_TOKENS` — Max output tokens for analysis (default: `4096`)
@@ -248,6 +253,30 @@ cd server && npm test
 - Tokens are encrypted at rest (`select:false`) and never returned to the client
 - Syncing never changes `Application.status`; only the explicit `apply-status` endpoint does
 - For matched applications, sync derives immutable timeline events (e.g. `interview_scheduled`, `offer_received`) idempotently from the Gmail message id, and persists structured interview details when present in the email — never invented
+
+### Career Intelligence Dashboard
+
+| Method | Endpoint                               | Description                                                  | Auth Required |
+|--------|----------------------------------------|--------------------------------------------------------------|---------------|
+| GET    | `/api/dashboard/career-intelligence`   | Aggregate career intelligence: pipeline overview, attention items, upcoming interviews, recent status changes, recent career emails, recent activity, and next actions | Yes |
+
+- The endpoint is entirely read-only and works without calling Claude
+- All queries are scoped to the authenticated user (`req.user.id`); cross-user data never appears, and the response never contains Gmail tokens, raw metadata, or secrets
+- **Attention / action rules (deterministic, explainable):**
+  - Upcoming interview — an application with an explicit future `interview.scheduledAt` → high priority
+  - Stale application — an active (applied/screening/interview/offer) application with no event/activity for `APPLICATION_STALE_DAYS` (default `7`) → "Follow up on stale application"
+  - Gmail follow-up — a matched email whose `suggestedApplicationStatus` differs from the current status → "Review email / update application status" (the dashboard never changes the status itself)
+  - Offer — surfaced prominently; rejected and withdrawn applications are never surfaced as urgent actions
+- **Upcoming interviews** derive from the explicitly stored `CareerEmail.interview.scheduledAt` only — no interview date is ever inferred from an email's received date, and no interview records are auto-created. Nullable interviewer/URL/location stay nullable
+- **Recent status changes** reconstruct the previous/new status from the application's chronological `status_changed` events (the oldest transition reports `previousStatus: null`, since the creation status is not stored)
+- **Recent activity** merges timeline events, status changes, and career emails ordered by their real `eventDate` (explicit dates are used instead of `createdAt`), bounded server-side (`MAX_ACTIVITY`, default 15)
+- Bounded queries throughout (`MAX_APPLICATIONS`, `MAX_EMAILS`, `MAX_STATUS_EVENTS`, `MAX_ATTENTION`); parallel queries avoid N+1
+
+### Frontend filter navigation
+
+- `/dashboard/applications?status=interview` — the My Applications page initializes its status filter from the URL
+- `/dashboard/emails?category=interview` and `/dashboard/emails?applicationStatus=interview` — the Career Emails page initializes its category/suggested-status filters from the URL
+- Dashboard cards and action buttons deep-link to these filtered pages
 
 ## Job Discovery
 
@@ -501,6 +530,64 @@ Indexes: `user + application + eventDate`, `application + eventDate`, and a part
 
 - AI summaries are cached on unchanged state to avoid repeat Claude calls
 - Timeline and email lists are bounded; body text is already capped in the sync pipeline
+
+## Career Intelligence Dashboard & Action Center
+
+### Endpoint
+
+`GET /api/dashboard/career-intelligence` returns one aggregated, user-scoped payload. It is JWT protected and, unlike the AI summary/job-match endpoints, requires **no Claude call** — a fast, deterministic aggregation of already-persisted data.
+
+### Response shape
+
+```
+{
+  overview: { totalApplications, saved, applied, screening, interview, offer, rejected, withdrawn },
+  attention: [{ application, reason, priority, eventDate }],
+  upcomingInterviews: [{ application, interview: { scheduledAt, interviewer, meetingUrl, location }, eventDate }],
+  recentStatusChanges: [{ application, event, previousStatus, newStatus }],
+  recentCareerEmails: [{ email, application }],
+  recentActivity: [{ id, kind, date, title, description, type, source, application }],
+  nextActions: [{ application, action, reason, priority }],
+  generatedAt
+}
+```
+
+### Pipeline statistics
+
+`overview` counts applications grouped by status using a single MongoDB `$group` aggregation; `totalApplications` is the sum. Counts are always scoped to the authenticated user.
+
+### Attention & action rules
+
+All rules are deterministic, explainable and testable — no AI-generated actions:
+
+1. **Upcoming interview (high):** the application has an explicitly stored future `CareerEmail.interview.scheduledAt`.
+2. **Interview stage reminder (medium):** status is `interview` but no explicit future interview record exists — "Check for scheduled interview details."
+3. **Gmail follow-up (medium):** a matched email's `suggestedApplicationStatus` differs from the application's current status — "Review email / update application status." The dashboard **never** changes the status (human-in-the-loop preserved).
+4. **Stale application (medium):** an active (applied/screening/interview/offer) application has had no event/activity for `APPLICATION_STALE_DAYS` (default 7) — "Follow up on stale application."
+5. **Offer (high):** status is `offer` — "Review offer."
+6. **Rejected / withdrawn:** counted in the overview but never surfaced as an urgent action.
+
+`attention` carries `reason`/`priority`/`eventDate`; `nextActions` carries an explicit `action` verb plus an explanation. Both derive from the same insight set.
+
+### Upcoming interviews
+
+Only `CareerEmail.interview.scheduledAt` in the future is used. Interviewer/meeting URL/location are returned exactly as stored (nullable when absent). No interview date is inferred from a received date and no interview records are auto-created.
+
+### Recent status changes
+
+The previous/new status for each `status_changed` event is reconstructed from the application's chronological status events (ordered by `eventDate`, then `createdAt`). The oldest transition reports `previousStatus: null` because the creation status is not stored.
+
+### Recent activity
+
+Merges timeline events (`ApplicationEvent.eventDate`), status changes, and career emails (`receivedAt`), ordered by their real event date (never `createdAt`), bounded server-side (default 15).
+
+### Performance
+
+Parallel top-level queries; a single `$group` aggregate for counts; bounded list limits (`MAX_APPLICATIONS` 500, `MAX_EMAILS` 25, `MAX_ACTIVITY` 15, `MAX_STATUS_EVENTS` 200, `MAX_ATTENTION` 20); no expensive AI call on dashboard load.
+
+### Security
+
+Every query is scoped to `req.user.id` — no user id is accepted from the client and no IDOR is possible. Responses are sanitized: no `user`, raw metadata, Gmail OAuth tokens, or secrets are exposed. Invalid ObjectIds fall through to the existing controlled error conventions. The dashboard makes no writes to applications, emails, timeline, or Gmail.
 
 ## Frontend Authentication
 
