@@ -34,3 +34,74 @@ export interface ApplicationPagination {
   total: number;
   totalPages: number;
 }
+
+export type TimelineEventType =
+  | "application_created"
+  | "status_changed"
+  | "interview_scheduled"
+  | "recruiter_contact"
+  | "assessment"
+  | "offer_received"
+  | "rejection_received"
+  | "note"
+  | "other";
+
+export type TimelineEventSource = "user" | "gmail" | "system";
+
+export interface TimelineEvent {
+  id: string;
+  application?: string;
+  type: TimelineEventType;
+  source: TimelineEventSource;
+  title: string;
+  description?: string;
+  eventDate: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ApplicationInterview {
+  type?: string | null;
+  scheduledAt?: string | null;
+  interviewer?: string | null;
+  meetingUrl?: string | null;
+  location?: string | null;
+  notes?: string | null;
+}
+
+export interface ApplicationAI {
+  summary: string;
+  currentSituation: string;
+  strengths: string[];
+  risks: string[];
+  nextActions: string[];
+}
+
+export interface ApplicationDetail {
+  application: Application;
+  timeline: { count: number; latest: TimelineEvent | null };
+  emails: CareerEmailRef[];
+  jobMatch: Record<string, unknown> | null;
+  interview: ApplicationInterview | null;
+  aiSummary: { [key: string]: unknown } | null;
+}
+
+export interface CareerEmailRef {
+  id?: string;
+  gmailMessageId?: string;
+  subject?: string;
+  from?: string;
+  receivedAt?: string;
+  category?: string;
+  confidence?: number;
+  summary?: string;
+  companyName?: string;
+  jobTitle?: string;
+  suggestedApplicationStatus?: string;
+}
+
+export interface TimelineResponse {
+  application: string;
+  events: TimelineEvent[];
+  pagination: ApplicationPagination;
+}

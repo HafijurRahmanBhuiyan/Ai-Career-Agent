@@ -1,12 +1,20 @@
 import { Request, Response, NextFunction } from "express";
 import { Application } from "../models/Application";
 import Job from "../models/Job";
+import { CareerEmail } from "../models/CareerEmail";
+import { ApplicationEvent } from "../models/ApplicationEvent";
+import { ApplicationSummary } from "../models/ApplicationSummary";
+import JobMatch from "../models/JobMatch";
 import { AppError } from "../middleware/errorHandler";
 import {
   applicationListQuerySchema,
   CreateApplicationInput,
   UpdateApplicationInput,
 } from "../validators/application";
+import {
+  createApplicationCreatedEvent,
+  createStatusChangedEvent,
+} from "../services/applicationTimeline";
 
 const JOB_POPULATE_FIELDS =
   "title companyName location locations remoteType employmentType source";
@@ -73,6 +81,8 @@ export const createApplication = async (
 
     await application.populate("job", JOB_POPULATE_FIELDS);
 
+    await createApplicationCreatedEvent(userId, String(application._id));
+
     res.status(201).json({ application: toSafeApplication(application) });
   } catch (error) {
     next(error);
@@ -138,13 +148,50 @@ export const getApplication = async (
 ) => {
   try {
     const userId = req.user!.id;
-    const application = await getApplicationForUser(userId, String(req.params.id));
+    const appId = String(req.params.id);
+
+    if (!isValidObjectId(appId)) {
+      return next(new AppError("Application not found", 404));
+    }
+
+    const application = await getApplicationForUser(userId, appId);
 
     if (!application) {
       return next(new AppError("Application not found", 404));
     }
 
-    res.status(200).json({ application: toSafeApplication(application) });
+    const [events, emails, jobMatch, aiSummary] = await Promise.all([
+      ApplicationEvent.find({ user: userId, application: appId })
+        .sort({ eventDate: -1 })
+        .limit(100)
+        .lean(),
+      CareerEmail.find({ user: userId, application: appId })
+        .sort({ receivedAt: -1 })
+        .limit(50)
+        .lean(),
+      JobMatch.findOne({ user: userId, job: application.job }).sort({
+        analyzedAt: -1,
+      }).lean(),
+      ApplicationSummary.findOne({ user: userId, application: appId }).sort({
+        analyzedAt: -1,
+      }).lean(),
+    ]);
+
+    const interview =
+      buildInterviewFromEmails(emails as unknown as EmailLike[]);
+
+    res.status(200).json({
+      application: toSafeApplication(application),
+      timeline: {
+        count: events.length,
+        latest:
+          events.length > 0 ? toSafeTimelineEvent(events[0]) : null,
+      },
+      emails: (emails as unknown as EmailLike[]).map(toSafeEmail),
+      jobMatch: jobMatch ? toSafeJobMatch(jobMatch) : null,
+      interview,
+      aiSummary: aiSummary ? toSafeSummary(aiSummary) : null,
+    });
   } catch (error) {
     next(error);
   }
@@ -167,8 +214,10 @@ export const updateApplication = async (
 
     const updateData: Record<string, unknown> = {};
 
+    let statusChanged = false;
     if (body.status !== undefined) {
       updateData.status = body.status;
+      statusChanged = existing.status !== body.status;
     }
 
     if (body.appliedAt !== undefined) {
@@ -195,6 +244,10 @@ export const updateApplication = async (
 
     if (!application) {
       return next(new AppError("Application not found", 404));
+    }
+
+    if (statusChanged) {
+      await createStatusChangedEvent(userId, appId, String(application.status));
     }
 
     res.status(200).json({ application: toSafeApplication(application) });
@@ -246,5 +299,100 @@ function toSafeApplication<T extends object>(
     safe.job = safeJob;
   }
 
+  return safe;
+}
+
+const isValidObjectId = (id: string): boolean => {
+  return /^[0-9a-fA-F]{24}$/.test(id);
+};
+
+interface EmailLike {
+  _id: unknown;
+  user?: unknown;
+  rawMetadata?: unknown;
+  gmailMessageId?: string;
+  subject?: string;
+  from?: string;
+  receivedAt?: unknown;
+  category?: string;
+  confidence?: number;
+  summary?: string;
+  companyName?: string;
+  jobTitle?: string;
+  suggestedApplicationStatus?: string;
+  interviewDate?: unknown;
+  interviewType?: string;
+  interview?: unknown;
+  actionRequired?: boolean | null;
+  actionDeadline?: unknown;
+}
+
+function toSafeEmail(email: EmailLike): Record<string, unknown> {
+  const record = email as unknown as Record<string, unknown>;
+  const { _id, user, rawMetadata, ...safe } = record;
+  void user;
+  void rawMetadata;
+  return {
+    ...safe,
+    id: _id,
+  };
+}
+
+function buildInterviewFromEmails(emails: EmailLike[]): Record<string, unknown> | null {
+  for (const email of emails) {
+    const interview = email.interview as Record<string, unknown> | null | undefined;
+    if (interview && Object.keys(interview).some((k) => interview[k] != null)) {
+      return interview as Record<string, unknown>;
+    }
+  }
+  return null;
+}
+
+function toSafeTimelineEvent(event: {
+  _id: unknown;
+  type: unknown;
+  source: unknown;
+  title: unknown;
+  description?: unknown;
+  eventDate: unknown;
+}): Record<string, unknown> {
+  return {
+    id: event._id,
+    type: event.type,
+    source: event.source,
+    title: event.title,
+    description: event.description ?? undefined,
+    eventDate: event.eventDate,
+  };
+}
+
+function toSafeJobMatch<T extends object>(match: T): Record<string, unknown> {
+  const source =
+    match &&
+    typeof (match as { toObject?: unknown }).toObject === "function"
+      ? (match as unknown as { toObject: () => Record<string, unknown> }).toObject()
+      : match;
+  const { __v, user, ...safe } = source as Record<string, unknown>;
+  void __v;
+  void user;
+  if (safe.job && typeof safe.job === "object") {
+    const jobRecord = safe.job as Record<string, unknown>;
+    const { rawSource, metadata, ...safeJob } = jobRecord;
+    void rawSource;
+    void metadata;
+    safe.job = safeJob;
+  }
+  return safe;
+}
+
+function toSafeSummary<T extends object>(summary: T): Record<string, unknown> {
+  const source =
+    summary &&
+    typeof (summary as { toObject?: unknown }).toObject === "function"
+      ? (summary as unknown as { toObject: () => Record<string, unknown> }).toObject()
+      : summary;
+  const { __v, user, ...safe } = source as Record<string, unknown>;
+  void __v;
+  void user;
   return safe;
 }

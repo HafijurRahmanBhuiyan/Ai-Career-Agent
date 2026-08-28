@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
+import { GmailStatus, GmailSyncResult } from "../types/careerEmail";
+import { getErrorMessage } from "../utils/apiError";
 
 interface GitHubStatus {
   connected: boolean;
@@ -82,6 +84,14 @@ function GitHubIntegrations() {
   const [analysisHistory, setAnalysisHistory] = useState<AnalysisData[]>([]);
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
+  const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null);
+  const [gmailLoading, setGmailLoading] = useState(true);
+  const [gmailSyncLoading, setGmailSyncLoading] = useState(false);
+  const [gmailSyncResult, setGmailSyncResult] = useState<GmailSyncResult | null>(
+    null
+  );
+  const [gmailError, setGmailError] = useState<string | null>(null);
+
   const fetchStatus = useCallback(async () => {
     try {
       const res = await api.get<GitHubStatus>(`${API_BASE}/github/status`);
@@ -105,6 +115,64 @@ function GitHubIntegrations() {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  useEffect(() => {
+    if (searchParams.get("gmail") === "connected") {
+      fetchGmailStatus();
+    }
+  }, [searchParams]);
+
+  const fetchGmailStatus = async () => {
+    try {
+      const res = await api.get<GmailStatus>(`${API_BASE}/gmail/status`);
+      setGmailStatus(res.data);
+    } catch {
+      setGmailError("Failed to check Gmail connection status");
+    } finally {
+      setGmailLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchGmailStatus();
+  }, []);
+
+  const handleGmailConnect = async () => {
+    try {
+      const res = await api.get<{ authorizeUrl: string }>(
+        `${API_BASE}/gmail/connect`
+      );
+      window.location.href = res.data.authorizeUrl;
+    } catch {
+      setGmailError("Failed to initiate Gmail connection");
+    }
+  };
+
+  const handleGmailDisconnect = async () => {
+    try {
+      await api.post(`${API_BASE}/gmail/disconnect`);
+      setGmailStatus({ connected: false });
+      setGmailSyncResult(null);
+    } catch {
+      setGmailError("Failed to disconnect Gmail");
+    }
+  };
+
+  const handleGmailSync = async () => {
+    setGmailSyncLoading(true);
+    setGmailError(null);
+    try {
+      const res = await api.post<GmailSyncResult>(`${API_BASE}/gmail/sync`);
+      setGmailSyncResult(res.data);
+      fetchGmailStatus();
+    } catch (err: unknown) {
+      setGmailError(
+        getErrorMessage(err, "Failed to sync Gmail career emails")
+      );
+    } finally {
+      setGmailSyncLoading(false);
+    }
+  };
 
   const fetchRepos = async () => {
     setReposLoading(true);
@@ -349,6 +417,101 @@ function GitHubIntegrations() {
                   Connect GitHub
                 </button>
               </div>
+            )}
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              Gmail / Career Email Intelligence
+            </h2>
+            {gmailLoading ? (
+              <p className="text-sm text-slate-400">Checking connection...</p>
+            ) : gmailStatus?.connected ? (
+              <div>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+                    <span className="text-slate-400 text-lg">@</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">
+                      {gmailStatus.gmail?.email}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Connected{" "}
+                      {new Date(
+                        gmailStatus.gmail?.connectedAt || ""
+                      ).toLocaleDateString()}
+                      {gmailStatus.gmail?.lastSyncedAt &&
+                        ` · Last synced ${new Date(
+                          gmailStatus.gmail.lastSyncedAt
+                        ).toLocaleString()}`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleGmailDisconnect}
+                    className="ml-auto px-4 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+
+                <div className="mt-5 border-t border-slate-100 pt-5">
+                  <p className="text-xs text-slate-500 mb-3">
+                    Run a sync to read career-related emails from your Gmail and
+                    classify them with AI. This is read-only and never changes
+                    your application status automatically.
+                  </p>
+                  <button
+                    onClick={handleGmailSync}
+                    disabled={gmailSyncLoading}
+                    className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {gmailSyncLoading ? "Syncing..." : "Sync Gmail"}
+                  </button>
+                  {gmailSyncResult && (
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded">
+                        Synced: {gmailSyncResult.synced}
+                      </span>
+                      <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded">
+                        Career emails: {gmailSyncResult.careerEmails}
+                      </span>
+                      <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
+                        Classified: {gmailSyncResult.classified}
+                      </span>
+                      <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded">
+                        Skipped: {gmailSyncResult.skipped}
+                      </span>
+                      <span className="px-2 py-1 bg-red-50 text-red-700 rounded">
+                        Failed: {gmailSyncResult.failed}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+                  <span className="text-slate-400 text-lg">@</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-900">
+                    Not connected
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Connect your Gmail (read-only) to classify career emails
+                  </p>
+                </div>
+                <button
+                  onClick={handleGmailConnect}
+                  className="ml-auto px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Connect Gmail
+                </button>
+              </div>
+            )}
+            {gmailError && (
+              <div className="mt-4 text-sm text-red-600">{gmailError}</div>
             )}
           </div>
 

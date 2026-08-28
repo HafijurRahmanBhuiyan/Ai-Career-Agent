@@ -8,6 +8,7 @@ const NAV_ITEMS: { label: string; to: string }[] = [
   { label: "Jobs", to: "/dashboard/jobs" },
   { label: "My Applications", to: "/dashboard/applications" },
   { label: "My Job Matches", to: "/dashboard/job-matches" },
+  { label: "Career Emails", to: "/dashboard/emails" },
 ];
 
 export default function DashboardLayout({

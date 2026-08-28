@@ -15,9 +15,11 @@ import githubRoutes from "./routes/github";
 import jobsRoutes from "./routes/jobs";
 import jobMatchRoutes from "./routes/jobMatch.routes";
 import applicationRoutes from "./routes/applications";
+import gmailRoutes from "./routes/gmail";
 import { registerJobSource } from "./integrations/jobs/jobSourceRegistry";
 import { MockJobSource } from "./integrations/jobs/sources/mockJobSource";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { NODE_ENV } from "./config";
 
 registerJobSource(() => new MockJobSource());
 
@@ -42,7 +44,12 @@ const limiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later." },
 });
-app.use(limiter);
+// Bypass the global rate limiter in tests so large, comprehensive suites
+// (auth, ownership, idempotency, etc.) can run many requests without tripping
+// the 100/15min cap. Production and development behaviour is unchanged.
+if (NODE_ENV !== "test") {
+  app.use(limiter);
+}
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -59,6 +66,7 @@ app.use("/api/github", githubRoutes);
 app.use("/api/jobs", jobsRoutes);
 app.use("/api/job-matches", jobMatchRoutes);
 app.use("/api/applications", applicationRoutes);
+app.use("/api/gmail", gmailRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

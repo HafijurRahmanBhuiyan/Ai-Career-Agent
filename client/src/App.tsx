@@ -9,6 +9,7 @@ import GitHubIntegrations from "./pages/GitHubIntegrations";
 import Jobs from "./pages/Jobs";
 import JobMatches from "./pages/JobMatches";
 import Applications from "./pages/Applications";
+import CareerEmails from "./pages/CareerEmails";
 
 function App() {
   return (
@@ -54,6 +55,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Applications />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/emails"
+          element={
+            <ProtectedRoute>
+              <CareerEmails />
             </ProtectedRoute>
           }
         />
