@@ -173,15 +173,14 @@ function GitHubIntegrations() {
     }
   }, []);
 
-  useEffect(() => {
-    if (searchParams.get("github") === "connected") {
-      fetchStatus();
-    }
-  }, [searchParams, fetchStatus]);
-
+  // Single source of truth for the initial load and the OAuth callback return:
+  // the URL changes (adds ?xxx=connected) when the callback lands, so keying on
+  // searchParams fires exactly once per navigation instead of duplicating the
+  // status/repo fetch (mount effect + param effect used to run the same request
+  // twice on every callback landing).
   useEffect(() => {
     fetchStatus();
-  }, [fetchStatus]);
+  }, [searchParams, fetchStatus]);
 
   useEffect(() => {
     if (searchParams.get("gmail") === "connected") {
@@ -266,7 +265,7 @@ function GitHubIntegrations() {
     fetchAIProviders();
   }, []);
 
-  const fetchLinkedInStatus = async () => {
+  const fetchLinkedInStatus = useCallback(async () => {
     try {
       const res = await api.get<LinkedInStatus>(`${API_BASE}/linkedin/status`);
       setLinkedInStatus(res.data);
@@ -275,16 +274,12 @@ function GitHubIntegrations() {
     } finally {
       setLinkedInLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchLinkedInStatus();
   }, []);
 
+  // See the GitHub effect above - keying on searchParams handles both the
+  // initial mount and the ?linkedin=connected callback return exactly once.
   useEffect(() => {
-    if (searchParams.get("linkedin") === "connected") {
-      fetchLinkedInStatus();
-    }
+    fetchLinkedInStatus();
   }, [searchParams, fetchLinkedInStatus]);
 
   const handleApprove = async (repo: ImportedRepo, approved: boolean) => {

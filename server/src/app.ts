@@ -40,6 +40,11 @@ dotenv.config();
 const app = express();
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
+// Behind Render's reverse proxy req.ip is the proxy IP for every client.
+// Trusting the first proxy hop restores the real client IP from
+// X-Forwarded-For so per-IP rate limiting is per-user, not global.
+app.set("trust proxy", 1);
+
 app.use(helmet());
 
 app.use(
@@ -51,7 +56,13 @@ app.use(
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  // Sized for real SPA usage: each dashboard page view fires ~6-8
+  // authenticated reads (github/status, repositories, imported, gmail/status,
+  // linkedin/status, ai/providers) and an OAuth connect/disconnect cycle adds
+  // a few more. 500/15min (~33 req/min sustained) leaves ample headroom for
+  // repeated connect -> disconnect -> reconnect cycles while still blocking
+  // genuine request floods. Keyed per real client IP (see trust proxy above).
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later." },
