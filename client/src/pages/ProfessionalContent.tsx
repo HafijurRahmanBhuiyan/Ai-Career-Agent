@@ -276,8 +276,15 @@ function ProfessionalContent() {
         `${API_BASE}/github/repositories/${selected.githubRepositoryId}/linkedin-draft/assist`
       );
       setSuggestions(res.data.suggestions);
+      const first = res.data.suggestions[0];
+      if (first) {
+        setEditing(null);
+        setHook(first.hook);
+        setBody(first.body);
+        setHashtags(first.hashtags.join(", "));
+      }
       setDraftNotice(
-        "These are AI suggestions for review only. Nothing has been published or saved automatically."
+        "The first AI suggestion is loaded into the Hook, Body, and Hashtags fields below. Review and edit it, then click 'Save Draft' to persist your version. Nothing has been published automatically."
       );
     } catch (err) {
       setError(getErrorMessage(err, "Failed to generate LinkedIn suggestions"));

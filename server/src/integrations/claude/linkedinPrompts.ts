@@ -9,6 +9,9 @@ Respect the following rules:
 - Do not invent company names, recruiters, revenue, user counts, or performance percentages.
 - Keep each suggestion professional, confident, and free of hype or false claims.
 - "insufficient evidence" is an acceptable stance if there is too little to write about honestly.
+- Hook: one crisp, specific opening line (ideally under 140 characters) that states the takeaway.
+- Body: 2-4 short paragraphs separated by a blank line; plain text only — no markdown, no bullet-point symbols, no emojis.
+- Hashtags: 3-6 relevant tags matching the project's technologies and domain, each written without a leading '#'.
 
 Return ONLY valid JSON matching this exact schema (do not include markdown or code fences):
 
