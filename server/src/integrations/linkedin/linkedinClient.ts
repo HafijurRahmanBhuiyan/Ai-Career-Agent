@@ -206,3 +206,16 @@ export class LinkedInClient {
 export function toPersonUrn(memberId: string): string {
   return `urn:li:person:${memberId}`;
 }
+
+/**
+ * Build a publicly viewable post URL from a post URN. LinkedIn exposes a post
+ * at https://www.linkedin.com/feed/update/{postUrnWithoutSchemePrefix}. Falls
+ * back to a URN-shaped string (or null) when the URN has no post id to use.
+ */
+export function toLinkedInPostUrl(postUrn: string): string | null {
+  if (!postUrn || !postUrn.includes(":")) return postUrn || null;
+  const colonId = postUrn.split(":").pop();
+  const id = colonId && colonId.includes("(") ? colonId.split("(")[0] : colonId;
+  if (!id) return null;
+  return `https://www.linkedin.com/feed/update/${id}`;
+}

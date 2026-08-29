@@ -31,11 +31,13 @@ export const callback = async (
     }
 
     const stateValidation = validateOAuthState(state);
-    if (!stateValidation.valid) {
-      return next(new AppError(stateValidation.error || "Invalid OAuth state", 400));
+    if (!stateValidation.valid || !stateValidation.userId) {
+      return next(
+        new AppError(stateValidation.error || "Invalid OAuth state", 400)
+      );
     }
 
-    await linkedInService.completeConnection(req.user!.id, code);
+    await linkedInService.completeConnection(stateValidation.userId, code);
 
     const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
     res.redirect(`${clientUrl}/dashboard/integrations?linkedin=connected`);

@@ -39,6 +39,8 @@ interface ImportedRepo {
   language: string | null;
   stars: number;
   importedAt: string;
+  approvedForProfessionalUse: boolean;
+  approvedAt: string | null;
 }
 
 interface AnalysisData {
@@ -73,6 +75,49 @@ interface AIProviderOption {
   available: boolean;
 }
 
+interface LinkedInStatus {
+  connected: boolean;
+  linkedin?: {
+    memberId: string;
+    profileUrn: string;
+    displayName: string | null;
+    isActive: boolean;
+    connectedAt: string | null;
+    tokenExpiry: string | null;
+    lastUsedAt: string | null;
+  };
+}
+
+interface LinkedInPreview {
+  approved: boolean;
+  repository: {
+    _id: string;
+    githubRepositoryId: number;
+    name: string;
+    fullName: string;
+    approvedForProfessionalUse: boolean;
+    approvedAt: string | null;
+  };
+  content: string;
+  draft: {
+    _id: string;
+    status: string;
+    linkedinPostUrn: string | null;
+    linkedinPostUrl: string | null;
+    publishedAt: string | null;
+    publishErrorCode: string | null;
+    publishErrorMessageSafe: string | null;
+    updatedAt: string;
+  } | null;
+}
+
+interface LinkedInPublishResult {
+  posted: boolean;
+  postUrn: string | null;
+  postUrl: string | null;
+  message: string;
+}
+
 function GitHubIntegrations() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<GitHubStatus | null>(null);
@@ -93,6 +138,18 @@ function GitHubIntegrations() {
   const [aiProviders, setAiProviders] = useState<AIProviderOption[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [providersError, setProvidersError] = useState<string | null>(null);
+
+  const [linkedInStatus, setLinkedInStatus] = useState<LinkedInStatus | null>(
+    null
+  );
+  const [linkedInLoading, setLinkedInLoading] = useState(true);
+  const [linkedInConnectLoading, setLinkedInConnectLoading] = useState(false);
+  const [linkedInContent, setLinkedInContent] = useState("");
+  const [linkedInPreviewLoading, setLinkedInPreviewLoading] = useState(false);
+  const [linkedInPublishing, setLinkedInPublishing] = useState(false);
+  const [publishResult, setPublishResult] =
+    useState<LinkedInPublishResult | null>(null);
+  const [linkedInError, setLinkedInError] = useState<string | null>(null);
 
   const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null);
   const [gmailLoading, setGmailLoading] = useState(true);
@@ -209,6 +266,135 @@ function GitHubIntegrations() {
     fetchAIProviders();
   }, []);
 
+  const fetchLinkedInStatus = async () => {
+    try {
+      const res = await api.get<LinkedInStatus>(`${API_BASE}/linkedin/status`);
+      setLinkedInStatus(res.data);
+    } catch {
+      setLinkedInStatus({ connected: false });
+    } finally {
+      setLinkedInLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLinkedInStatus();
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get("linkedin") === "connected") {
+      fetchLinkedInStatus();
+    }
+  }, [searchParams, fetchLinkedInStatus]);
+
+  const handleApprove = async (repo: ImportedRepo, approved: boolean) => {
+    setError(null);
+    try {
+      const res = await api.post<{ repository: ImportedRepo }>(
+        `${API_BASE}/github/repositories/${repo.githubRepositoryId}/approve`,
+        { approved }
+      );
+      const updated = res.data.repository;
+      setImportedRepos((prev) =>
+        prev.map((r) =>
+          r.githubRepositoryId === updated.githubRepositoryId
+            ? { ...r, ...updated }
+            : r
+        )
+      );
+      if (selectedRepo?.githubRepositoryId === updated.githubRepositoryId) {
+        setSelectedRepo((cur) => (cur ? { ...cur, ...updated } : cur));
+      }
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to update repository approval"));
+    }
+  };
+
+  const handleConnectLinkedIn = async () => {
+    setLinkedInError(null);
+    setLinkedInConnectLoading(true);
+    try {
+      const res = await api.get<{ authorizeUrl: string }>(
+        `${API_BASE}/linkedin/connect`
+      );
+      window.location.assign(res.data.authorizeUrl);
+    } catch (err: unknown) {
+      setLinkedInConnectLoading(false);
+      setLinkedInError(
+        getErrorMessage(err, "Failed to start LinkedIn connection")
+      );
+    }
+  };
+
+  const handleDisconnectLinkedIn = async () => {
+    setLinkedInError(null);
+    try {
+      await api.post(`${API_BASE}/linkedin/disconnect`);
+      setLinkedInStatus({ connected: false });
+      setPublishResult(null);
+    } catch (err: unknown) {
+      setLinkedInError(getErrorMessage(err, "Failed to disconnect LinkedIn"));
+    }
+  };
+
+  const loadLinkedInPreview = async (repo: ImportedRepo) => {
+    setLinkedInPreviewLoading(true);
+    try {
+      const res = await api.get<LinkedInPreview>(
+        `${API_BASE}/github/repositories/${repo.githubRepositoryId}/linkedin-preview`
+      );
+      if (res.data.content) {
+        setLinkedInContent(res.data.content);
+      }
+    } catch {
+      // Preview is best-effort; the editor still works from the AI analysis.
+    } finally {
+      setLinkedInPreviewLoading(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!selectedRepo) return;
+    if (!linkedInContent.trim()) return;
+    setLinkedInError(null);
+    setPublishResult(null);
+    setLinkedInPublishing(true);
+    try {
+      const res = await api.post<LinkedInPublishResult>(
+        `${API_BASE}/github/repositories/${selectedRepo.githubRepositoryId}/linkedin-draft/publish`,
+        { content: linkedInContent }
+      );
+      setPublishResult(res.data);
+      if (res.data.posted) {
+        loadLinkedInPreview(selectedRepo);
+      }
+    } catch (err: unknown) {
+      setLinkedInError(getErrorMessage(err, "Failed to publish to LinkedIn"));
+    } finally {
+      setLinkedInPublishing(false);
+    }
+  };
+
+  const analysisId = analysis?._id ?? null;
+
+  useEffect(() => {
+    if (analysis) {
+      setLinkedInContent(analysis.linkedinDescription || "");
+      setPublishResult(null);
+      setLinkedInError(null);
+    }
+  }, [analysisId]);
+
+  useEffect(() => {
+    if (selectedRepo && selectedRepo.approvedForProfessionalUse && analysis) {
+      loadLinkedInPreview(selectedRepo);
+    }
+  }, [
+    selectedRepo?.githubRepositoryId,
+    selectedRepo?.approvedForProfessionalUse,
+    analysisId,
+  ]);
+
   const fetchRepos = async () => {
     setReposLoading(true);
     try {
@@ -254,6 +440,9 @@ function GitHubIntegrations() {
       setSelectedRepo(null);
       setAnalysis(null);
       setAnalysisHistory([]);
+      setLinkedInContent("");
+      setPublishResult(null);
+      setLinkedInError(null);
     } catch {
       setError("Failed to disconnect GitHub");
     }
@@ -291,6 +480,9 @@ function GitHubIntegrations() {
         setSelectedRepo(null);
         setAnalysis(null);
         setAnalysisHistory([]);
+        setLinkedInContent("");
+        setPublishResult(null);
+        setLinkedInError(null);
       }
     } catch {
       setError("Failed to delete imported repository");
@@ -371,6 +563,9 @@ function GitHubIntegrations() {
     setSelectedRepo(repo);
     setAnalysis(null);
     setAnalysisHistory([]);
+    setLinkedInContent("");
+    setPublishResult(null);
+    setLinkedInError(null);
     setAnalysisLoading(true);
     try {
       const res = await api.get<{ analysis: AnalysisData }>(
@@ -881,6 +1076,195 @@ function GitHubIntegrations() {
                         {new Date(analysis.analyzedAt).toLocaleString()}
                       </div>
                     </div>
+                  )}
+
+                  {!analysisLoading && analysis && (
+                    <section className="mt-8 pt-6 border-t border-slate-200">
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-slate-900">
+                          LinkedIn Posting
+                        </h3>
+                        <p className="text-sm text-slate-500 mt-1">
+                          Review the AI-generated post, approve the repository,
+                          then publish to LinkedIn.
+                        </p>
+                      </div>
+
+                      <div className="border border-slate-100 rounded-lg p-4 mb-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">
+                              {selectedRepo?.approvedForProfessionalUse
+                                ? "Approved for Professional Use"
+                                : "Not approved for Professional Use"}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {selectedRepo?.approvedForProfessionalUse
+                                ? selectedRepo.approvedAt
+                                  ? `Approved ${new Date(selectedRepo.approvedAt).toLocaleDateString()}`
+                                  : "Approved"
+                                : "Repository approval is required before posting to LinkedIn."}
+                            </p>
+                          </div>
+                          {selectedRepo?.approvedForProfessionalUse ? (
+                            <button
+                              onClick={() =>
+                                selectedRepo && handleApprove(selectedRepo, false)
+                              }
+                              className="px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                            >
+                              Revoke Approval
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                selectedRepo && handleApprove(selectedRepo, true)
+                              }
+                              className="px-3 py-1.5 text-xs text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
+                            >
+                              Approve for Professional Use
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="border border-slate-100 rounded-lg p-4 mb-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">
+                              {linkedInLoading
+                                ? "Checking LinkedIn connection..."
+                                : linkedInStatus?.connected
+                                  ? `LinkedIn connected${
+                                      linkedInStatus.linkedin?.displayName
+                                        ? ` as ${linkedInStatus.linkedin.displayName}`
+                                        : ""
+                                    }`
+                                  : "LinkedIn not connected"}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {linkedInStatus?.connected
+                                ? "Your token stays encrypted on the server and is never exposed in the browser."
+                                : "Connect your LinkedIn account to publish approved posts."}
+                            </p>
+                          </div>
+                          {linkedInLoading ? (
+                            <span className="text-xs text-slate-400">
+                              Loading…
+                            </span>
+                          ) : linkedInStatus?.connected ? (
+                            <button
+                              onClick={handleDisconnectLinkedIn}
+                              className="px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                            >
+                              Disconnect
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleConnectLinkedIn}
+                              disabled={linkedInConnectLoading}
+                              className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            >
+                              {linkedInConnectLoading
+                                ? "Connecting…"
+                                : "Connect LinkedIn"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label
+                            htmlFor="linkedin-post-content"
+                            className="text-xs font-semibold text-slate-500 uppercase tracking-wider"
+                          >
+                            LinkedIn Post Preview
+                          </label>
+                          <span
+                            className={`text-xs ${
+                              linkedInContent.length > 3000
+                                ? "text-red-600"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {linkedInContent.length} / 3000
+                          </span>
+                        </div>
+                        {linkedInPreviewLoading && (
+                          <p className="text-xs text-slate-400 mb-2">
+                            Loading LinkedIn preview…
+                          </p>
+                        )}
+                        <textarea
+                          id="linkedin-post-content"
+                          rows={8}
+                          value={linkedInContent}
+                          onChange={(e) => {
+                            setLinkedInContent(e.target.value);
+                            setPublishResult(null);
+                            setLinkedInError(null);
+                          }}
+                          placeholder="Your LinkedIn post content. Start from the AI-generated text and edit freely."
+                          className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      {linkedInError && (
+                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                          {linkedInError}
+                        </div>
+                      )}
+
+                      {publishResult?.posted && (
+                        <div className="mt-3 p-4 bg-green-50 border border-green-200 rounded-xl text-green-800 text-sm">
+                          <p className="font-medium">Published to LinkedIn</p>
+                          {publishResult.postUrl && (
+                            <a
+                              href={publishResult.postUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 inline-block text-blue-700 underline hover:text-blue-900"
+                            >
+                              View on LinkedIn
+                            </a>
+                          )}
+                          {publishResult.postUrn && (
+                            <p className="mt-1 text-xs text-green-700 break-all">
+                              {publishResult.postUrn}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="mt-4 flex items-center justify-end">
+                        <button
+                          onClick={handlePublish}
+                          disabled={
+                            !selectedRepo?.approvedForProfessionalUse ||
+                            !linkedInStatus?.connected ||
+                            !linkedInContent.trim() ||
+                            linkedInPublishing
+                          }
+                          className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {linkedInPublishing
+                            ? "Publishing…"
+                            : "Post to LinkedIn"}
+                        </button>
+                      </div>
+                      {!selectedRepo?.approvedForProfessionalUse && (
+                        <p className="mt-2 text-xs text-slate-400 text-right">
+                          Approve the repository to enable posting.
+                        </p>
+                      )}
+                      {selectedRepo?.approvedForProfessionalUse &&
+                        !linkedInStatus?.connected && (
+                          <p className="mt-2 text-xs text-slate-400 text-right">
+                            Connect LinkedIn to enable posting.
+                          </p>
+                        )}
+                    </section>
                   )}
 
                   {analysisHistory.length > 0 && (

@@ -26,8 +26,10 @@ import {
   getEvidence,
   updateEvidence,
   assistDraft,
+  getRepoLinkedInPreviewController,
+  publishRepoLinkedInController,
 } from "../controllers/professionalContent";
-import { updateEvidenceSchema } from "../validators/professionalContent";
+import { updateEvidenceSchema, publishRepoContentSchema } from "../validators/professionalContent";
 
 const router = Router();
 
@@ -70,6 +72,20 @@ router.post(
   "/repositories/:githubRepositoryId/linkedin-draft/assist",
   authenticate,
   assistDraft
+);
+
+// Repo-scoped LinkedIn preview + publish used by the GitHub integrations page.
+// Both enforce the repository approval gate (403) and ownership (404).
+router.get(
+  "/repositories/:githubRepositoryId/linkedin-preview",
+  authenticate,
+  getRepoLinkedInPreviewController
+);
+router.post(
+  "/repositories/:githubRepositoryId/linkedin-draft/publish",
+  authenticate,
+  validate(publishRepoContentSchema),
+  publishRepoLinkedInController
 );
 
 export default router;

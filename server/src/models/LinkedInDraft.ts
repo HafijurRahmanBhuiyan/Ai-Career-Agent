@@ -12,12 +12,14 @@ export type LinkedInDraftStatus =
 export interface ILinkedInDraft extends Document {
   user: mongoose.Types.ObjectId;
   evidence: mongoose.Types.ObjectId;
+  repository?: mongoose.Types.ObjectId | null;
   hook: string;
   body: string;
   hashtags: string[];
   status: LinkedInDraftStatus;
   publishedAt?: Date | null;
   linkedinPostUrn?: string | null;
+  linkedinPostUrl?: string | null;
   lastPublishAttemptAt?: Date | null;
   publishErrorCode?: string | null;
   publishErrorMessageSafe?: string | null;
@@ -36,6 +38,11 @@ const linkedInDraftSchema = new Schema<ILinkedInDraft>(
       type: Schema.Types.ObjectId,
       ref: "ProfessionalEvidence",
       required: true,
+    },
+    repository: {
+      type: Schema.Types.ObjectId,
+      ref: "GitHubRepository",
+      default: null,
     },
     hook: {
       type: String,
@@ -71,6 +78,11 @@ const linkedInDraftSchema = new Schema<ILinkedInDraft>(
       default: null,
     },
     linkedinPostUrn: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    linkedinPostUrl: {
       type: String,
       default: null,
       trim: true,

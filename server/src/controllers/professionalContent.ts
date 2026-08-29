@@ -12,6 +12,8 @@ import {
   updateDraft,
   approveDraft,
   archiveDraft,
+  getRepoLinkedInPreview,
+  publishRepoContent,
 } from "../services/linkedInDraft";
 import ProfessionalEvidence from "../models/ProfessionalEvidence";
 import GitHubRepositoryModel from "../models/GitHubRepository";
@@ -264,6 +266,7 @@ export const publishLinkedInDraft = async (
         draft: result.draft,
         posted: true,
         postUrn: result.postUrn,
+        postUrl: result.postUrl,
         message: "Post published to LinkedIn",
       });
     } else {
@@ -273,6 +276,47 @@ export const publishLinkedInDraft = async (
         message: "Post was not published",
       });
     }
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getRepoLinkedInPreviewController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const repoId = parseRepoId(req.params.githubRepositoryId);
+    if (isNaN(repoId)) {
+      return next(new AppError("Invalid repository ID", 400));
+    }
+    const preview = await getRepoLinkedInPreview(
+      req.user!.id,
+      repoId
+    );
+    res.status(200).json(preview);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const publishRepoLinkedInController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const repoId = parseRepoId(req.params.githubRepositoryId);
+    if (isNaN(repoId)) {
+      return next(new AppError("Invalid repository ID", 400));
+    }
+    const result = await publishRepoContent(
+      req.user!.id,
+      repoId,
+      req.body.content
+    );
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

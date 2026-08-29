@@ -9,11 +9,12 @@ import { authenticate } from "../middleware/auth";
 
 const router = Router();
 
-router.use(authenticate);
-
-router.get("/connect", connect);
+// The callback is a browser redirect from LinkedIn (no Authorization header),
+// so it must NOT require authenticate. The userId is recovered from the
+// validated OAuth state, matching the GitHub callback convention.
+router.get("/connect", authenticate, connect);
 router.get("/callback", callback);
-router.get("/status", getStatus);
-router.post("/disconnect", disconnect);
+router.get("/status", authenticate, getStatus);
+router.post("/disconnect", authenticate, disconnect);
 
 export default router;

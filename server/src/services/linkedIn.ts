@@ -7,6 +7,7 @@ import {
   LinkedInError,
   getLinkedInScopes,
   toPersonUrn,
+  toLinkedInPostUrl,
 } from "../integrations/linkedin/linkedinClient";
 import { generateOAuthState } from "../utils/oauthState";
 import { encryptToken, decryptToken } from "../utils/encryption";
@@ -251,12 +252,18 @@ export class LinkedInService {
     draft.status = "published";
     draft.publishedAt = new Date();
     draft.linkedinPostUrn = result.postUrn;
+    draft.linkedinPostUrl = toLinkedInPostUrl(result.postUrn);
     draft.lastPublishAttemptAt = new Date();
     draft.publishErrorCode = null;
     draft.publishErrorMessageSafe = null;
     await draft.save();
 
-    return { draft, published: true, postUrn: result.postUrn };
+    return {
+      draft,
+      published: true,
+      postUrn: result.postUrn,
+      postUrl: draft.linkedinPostUrl || toLinkedInPostUrl(result.postUrn),
+    };
   }
 }
 

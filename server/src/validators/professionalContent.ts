@@ -45,6 +45,17 @@ export type UpdateDraftInput = z.infer<typeof updateDraftSchema>;
 
 export const approveDraftSchema = z.object({}).strict();
 
+export const publishRepoContentSchema = z
+  .object({
+    content: z
+      .string()
+      .min(1, "Post content is required")
+      .max(3000, "Post content must be 3000 characters or less"),
+  })
+  .strict();
+
+export type PublishRepoContentInput = z.infer<typeof publishRepoContentSchema>;
+
 export const listDraftsQuerySchema = z
   .object({
     status: z

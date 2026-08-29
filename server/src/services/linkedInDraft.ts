@@ -2,11 +2,16 @@ import { Types } from "mongoose";
 import GitHubRepositoryModel from "../models/GitHubRepository";
 import ProfessionalEvidence from "../models/ProfessionalEvidence";
 import LinkedInDraft from "../models/LinkedInDraft";
+import LinkedInConnection from "../models/LinkedInConnection";
+import ProjectAnalysis from "../models/ProjectAnalysis";
 import { ClaudeService } from "../integrations/claude/claude.service";
 import { linkedInAssistResultSchema } from "../validators/linkedInAssist";
 import { AppError } from "../middleware/errorHandler";
+import { deriveProfessionalEvidence } from "./professionalEvidence";
+import { LinkedInService } from "./linkedIn";
 
 const claudeService = new ClaudeService();
+const linkedInService = new LinkedInService();
 
 export const MAX_DRAFTS_PER_EVIDENCE = 50;
 
@@ -105,6 +110,152 @@ export async function assistLinkedInSuggestions({
   }
 
   return { suggestions: validation.data.suggestions };
+}
+
+async function loadApprovedEditor(
+  userId: string,
+  githubRepositoryId: number
+) {
+  const repository = await GitHubRepositoryModel.findOne({
+    user: userId,
+    githubRepositoryId,
+  });
+  if (!repository) {
+    throw new AppError("Repository not imported", 404);
+  }
+  if (!repository.approvedForProfessionalUse) {
+    throw new AppError(
+      "Repository must be explicitly approved for professional use",
+      403
+    );
+  }
+  return repository;
+}
+
+/**
+ * Returns the LinkedIn post content/preview for an approved repository without
+ * persisting anything. The content is the latest saved draft body, or the AI
+ * generated `linkedinDescription` from the latest project analysis when no
+ * draft exists yet. Publishing information of the most recent draft is exposed
+ * so the UI can show status/history.
+ */
+export async function getRepoLinkedInPreview(
+  userId: string,
+  githubRepositoryId: number
+) {
+  const repository = await loadApprovedEditor(userId, githubRepositoryId);
+
+  const analysis = await ProjectAnalysis.findOne({
+    user: userId,
+    githubRepository: repository._id,
+  }).sort({ analyzedAt: -1 });
+
+  const evidence = await ProfessionalEvidence.findOne({
+    user: userId,
+    githubRepository: repository._id,
+  });
+
+  let draft: InstanceType<typeof LinkedInDraft> | null = null;
+  if (evidence) {
+    draft = await LinkedInDraft.findOne({
+      user: userId,
+      evidence: evidence._id,
+    }).sort({ updatedAt: -1 });
+  }
+
+  return {
+    approved: true,
+    repository: {
+      _id: repository._id,
+      githubRepositoryId: repository.githubRepositoryId,
+      name: repository.name,
+      fullName: repository.fullName,
+      approvedForProfessionalUse: repository.approvedForProfessionalUse,
+      approvedAt: repository.approvedAt,
+    },
+    content: draft?.body || analysis?.linkedinDescription || "",
+    draft: draft
+      ? {
+          _id: draft._id,
+          status: draft.status,
+          linkedinPostUrn: draft.linkedinPostUrn,
+          linkedinPostUrl: draft.linkedinPostUrl,
+          publishedAt: draft.publishedAt,
+          publishErrorCode: draft.publishErrorCode,
+          publishErrorMessageSafe: draft.publishErrorMessageSafe,
+          updatedAt: draft.updatedAt,
+        }
+      : null,
+  };
+}
+
+/**
+ * Publishes explicitly provided (already user-edited) post content for an
+ * approved repository. It reuses the existing draft + linkedIn publish
+ * pipeline and never calls the AI: the caller supplies the exact text to post.
+ * Pre-flight guarantees: ownership (404), repository approval (403), non-empty
+ * content (400) and a connected LinkedIn account (400).
+ */
+export async function publishRepoContent(
+  userId: string,
+  githubRepositoryId: number,
+  content: string
+): Promise<Record<string, unknown>> {
+  const repository = await loadApprovedEditor(userId, githubRepositoryId);
+
+  const trimmed = (content || "").trim();
+  if (!trimmed) {
+    throw new AppError("Post content is required", 400);
+  }
+
+  const connection = await LinkedInConnection.findOne({
+    user: userId,
+    isActive: true,
+  }).select("+encryptedAccessToken");
+  if (!connection) {
+    throw new AppError(
+      "LinkedIn not connected. Connect your LinkedIn account first.",
+      400
+    );
+  }
+
+  const { evidence } = await deriveProfessionalEvidence({
+    userId,
+    githubRepositoryId,
+  });
+
+  const draft = await LinkedInDraft.create({
+    user: userId,
+    evidence: evidence._id,
+    repository: repository._id,
+    body: trimmed,
+    status: "approved",
+  });
+
+  const result = await linkedInService.publishDraft(
+    userId,
+    String(draft._id)
+  );
+
+  if (!result.published) {
+    const failed = result.draft as InstanceType<typeof LinkedInDraft>;
+    const reason =
+      failed.publishErrorMessageSafe ||
+      failed.publishErrorCode ||
+      "the LinkedIn API did not confirm the post";
+    throw new AppError(`Post was not published. ${reason}`, 400);
+  }
+
+  const publishedDraft = result.draft as InstanceType<typeof LinkedInDraft>;
+  const postUrn = result.postUrn as string | undefined;
+
+  return {
+    draft: publishedDraft,
+    posted: true,
+    postUrn: postUrn || null,
+    postUrl: publishedDraft.linkedinPostUrl || null,
+    message: "Post published to LinkedIn",
+  };
 }
 
 export async function listDrafts(

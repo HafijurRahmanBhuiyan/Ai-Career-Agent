@@ -52,6 +52,7 @@ jest.mock("../src/integrations/linkedin/linkedinClient", () => {
     getLinkedInScopes: actual.getLinkedInScopes,
     LinkedInError: actual.LinkedInError,
     toPersonUrn: actual.toPersonUrn,
+    toLinkedInPostUrl: actual.toLinkedInPostUrl,
     LinkedInClient: MockLinkedInClient,
     __getMock: () => mock,
   };

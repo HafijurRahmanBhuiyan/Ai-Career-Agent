@@ -15,6 +15,7 @@ import CareerEmails from "./pages/CareerEmails";
 import FollowUps from "./pages/FollowUps";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route
           path="/dashboard"
           element={
