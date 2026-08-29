@@ -14,6 +14,8 @@ AI Career Agent automates career-related workflows including GitHub project anal
 - **AI:** Anthropic Claude API
 - **Automation:** n8n
 
+## Live link: https://ai-career-agent-1bn8.onrender.com
+
 ## Current Milestone
 
 **Milestone 18: Real Job Sources, Scheduled Ingestion, Notifications & Settings**
