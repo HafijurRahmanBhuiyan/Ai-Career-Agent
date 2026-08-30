@@ -272,6 +272,13 @@ function ProfessionalContent() {
     setAssistLoading(true);
     setSuggestions([]);
     try {
+      if (!evidence) {
+        setDraftNotice("No professional evidence yet. Generating it first, then Claude will draft your post.");
+        const evRes = await api.post<{ evidence: ProfessionalEvidence }>(
+          `${API_BASE}/github/repositories/${selected.githubRepositoryId}/professional-evidence`
+        );
+        setEvidence(evRes.data.evidence);
+      }
       const res = await api.post<{ suggestions: LinkedInSuggestion[] }>(
         `${API_BASE}/github/repositories/${selected.githubRepositoryId}/linkedin-draft/assist`
       );
@@ -642,7 +649,7 @@ function ProfessionalContent() {
                         </h2>
                         <button
                           onClick={runAssist}
-                          disabled={assistLoading || !evidence}
+                          disabled={assistLoading}
                           className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                         >
                           {assistLoading ? "Generating..." : "Generate LinkedIn Post"}

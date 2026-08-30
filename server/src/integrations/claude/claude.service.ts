@@ -1,4 +1,4 @@
-import { analyzeWithAI } from "../ai/aiRouter";
+import { analyzeWithAI, analyzeWithAIFallback } from "../ai/aiRouter";
 import { AIProvider } from "../ai/ai.types";
 import {
   PROJECT_ANALYSIS_SYSTEM_PROMPT,
@@ -170,7 +170,7 @@ export class ClaudeService {
   async assistLinkedInPost(input: LinkedInAssistInput, provider?: AIProvider): Promise<unknown> {
     const userMessage = buildLinkedInAssistUserMessage(input);
 
-    const rawResponse = await analyzeWithAI(
+    const rawResponse = await analyzeWithAIFallback(
       {
         systemPrompt: LINKEDIN_ASSIST_SYSTEM_PROMPT,
         userMessage,
