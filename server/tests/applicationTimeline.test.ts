@@ -658,9 +658,11 @@ describe("Application timeline - Gmail-derived events", () => {
       application: new Types.ObjectId(appId),
       source: "gmail",
     });
-    expect(events.length).toBe(1);
-    expect(events[0].type).toBe("interview_scheduled");
-    expect(events[0].sourceId).toBe("gmsg1");
+    expect(events.length).toBe(2);
+    const careerRow = events.find((e) => e.sourceId === "gmsg1:career-interview");
+    expect(careerRow).toBeTruthy();
+    expect(careerRow!.type).toBe("interview_scheduled");
+    expect(events.find((e) => e.sourceId === "gmsg1")).toBeTruthy();
 
     await request(app)
       .post("/api/gmail/sync")

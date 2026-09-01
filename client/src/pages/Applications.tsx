@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
@@ -8,6 +8,7 @@ import {
   ApplicationPagination,
   ApplicationStatus,
   ApplicationDetail,
+  CareerEmailDetection,
   ActionSummary,
   PreparationSummary,
   TimelineEvent,
@@ -36,6 +37,7 @@ import {
   formatDueUrgency,
 } from "../types/followUp";
 import { getErrorMessage } from "../utils/apiError";
+import { validateHandoffUrl } from "../utils/handoffUrl";
 
 const API_BASE = "";
 const PAGE_SIZE = 10;
@@ -64,6 +66,180 @@ const STATUS_STYLES: Record<ApplicationStatus, string> = {
   withdrawn: "bg-amber-50 text-amber-700",
 };
 
+const DETECTED_STATUS_STYLES: Record<string, string> = {
+  screening: "bg-indigo-50 text-indigo-700",
+  interview: "bg-purple-50 text-purple-700",
+  offer: "bg-emerald-50 text-emerald-700",
+  rejected: "bg-red-50 text-red-700",
+};
+
+const CAREER_EVENT_STYLES: Record<
+  string,
+  { emoji: string; label: string; chip: string }
+> = {
+  interview: {
+    emoji: "🟢",
+    label: "Interview Scheduled",
+    chip: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  screening: {
+    emoji: "🟡",
+    label: "Screening",
+    chip: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  shortlist: {
+    emoji: "🟡",
+    label: "Shortlisted",
+    chip: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  assessment: {
+    emoji: "🔵",
+    label: "Assessment",
+    chip: "bg-sky-50 text-sky-700 border-sky-200",
+  },
+  offer: {
+    emoji: "🟣",
+    label: "Offer",
+    chip: "bg-purple-50 text-purple-700 border-purple-200",
+  },
+  rejection: {
+    emoji: "🔴",
+    label: "Rejection",
+    chip: "bg-red-50 text-red-700 border-red-200",
+  },
+  recruiter_contact: {
+    emoji: "🟠",
+    label: "Recruiter Contact",
+    chip: "bg-orange-50 text-orange-700 border-orange-200",
+  },
+  application_update: {
+    emoji: "⚪",
+    label: "Application Update",
+    chip: "bg-slate-100 text-slate-700 border-slate-200",
+  },
+};
+
+function careerEventStyle(type: string | undefined) {
+  return (
+    CAREER_EVENT_STYLES[type ?? ""] ?? {
+      emoji: "🔵",
+      label: "Update",
+      chip: "bg-slate-100 text-slate-700 border-slate-200",
+    }
+  );
+}
+
+function formatWhen(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function CareerIntelligenceCard({
+  app,
+  onViewApplication,
+  onViewTimeline,
+}: {
+  app: Application;
+  onViewApplication: () => void;
+  onViewTimeline: () => void;
+}) {
+  const event = app.latestCareerEvent;
+  const style = careerEventStyle(event?.type);
+  const company =
+    app.job?.companyName || event?.company || "Unknown company";
+  const role = app.job?.title || event?.role || "";
+  const quote =
+    event?.actionText ||
+    event?.evidence ||
+    event?.title ||
+    (event?.type
+      ? `Rating update on your application with ${company}.`
+      : null);
+  const meetingLabel =
+    event?.meetingPlatform ||
+    (event?.meetingUrl ? "link provided" : null);
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-slate-900 truncate">{company}</p>
+          {role && (
+            <p className="text-sm text-slate-500 truncate">{role}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${style.chip}`}
+        >
+          <span aria-hidden>{style.emoji}</span>
+          {style.label}
+        </span>
+        {event?.confidence != null && (
+          <span className="text-[10px] text-slate-400">
+            {Math.round(event.confidence * 100)}% confidence
+          </span>
+        )}
+      </div>
+
+      {(event?.scheduledAt ||
+        meetingLabel ||
+        event?.location ||
+        event?.phone) && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
+          {event?.scheduledAt && (
+            <span>📅 {formatWhen(event.scheduledAt)}</span>
+          )}
+          {meetingLabel && (
+            <span className="capitalize">🔗 {meetingLabel}</span>
+          )}
+          {event?.location && <span>📍 {event.location}</span>}
+          {event?.phone && <span>📞 {event.phone}</span>}
+        </div>
+      )}
+
+      {event?.deadlineAt && event?.actionRequired && (
+        <p className="text-xs text-amber-700">
+          ⏰ Action required — reply by {formatWhen(event.deadlineAt)}
+        </p>
+      )}
+
+      {quote && (
+        <p className="text-sm text-slate-600 italic line-clamp-2">
+          <span className="not-italic font-medium text-slate-400">
+            Latest:{" "}
+          </span>
+          “{quote}”
+        </p>
+      )}
+
+      <div className="flex gap-2 mt-auto pt-1">
+        <button
+          onClick={onViewApplication}
+          className="px-3 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+        >
+          View Application
+        </button>
+        <button
+          onClick={onViewTimeline}
+          className="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+        >
+          View Timeline
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Applications() {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlStatus = searchParams.get("status");
@@ -88,6 +264,9 @@ function Applications() {
   const [editing, setEditing] = useState<Application | null>(null);
   const [deleting, setDeleting] = useState<Application | null>(null);
   const [viewing, setViewing] = useState<Application | null>(null);
+  const [viewTimelineFor, setViewTimelineFor] = useState<Application | null>(
+    null
+  );
 
   // Deep-link support: /dashboard/applications?id=... opens the detail modal.
   const urlId = searchParams.get("id");
@@ -220,6 +399,32 @@ function Applications() {
           </div>
         </div>
 
+        {applications.filter((a) => a.latestCareerEvent?.type).length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Career Intelligence
+              </h2>
+              <span className="text-xs text-slate-400">
+                {applications.filter((a) => a.latestCareerEvent?.type).length}{" "}
+                active stage(s)
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {applications
+                .filter((a) => a.latestCareerEvent?.type)
+                .map((app) => (
+                  <CareerIntelligenceCard
+                    key={app._id}
+                    app={app}
+                    onViewApplication={() => setViewing(app)}
+                    onViewTimeline={() => setViewTimelineFor(app)}
+                  />
+                ))}
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-16">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
@@ -240,6 +445,7 @@ function Applications() {
                 <tr>
                   <th className="px-4 py-3">Job</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Detected</th>
                   <th className="px-4 py-3">Applied</th>
                   <th className="px-4 py-3">Notes</th>
                   <th className="px-4 py-3"></th>
@@ -257,6 +463,16 @@ function Applications() {
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
+                      {validateHandoffUrl(app.job?.jobUrl) && (
+                        <a
+                          href={validateHandoffUrl(app.job?.jobUrl) ?? undefined}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          View job post
+                        </a>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -264,6 +480,43 @@ function Applications() {
                       >
                         {app.status}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {app.careerEmailDetection?.careerStatus ? (
+                        <div>
+                          <span
+                            className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
+                              DETECTED_STATUS_STYLES[
+                                app.careerEmailDetection.careerStatus
+                              ] ?? "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {app.careerEmailDetection.careerStatus}
+                            {app.careerEmailDetection
+                              .careerStatusConfidence != null
+                              ? ` ${Math.round(
+                                  app.careerEmailDetection
+                                    .careerStatusConfidence * 100
+                                )}%`
+                              : ""}
+                            {app.careerEmailDetection.autoStatusApplied
+                              ? " • auto"
+                              : ""}
+                            {app.careerEmailDetection.manualStatusApplied
+                              ? " • manual"
+                              : ""}
+                          </span>
+                          {app.careerEmailDetection.autoStatusReason ||
+                          app.careerEmailDetection.manualStatusReason ? (
+                            <p className="text-[10px] text-slate-400 mt-0.5 max-w-[180px] line-clamp-1">
+                              {app.careerEmailDetection.autoStatusReason ||
+                                app.careerEmailDetection.manualStatusReason}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-slate-500 text-xs">
                       {app.appliedAt ? formatDate(app.appliedAt) : "—"}
@@ -344,6 +597,14 @@ function Applications() {
         <ApplicationDetailModal
           application={viewing}
           onClose={() => setViewing(null)}
+        />
+      )}
+
+      {viewTimelineFor && (
+        <ApplicationDetailModal
+          application={viewTimelineFor}
+          onClose={() => setViewTimelineFor(null)}
+          initialScrollToTimeline
         />
       )}
 
@@ -513,14 +774,17 @@ function EditApplicationModal({
 function ApplicationDetailModal({
   application,
   onClose,
+  initialScrollToTimeline,
 }: {
   application: Application;
   onClose: () => void;
+  initialScrollToTimeline?: boolean;
 }) {
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   const [newType, setNewType] = useState<TimelineEventType>("note");
   const [newTitle, setNewTitle] = useState("");
@@ -572,6 +836,14 @@ function ApplicationDetailModal({
   useEffect(() => {
     loadDetail();
   }, [loadDetail]);
+
+  useEffect(() => {
+    if (!loading && initialScrollToTimeline && bodyRef.current) {
+      bodyRef.current
+        .querySelector("[data-timeline]")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [loading, initialScrollToTimeline]);
 
   const reloadTimeline = useCallback(async () => {
     try {
@@ -634,6 +906,13 @@ function ApplicationDetailModal({
 
   const jobTitle = detail?.application?.job?.title || "Untitled Job";
   const companyName = detail?.application?.job?.companyName || "";
+  const detection = (application.careerEmailDetection ??
+    null) as CareerEmailDetection | null;
+  const latestEvent = application.latestStatusEvent ?? null;
+  const latestCareerEvent = application.latestCareerEvent ?? null;
+  const jobUrl = validateHandoffUrl(
+    application.job?.jobUrl ?? detail?.application?.job?.jobUrl
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -642,6 +921,16 @@ function ApplicationDetailModal({
           <div>
             <h2 className="text-lg font-semibold text-slate-900">{jobTitle}</h2>
             <p className="text-sm text-slate-600 mt-1">{companyName}</p>
+            {jobUrl && (
+              <a
+                href={jobUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-xs text-blue-600 hover:underline inline-block mt-1 break-all"
+              >
+                View job post
+              </a>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -652,7 +941,7 @@ function ApplicationDetailModal({
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto">
+        <div className="p-6 overflow-y-auto" ref={bodyRef}>
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
@@ -691,11 +980,128 @@ function ApplicationDetailModal({
                       {detail?.application?.notes || "—"}
                     </p>
                   </div>
+                  <div className="bg-slate-50 rounded-lg p-3 col-span-2">
+                    <p className="text-xs text-slate-500">
+                      Detected career stage
+                    </p>
+                    {detection?.careerStatus ? (
+                      <>
+                        <p className="font-medium text-slate-900 mt-1">
+                          {detection.careerStatus}
+                          {detection.careerStatusConfidence != null
+                            ? ` · ${Math.round(
+                                detection.careerStatusConfidence * 100
+                              )}% confidence`
+                            : ""}
+                        </p>
+                        {detection.autoStatusApplied ? (
+                          <p className="text-xs text-emerald-700 mt-1">
+                            Auto-applied
+                            {detection.autoStatusReason
+                              ? `: ${detection.autoStatusReason}`
+                              : ""}
+                          </p>
+                        ) : detection.manualStatusApplied ? (
+                          <p className="text-xs text-indigo-700 mt-1">
+                            Manually applied from career email
+                            {detection.manualStatusReason
+                              ? `: ${detection.manualStatusReason}`
+                              : ""}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-400 mt-1">
+                            Detected but not applied automatically.
+                          </p>
+                        )}
+                        {detection.careerStatusDetectedAt && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            Detected{" "}
+                            {formatDateTime(detection.careerStatusDetectedAt)}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-slate-400 mt-1 text-sm">
+                        No hiring-stage signal detected yet.
+                      </p>
+                    )}
+                  </div>
+                  <div className="bg-slate-50 rounded-lg p-3 col-span-2">
+                    <p className="text-xs text-slate-500">Latest status change</p>
+                    {latestEvent ? (
+                      <>
+                        <p className="font-medium text-slate-900 mt-1">
+                          {latestEvent.title}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {formatDateTime(latestEvent.eventDate)} ·{" "}
+                          {latestEvent.source}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-slate-400 mt-1 text-sm">
+                        No status changes recorded yet.
+                      </p>
+                    )}
+                  </div>
+                  {latestCareerEvent?.type && (
+                    <div className="bg-emerald-50 rounded-lg p-3 col-span-2">
+                      <p className="text-xs text-emerald-700">
+                        Latest career event
+                      </p>
+                      <p className="font-medium text-slate-900 mt-1 capitalize">
+                        {latestCareerEvent.type.replace(/_/g, " ")}
+                        {latestCareerEvent.confidence != null
+                          ? ` · ${Math.round(
+                              latestCareerEvent.confidence * 100
+                            )}% confidence`
+                          : ""}
+                      </p>
+                      {latestCareerEvent.scheduledAt && (
+                        <p className="text-xs text-slate-700 mt-1">
+                          Scheduled:{" "}
+                          {formatDateTime(latestCareerEvent.scheduledAt)}
+                          {latestCareerEvent.timezone
+                            ? ` (${latestCareerEvent.timezone})`
+                            : ""}
+                        </p>
+                      )}
+                      {latestCareerEvent.meetingUrl &&
+                        validateHandoffUrl(latestCareerEvent.meetingUrl) && (
+                          <p className="mt-1">
+                            <a
+                              href={
+                                validateHandoffUrl(
+                                  latestCareerEvent.meetingUrl
+                                ) ?? undefined
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-emerald-700 underline"
+                            >
+                              Join meeting
+                              {latestCareerEvent.meetingPlatform
+                                ? ` (${latestCareerEvent.meetingPlatform})`
+                                : ""}
+                            </a>
+                          </p>
+                        )}
+                      {latestCareerEvent.actionRequired && (
+                        <p className="text-xs text-slate-700 mt-1">
+                          Action required:{" "}
+                          {latestCareerEvent.actionText || "yes"}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                <h3
+                  className="text-sm font-semibold text-slate-800 mb-2"
+                  data-timeline
+                >
                   Timeline ({events.length})
                 </h3>
                 <div className="space-y-2">

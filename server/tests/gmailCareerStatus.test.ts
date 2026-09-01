@@ -882,7 +882,8 @@ describe("Gmail sync automatic tracking (opt-in)", () => {
     expect(emails).toHaveLength(1);
 
     const events = await ApplicationEvent.find({ application: application._id, source: "gmail" });
-    expect(events).toHaveLength(1);
+    const sourceIds = events.map((e) => e.sourceId).sort();
+    expect(sourceIds).toEqual(["msg1", "msg1:career-interview"]);
   });
 
   it("skips emails sent by the agent to itself (loop prevention)", async () => {

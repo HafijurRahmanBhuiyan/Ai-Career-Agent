@@ -16,6 +16,62 @@ export interface ApplicationJob {
   remoteType?: string;
   employmentType?: string;
   source?: string;
+  jobUrl?: string | null;
+  applyUrl?: string | null;
+  applyCapability?: ApplyCapability | null;
+}
+
+export interface CareerEmailDetection {
+  id: string;
+  careerStatus: string;
+  careerStatusConfidence: number | null;
+  careerStatusDetectedAt: string | null;
+  autoStatusApplied: boolean;
+  autoStatusReason: string | null;
+  manualStatusApplied: boolean;
+  manualStatusAppliedAt: string | null;
+  manualStatusReason: string | null;
+}
+
+export interface LatestStatusEvent {
+  id: string;
+  title: string;
+  eventDate: string;
+  source: string;
+}
+
+export type LatestCareerEventType =
+  | "interview"
+  | "screening"
+  | "assessment"
+  | "shortlist"
+  | "offer"
+  | "rejection"
+  | "recruiter_contact"
+  | "application_update";
+
+export interface LatestCareerEvent {
+  type?: LatestCareerEventType;
+  confidence?: number | null;
+  title?: string | null;
+  company?: string | null;
+  role?: string | null;
+  scheduledAt?: string | null;
+  timezone?: string | null;
+  durationMinutes?: number | null;
+  interviewerName?: string | null;
+  interviewerEmail?: string | null;
+  meetingUrl?: string | null;
+  meetingPlatform?: string | null;
+  location?: string | null;
+  phone?: string | null;
+  deadlineAt?: string | null;
+  deadlineTimezone?: string | null;
+  actionRequired?: boolean | null;
+  actionText?: string | null;
+  candidateResponseRequired?: boolean | null;
+  evidence?: string | null;
+  detectedAt?: string | null;
 }
 
 export interface Application {
@@ -24,6 +80,9 @@ export interface Application {
   status: ApplicationStatus;
   appliedAt?: string | null;
   notes?: string | null;
+  careerEmailDetection?: CareerEmailDetection | null;
+  latestCareerEvent?: LatestCareerEvent | null;
+  latestStatusEvent?: LatestStatusEvent | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -118,6 +177,15 @@ export interface CareerEmailRef {
   companyName?: string;
   jobTitle?: string;
   suggestedApplicationStatus?: string;
+  careerStatus?: string | null;
+  careerStatusConfidence?: number | null;
+  careerStatusDetectedAt?: string | null;
+  autoStatusApplied?: boolean;
+  autoStatusReason?: string | null;
+  manualStatusApplied?: boolean;
+  manualStatusAppliedAt?: string | null;
+  manualStatusReason?: string | null;
+  careerEvent?: LatestCareerEvent | null;
 }
 
 export interface TimelineResponse {

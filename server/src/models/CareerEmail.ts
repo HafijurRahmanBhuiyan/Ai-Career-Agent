@@ -37,6 +37,48 @@ export const CAREER_EMAIL_CLASSIFICATION_STATUSES = [
 export type CareerEmailClassificationStatus =
   (typeof CAREER_EMAIL_CLASSIFICATION_STATUSES)[number];
 
+// Structured career-event intelligence (Phase 2, Step 6): a richer, additive
+// summary of a concrete career event detected in a single Gmail message. It
+// does not replace the category/status fields; it complements them with
+// interview details, deadlines, actions and confidence, all of which stay
+// optional and are never fabricated.
+export const CAREER_EVENT_TYPES = [
+  "interview",
+  "screening",
+  "assessment",
+  "shortlist",
+  "offer",
+  "rejection",
+  "recruiter_contact",
+  "application_update",
+] as const;
+
+export type CareerEventType = (typeof CAREER_EVENT_TYPES)[number];
+
+export interface ICareerEvent {
+  type?: CareerEventType;
+  confidence?: number | null;
+  title?: string | null;
+  company?: string | null;
+  role?: string | null;
+  scheduledAt?: Date | null;
+  timezone?: string | null;
+  durationMinutes?: number | null;
+  interviewerName?: string | null;
+  interviewerEmail?: string | null;
+  meetingUrl?: string | null;
+  meetingPlatform?: string | null;
+  location?: string | null;
+  phone?: string | null;
+  deadlineAt?: Date | null;
+  deadlineTimezone?: string | null;
+  actionRequired?: boolean | null;
+  actionText?: string | null;
+  candidateResponseRequired?: boolean | null;
+  evidence?: string | null;
+  detectedAt?: Date;
+}
+
 export interface InterviewInfo {
   type?: string | null;
   scheduledAt?: Date | null;
@@ -81,6 +123,15 @@ export interface ICareerEmail extends Document {
   careerStatusDetectedAt?: Date;
   autoStatusApplied?: boolean;
   autoStatusReason?: string;
+  // Manually applied from this email (distinct from automatic high-confidence
+  // application in careerStatusTransitions). Additive bookkeeping for the
+  // manual status-application flow; never duplicates the automatic signal.
+  manualStatusApplied?: boolean;
+  manualStatusAppliedAt?: Date;
+  manualStatusReason?: string;
+  // Phase 2 Step 6: structured career-event intelligence for this message.
+  // Additive and optional; never fabricated and never merged with category.
+  careerEvent?: ICareerEvent;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -214,6 +265,49 @@ const careerEmailSchema = new Schema<ICareerEmail>(
       type: String,
       trim: true,
       maxlength: 1000,
+      default: null,
+    },
+    manualStatusApplied: {
+      type: Boolean,
+      default: false,
+    },
+    manualStatusAppliedAt: {
+      type: Date,
+      default: null,
+    },
+    manualStatusReason: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: null,
+    },
+    careerEvent: {
+      type: new Schema(
+        {
+          type: { type: String, enum: CAREER_EVENT_TYPES, default: null },
+          confidence: { type: Number, min: 0, max: 1, default: null },
+          title: { type: String, trim: true, maxlength: 500, default: null },
+          company: { type: String, trim: true, maxlength: 300, default: null },
+          role: { type: String, trim: true, maxlength: 300, default: null },
+          scheduledAt: { type: Date, default: null },
+          timezone: { type: String, trim: true, maxlength: 120, default: null },
+          durationMinutes: { type: Number, min: 0, max: 10080, default: null },
+          interviewerName: { type: String, trim: true, maxlength: 300, default: null },
+          interviewerEmail: { type: String, trim: true, maxlength: 300, default: null },
+          meetingUrl: { type: String, trim: true, maxlength: 1000, default: null },
+          meetingPlatform: { type: String, trim: true, maxlength: 120, default: null },
+          location: { type: String, trim: true, maxlength: 500, default: null },
+          phone: { type: String, trim: true, maxlength: 100, default: null },
+          deadlineAt: { type: Date, default: null },
+          deadlineTimezone: { type: String, trim: true, maxlength: 120, default: null },
+          actionRequired: { type: Boolean, default: null },
+          actionText: { type: String, trim: true, maxlength: 500, default: null },
+          candidateResponseRequired: { type: Boolean, default: null },
+          evidence: { type: String, trim: true, maxlength: 500, default: null },
+          detectedAt: { type: Date, default: null },
+        },
+        { _id: false }
+      ),
       default: null,
     },
   },

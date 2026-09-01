@@ -8,6 +8,10 @@ import { Application } from "../models/Application";
 import GmailConnection from "../models/GmailConnection";
 import { createStatusChangedEvent } from "../services/applicationTimeline";
 import {
+  isAllowedStatusTransition,
+  isDetectedStatusTarget,
+} from "../services/careerStatusTransitions";
+import {
   applyStatusSchema,
   emailListQuerySchema,
   syncQuerySchema,
@@ -130,6 +134,7 @@ export const syncAll = async (
     let skipped = 0;
     let failed = 0;
     let autoUpdated = 0;
+    let careerEvents = 0;
     const errors: { user: string; message: string }[] = [];
 
     for (const connection of connections) {
@@ -143,6 +148,7 @@ export const syncAll = async (
         skipped += result.skipped;
         failed += result.failed;
         autoUpdated += result.autoUpdated;
+        careerEvents += result.careerEvents;
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Unknown error";
@@ -159,6 +165,7 @@ export const syncAll = async (
       skipped,
       failed,
       autoUpdated,
+      careerEvents,
       errors,
     });
   } catch (error) {
@@ -272,21 +279,63 @@ export const applyStatus = async (
       return next(new AppError("Linked application not found", 404));
     }
 
-    const previousStatus = application.status;
-    application.status = parsed.data.status;
-    await application.save();
+    const target = parsed.data.status;
 
-    if (previousStatus !== parsed.data.status) {
-      await createStatusChangedEvent(
-        userId,
-        String(application._id),
-        parsed.data.status
+    // Server-side only: never trust the client to bypass detection guards. The
+    // manual flow may only apply hiring stages Gmail detection itself derives.
+    if (!isDetectedStatusTarget(target)) {
+      return next(
+        new AppError(
+          "Only detected hiring stages may be applied from career emails",
+          400
+        )
       );
     }
 
+    const manualMetadata = {
+      manualStatusApplied: true,
+      manualStatusAppliedAt: new Date(),
+      manualStatusReason: `Manually applied status "${target}" to the linked application from this career email`,
+    };
+
+    // Idempotent: applying the already-current status records the manual
+    // metadata but never mutates the application or creates another event.
+    // Checked before the transition guard because same-status is a no-op, not
+    // an invalid forward move.
+    if (application.status === target) {
+      await CareerEmail.updateOne({ _id: email._id }, { $set: manualMetadata });
+      return res.status(200).json({
+        application: toSafeApplication(application),
+        unchanged: true,
+        message: `Application status is already ${target}`,
+      });
+    }
+
+    if (!isAllowedStatusTransition(application.status, target)) {
+      return next(
+        new AppError(
+          `Transition from ${application.status} to ${target} is not allowed`,
+          409
+        )
+      );
+    }
+
+    application.status = target;
+    await application.save();
+
+    await CareerEmail.updateOne({ _id: email._id }, { $set: manualMetadata });
+
+    // Exactly one status_changed event per transition. createStatusChangedEvent
+    // is only called when the status actually changed, so re-posts are no-ops.
+    await createStatusChangedEvent(
+      userId,
+      String(application._id),
+      target
+    );
+
     res.status(200).json({
       application: toSafeApplication(application),
-      message: `Application status updated to ${parsed.data.status}`,
+      message: `Application status updated to ${target}`,
     });
   } catch (error) {
     next(error);
