@@ -239,7 +239,11 @@ describe("Jobs API - discovery endpoint", () => {
       .send({});
     expect(res.status).toBe(200);
     expect(res.body.sources.length).toBeGreaterThan(0);
-    expect(res.body.sources[0].status).toBe("success");
+    // Network-dependent live sources are disabled in this suite, so only the
+    // Mock source (registered in non-production) is expected to succeed.
+    const mockSource = res.body.sources.find((s: { source: string }) => s.source === "mock");
+    expect(mockSource).toBeDefined();
+    expect(mockSource.status).toBe("success");
     expect(res.body.count).toBeGreaterThan(0);
     expect(res.body.jobs.length).toBe(res.body.count);
 

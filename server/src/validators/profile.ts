@@ -37,6 +37,7 @@ export const createProfileSchema = z.object({
     .optional()
     .or(z.literal("")),
   gmailNotifyEnabled: z.boolean().optional(),
+  gmailAutoStatusEnabled: z.boolean().optional(),
 });
 
 export const updateProfileSchema = createProfileSchema.partial();

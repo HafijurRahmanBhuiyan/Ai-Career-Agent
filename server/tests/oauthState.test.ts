@@ -11,15 +11,16 @@ describe("OAuth State", () => {
     expect(state.length).toBe(64);
   });
 
-  it("should validate a valid state", () => {
+  it("should validate a valid state and return the userId", () => {
     const state = generateOAuthState("user1");
-    const result = validateOAuthState(state, "user1");
+    const result = validateOAuthState(state);
 
     expect(result.valid).toBe(true);
+    expect(result.userId).toBe("user1");
   });
 
   it("should fail for an invalid state", () => {
-    const result = validateOAuthState("nonexistent_state", "user1");
+    const result = validateOAuthState("nonexistent_state");
 
     expect(result.valid).toBe(false);
     expect(result.error).toBe("Invalid OAuth state");
@@ -28,21 +29,12 @@ describe("OAuth State", () => {
   it("should fail for a used state", () => {
     const state = generateOAuthState("user1");
 
-    validateOAuthState(state, "user1");
+    validateOAuthState(state);
 
-    const result = validateOAuthState(state, "user1");
+    const result = validateOAuthState(state);
 
     expect(result.valid).toBe(false);
     expect(result.error).toBe("OAuth state already used");
-  });
-
-  it("should fail for wrong user", () => {
-    const state = generateOAuthState("user1");
-
-    const result = validateOAuthState(state, "user2");
-
-    expect(result.valid).toBe(false);
-    expect(result.error).toBe("OAuth state does not match user");
   });
 
   it("should clean up old states for the same user", () => {
@@ -50,7 +42,8 @@ describe("OAuth State", () => {
     generateOAuthState("user1");
     const state = generateOAuthState("user1");
 
-    const result = validateOAuthState(state, "user1");
+    const result = validateOAuthState(state);
     expect(result.valid).toBe(true);
+    expect(result.userId).toBe("user1");
   });
 });

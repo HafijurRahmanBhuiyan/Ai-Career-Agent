@@ -5,6 +5,7 @@ import { validateOAuthState } from "../utils/oauthState";
 import { AppError } from "../middleware/errorHandler";
 import { CareerEmail } from "../models/CareerEmail";
 import { Application } from "../models/Application";
+import GmailConnection from "../models/GmailConnection";
 import { createStatusChangedEvent } from "../services/applicationTimeline";
 import {
   applyStatusSchema,
@@ -40,8 +41,12 @@ export const callback = async (
     }
 
     const stateValidation = validateOAuthState(state);
-    if (!stateValidation.valid) {
+    if (!stateValidation.valid || !stateValidation.userId) {
       return next(new AppError(stateValidation.error || "Invalid OAuth state", 400));
+    }
+
+    if (stateValidation.userId !== req.user!.id) {
+      return next(new AppError("OAuth state does not belong to the authenticated user", 400));
     }
 
     await gmailService.completeConnection(req.user!.id, code);
@@ -103,6 +108,59 @@ export const sync = async (
       parsed.data.max
     );
     res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const syncAll = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const connections = await GmailConnection.find({
+      isActive: { $ne: false },
+    });
+
+    const results: { user: string; ok: boolean; error?: string }[] = [];
+    let synced = 0;
+    let careerEmails = 0;
+    let classified = 0;
+    let skipped = 0;
+    let failed = 0;
+    let autoUpdated = 0;
+    const errors: { user: string; message: string }[] = [];
+
+    for (const connection of connections) {
+      const userId = String(connection.user);
+      try {
+        const result = await gmailService.syncEmails(userId);
+        results.push({ user: userId, ok: true });
+        synced += result.synced;
+        careerEmails += result.careerEmails;
+        classified += result.classified;
+        skipped += result.skipped;
+        failed += result.failed;
+        autoUpdated += result.autoUpdated;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        errors.push({ user: userId, message });
+        results.push({ user: userId, ok: false, error: message });
+      }
+    }
+
+    res.status(200).json({
+      users: results.length,
+      synced,
+      careerEmails,
+      classified,
+      skipped,
+      failed,
+      autoUpdated,
+      errors,
+    });
   } catch (error) {
     next(error);
   }

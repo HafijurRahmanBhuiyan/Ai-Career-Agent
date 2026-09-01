@@ -21,21 +21,54 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:5001/api/jobs/discover",
+        "url": "http://localhost:5001/api/jobs/discovery/run",
         "sendBody": true,
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "specifyBody": "json",
-        "jsonBody": "{\n  \"roles\": [\"Software Engineer\", \"Full Stack Developer\"],\n  \"locations\": [],\n  \"remote\": \"any\",\n  \"experienceLevel\": \"mid\",\n  \"salaryMinimum\": 60000,\n  \"limit\": 20,\n  \"page\": 1\n}",
+        "specifyBody": "none",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Run automatic discovery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5001/api/jobs/maintenance/stale",
+        "sendBody": false,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "options": {
           "timeout": 60000
         }
       },
-      "id": "22222222-2222-4222-8222-222222222222",
-      "name": "Trigger job discovery",
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Deactivate stale jobs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [500, 300]
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5001/api/gmail/sync-all",
+        "sendBody": false,
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "44444444-4444-4444-8444-444444444444",
+      "name": "Sync Gmail career emails",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1020, 300]
     }
   ],
   "connections": {
@@ -43,7 +76,29 @@
       "main": [
         [
           {
-            "node": "Trigger job discovery",
+            "node": "Run automatic discovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run automatic discovery": {
+      "main": [
+        [
+          {
+            "node": "Deactivate stale jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deactivate stale jobs": {
+      "main": [
+        [
+          {
+            "node": "Sync Gmail career emails",
             "type": "main",
             "index": 0
           }

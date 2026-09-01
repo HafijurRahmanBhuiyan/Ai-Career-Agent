@@ -7,7 +7,9 @@ import Project from "../models/Project";
 import GitHubRepositoryModel from "../models/GitHubRepository";
 import ProjectAnalysis, { IProjectAnalysis } from "../models/ProjectAnalysis";
 import ProfessionalEvidence from "../models/ProfessionalEvidence";
+import Resume from "../models/Resume";
 import { JobMatchProfilePayload } from "./jobMatchTypes";
+import { ResumeDerivedEvidence } from "./resumeTypes";
 
 const MAX_PROJECTS = 10;
 const MAX_EXPERIENCE = 15;
@@ -15,6 +17,7 @@ const MAX_EDUCATION = 10;
 const MAX_SKILLS = 50;
 const MAX_GITHUB_ANALYSES = 8;
 const MAX_PROFESSIONAL_EVIDENCE = 12;
+const MAX_RESUME_EVIDENCE = 3;
 
 function coerceNull<T>(value: T | undefined | null): T | null {
   return typeof value === "undefined" ? null : (value as T | null);
@@ -29,6 +32,7 @@ export interface PreparedMatchProfile {
     hasEducation: boolean;
     hasProjects: boolean;
     hasGithubAnalysis: boolean;
+    hasResume: boolean;
   };
 }
 
@@ -45,6 +49,8 @@ export async function prepareMatchProfile(
     projects,
     githubRepositories,
     professionalEvidences,
+    resumes,
+    resumeDerived,
   ] = await Promise.all([
     Profile.findOne({ user: userIdObj }).lean(),
     Skill.find({ user: userIdObj }).limit(MAX_SKILLS).sort({ createdAt: -1 }).lean(),
@@ -62,6 +68,8 @@ export async function prepareMatchProfile(
       .limit(MAX_PROFESSIONAL_EVIDENCE)
       .sort({ updatedAt: -1 })
       .lean(),
+    loadResumeEvidence(userIdObj),
+    loadResumeDerivedEvidence(userIdObj),
   ]);
 
   let analyses: Array<FlattenMaps<IProjectAnalysis>> = [];
@@ -76,7 +84,7 @@ export async function prepareMatchProfile(
       .lean();
   }
 
-  const payload: JobMatchProfilePayload = {
+    const payload: JobMatchProfilePayload = {
     profile: {
       fullName: profile?.fullName ?? null,
       headline: profile?.headline ?? null,
@@ -90,6 +98,15 @@ export async function prepareMatchProfile(
             min: coerceNull(profile.salaryExpectation.min),
             max: coerceNull(profile.salaryExpectation.max),
             currency: coerceNull(profile.salaryExpectation.currency),
+          }
+        : null,
+      jobSearchPreferences: profile?.jobSearchPreferences
+        ? {
+            roles: profile.jobSearchPreferences.roles ?? [],
+            locations: profile.jobSearchPreferences.locations ?? [],
+            remote: coerceNull(profile.jobSearchPreferences.remote),
+            experienceLevel: coerceNull(profile.jobSearchPreferences.experienceLevel),
+            salaryMinimum: coerceNull(profile.jobSearchPreferences.salaryMinimum),
           }
         : null,
     },
@@ -137,6 +154,8 @@ export async function prepareMatchProfile(
       projectDomain: e.projectDomain,
       senioritySignals: e.senioritySignals ?? [],
     })),
+    resumeEvidence: resumes,
+    resumeDerived,
   };
 
   return {
@@ -148,7 +167,119 @@ export async function prepareMatchProfile(
       hasEducation: education.length > 0,
       hasProjects: projects.length > 0,
       hasGithubAnalysis: analyses.length > 0,
+      hasResume: resumes.length > 0,
     },
+  };
+}
+
+/**
+ * (Phase 2, Step 2) Load the user's active CV/resume as lightweight evidence for
+ * the AI job matcher. Only public metadata (title, file name, version, and
+ * whether a file is attached) is returned — the private `fileUrl` is deliberately
+ * excluded. CV and Resume share the same underlying Resume model, so "active
+ * resume" is the current CV. Active resumes are preferred; if none is flagged
+ * active, the most recently updated resume is used.
+ */
+async function loadResumeEvidence(
+  userId: Types.ObjectId
+): Promise<Array<{ title: string; fileName: string; version: number; hasFile: boolean }>> {
+  const active = await Resume.find({ user: userId, isActive: true })
+    .sort({ updatedAt: -1 })
+    .limit(MAX_RESUME_EVIDENCE)
+    .select("title fileName version fileUrl updatedAt")
+    .lean();
+
+  if (active.length > 0) {
+    return active.map((r) => ({
+      title: r.title,
+      fileName: r.fileName,
+      version: r.version,
+      hasFile: Boolean(r.fileUrl),
+    }));
+  }
+
+  const latest = await Resume.find({ user: userId })
+    .sort({ updatedAt: -1 })
+    .limit(MAX_RESUME_EVIDENCE)
+    .select("title fileName version fileUrl updatedAt")
+    .lean();
+
+  return latest.map((r) => ({
+    title: r.title,
+    fileName: r.fileName,
+    version: r.version,
+    hasFile: Boolean(r.fileUrl),
+  }));
+}
+
+/**
+ * (Phase 2, Step 3) Load the active resume's structured, resume-derived evidence
+ * as a SUPPLEMENTARY matching block. It is derived from the resume document
+ * content (never the raw text, which stays server-side) and only the validated
+ * structured fields are forwarded to the matcher. It never overwrites the
+ * trusted structured profile data.
+ */
+async function loadResumeDerivedEvidence(
+  userId: Types.ObjectId
+): Promise<JobMatchProfilePayload["resumeDerived"]> {
+  const baseQuery: Record<string, unknown> = { user: userId, evidence: { $exists: true } };
+  const projection = { title: 1, evidence: 1, isActive: 1, updatedAt: 1 };
+
+  let resume = await Resume.findOne({ ...baseQuery, isActive: true })
+    .sort({ updatedAt: -1 })
+    .select(projection)
+    .lean();
+
+  if (!resume) {
+    resume = await Resume.findOne(baseQuery)
+      .sort({ updatedAt: -1 })
+      .select(projection)
+      .lean();
+  }
+
+  if (!resume || !resume.evidence) return null;
+
+  const evidence: ResumeDerivedEvidence = resume.evidence as ResumeDerivedEvidence;
+  const skills = evidence.skills ?? [];
+  const technologies = evidence.technologies ?? [];
+  const roles = evidence.roles ?? [];
+  const employers = evidence.employers ?? [];
+  const projects = evidence.projects ?? [];
+  const achievements = evidence.achievements ?? [];
+  const certifications = evidence.certifications ?? [];
+  const domains = evidence.domains ?? [];
+
+  const hasSignal =
+    skills.length > 0 ||
+    technologies.length > 0 ||
+    roles.length > 0 ||
+    employers.length > 0 ||
+    projects.length > 0 ||
+    achievements.length > 0 ||
+    certifications.length > 0 ||
+    domains.length > 0 ||
+    (evidence.yearsExperience ?? null) != null ||
+    (evidence.education ?? []).length > 0;
+
+  if (!hasSignal) return null;
+
+  return {
+    summary: evidence.summary ?? null,
+    skills,
+    technologies,
+    roles,
+    employers,
+    yearsExperience: evidence.yearsExperience ?? null,
+    projects,
+    achievements,
+    education: (evidence.education ?? []).map((e) => ({
+      degree: e.degree ?? null,
+      institution: e.institution ?? null,
+      field: e.field ?? null,
+    })),
+    certifications,
+    domains,
+    source: evidence.extraction?.source === "ai" ? "ai" : "deterministic",
   };
 }
 

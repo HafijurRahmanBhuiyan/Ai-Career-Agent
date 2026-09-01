@@ -131,6 +131,7 @@ describe("deterministicMatch unit tests", () => {
     ],
     githubAnalysis: [],
     professionalEvidence: [],
+    resumeEvidence: [],
   };
 
   const job: JobMatchJobPayload = {
@@ -243,6 +244,7 @@ describe("Opportunity feed API", () => {
       .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.opportunities[0].alreadyApplied).toBe(true);
+    expect(res.body.opportunities[0].applicationStatus).toBe("saved");
   });
 
   test("is user-scoped for applied status", async () => {
@@ -263,7 +265,9 @@ describe("Opportunity feed API", () => {
       .get("/api/jobs/opportunities")
       .set("Authorization", `Bearer ${t2}`);
     expect(res1.body.opportunities[0].alreadyApplied).toBe(true);
+    expect(res1.body.opportunities[0].applicationStatus).toBe("saved");
     expect(res2.body.opportunities[0].alreadyApplied).toBe(false);
+    expect(res2.body.opportunities[0].applicationStatus).toBeNull();
   });
 
   test("filters by keywords", async () => {
@@ -428,6 +432,7 @@ describe("Opportunity detail API", () => {
       .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.alreadyApplied).toBe(true);
+    expect(res.body.applicationStatus).toBe("saved");
   });
 });
 

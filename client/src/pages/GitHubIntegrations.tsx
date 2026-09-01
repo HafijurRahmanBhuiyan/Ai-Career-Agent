@@ -695,8 +695,9 @@ function GitHubIntegrations() {
                 <div className="mt-5 border-t border-slate-100 pt-5">
                   <p className="text-xs text-slate-500 mb-3">
                     Run a sync to read career-related emails from your Gmail and
-                    classify them with AI. This is read-only and never changes
-                    your application status automatically.
+                    classify them with AI. Detection is read-only; application
+                    status changes automatically only for high-confidence
+                    signals when enabled in Settings.
                   </p>
                   <button
                     onClick={handleGmailSync}
@@ -716,6 +717,11 @@ function GitHubIntegrations() {
                       <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
                         Classified: {gmailSyncResult.classified}
                       </span>
+                      {gmailSyncResult.autoUpdated > 0 && (
+                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded font-medium">
+                          Auto-updated: {gmailSyncResult.autoUpdated}
+                        </span>
+                      )}
                       <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded">
                         Skipped: {gmailSyncResult.skipped}
                       </span>

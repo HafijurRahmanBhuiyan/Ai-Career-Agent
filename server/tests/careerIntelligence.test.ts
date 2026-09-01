@@ -660,20 +660,54 @@ describe("Career intelligence - follow-ups", () => {
   });
 
   test("marks a follow-up due within today as due_today", async () => {
-    const { token, user } = await registerUser();
-    const job = await createJob();
-    const app = await createApplication(user.id as string, job._id as Types.ObjectId, "applied");
-
-    await ApplicationFollowUp.create({
-      user: user.id,
-      application: app._id as Types.ObjectId,
-      action: "interview_follow_up",
-      dueAt: new Date(Date.now() + 60 * 60 * 1000),
-      completed: false,
+    // Pin the system clock to local noon so dueAt (= noon + 60 min) can never
+    // cross a calendar-day boundary. Only Date is faked; real timers (setTimeout,
+    // etc.) stay untouched so supertest/mongoose async operations work normally.
+    const now = new Date();
+    const fixedNow = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      12,
+      0,
+      0,
+      0
+    );
+    // Fake Date (so the endpoint's `new Date()` is pinned) but keep all real
+    // timer APIs so supertest/mongoose async work normally.
+    jest.useFakeTimers({
+      doNotFake: [
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+        "setImmediate",
+        "clearImmediate",
+        "queueMicrotask",
+        "nextTick",
+        "performance",
+      ],
     });
+    jest.setSystemTime(fixedNow);
 
-    const res = await getDashboard(token);
-    expect(res.body.followUps[0].urgency).toBe("due_today");
+    try {
+      const { token, user } = await registerUser();
+      const job = await createJob();
+      const app = await createApplication(user.id as string, job._id as Types.ObjectId, "applied");
+
+      await ApplicationFollowUp.create({
+        user: user.id,
+        application: app._id as Types.ObjectId,
+        action: "interview_follow_up",
+        dueAt: new Date(Date.now() + 60 * 60 * 1000),
+        completed: false,
+      });
+
+      const res = await getDashboard(token);
+      expect(res.body.followUps[0].urgency).toBe("due_today");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test("marks a future follow-up as upcoming", async () => {

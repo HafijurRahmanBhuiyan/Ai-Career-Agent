@@ -17,6 +17,18 @@ export const CAREER_EMAIL_CATEGORIES = [
 
 export type CareerEmailCategory = (typeof CAREER_EMAIL_CATEGORIES)[number];
 
+// Hiring-stage signals Gmail career-status detection can derive and auto-apply.
+// Excludes "applied" and "withdrawn" on purpose: "applied" is only ever set by
+// the explicit execution flow, and "withdrawn" is never changed automatically.
+export const DETECTED_CAREER_STATUSES = [
+  "screening",
+  "interview",
+  "offer",
+  "rejected",
+] as const;
+
+export type DetectedCareerStatus = (typeof DETECTED_CAREER_STATUSES)[number];
+
 export const CAREER_EMAIL_CLASSIFICATION_STATUSES = [
   "classified",
   "failed",
@@ -59,6 +71,16 @@ export interface ICareerEmail extends Document {
   classificationStatus?: CareerEmailClassificationStatus;
   classifiedAt?: Date;
   rawMetadata?: Record<string, unknown>;
+  // Phase 2 Step 5: hiring-stage detection from Gmail. "careerStatus" is the
+  // derived stage (screening/interview/offer/rejected); it is stored alongside
+  // the original AI classification and may advance the linked application only
+  // when the profile toggle is on, confidence is high, and the transition is
+  // explicitly allowed.
+  careerStatus?: DetectedCareerStatus | null;
+  careerStatusConfidence?: number | null;
+  careerStatusDetectedAt?: Date;
+  autoStatusApplied?: boolean;
+  autoStatusReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -169,6 +191,31 @@ const careerEmailSchema = new Schema<ICareerEmail>(
       type: Schema.Types.Mixed,
       default: {},
     },
+    careerStatus: {
+      type: String,
+      enum: DETECTED_CAREER_STATUSES,
+      default: null,
+    },
+    careerStatusConfidence: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: null,
+    },
+    careerStatusDetectedAt: {
+      type: Date,
+      default: null,
+    },
+    autoStatusApplied: {
+      type: Boolean,
+      default: false,
+    },
+    autoStatusReason: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -183,6 +230,7 @@ careerEmailSchema.index(
 
 careerEmailSchema.index({ user: 1, category: 1 });
 careerEmailSchema.index({ user: 1, suggestedApplicationStatus: 1 });
+careerEmailSchema.index({ user: 1, careerStatus: 1 });
 careerEmailSchema.index({ user: 1, receivedAt: -1 });
 
 export const CareerEmail = mongoose.model<ICareerEmail>(

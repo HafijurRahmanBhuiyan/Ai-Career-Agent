@@ -8,6 +8,7 @@ import {
   CareerEmailCategory,
   CareerEmailLinkedApplication,
   CareerEmailPagination,
+  DetectedCareerStatus,
 } from "../types/careerEmail";
 import { getErrorMessage } from "../utils/apiError";
 
@@ -52,6 +53,13 @@ const CATEGORY_STYLES: Record<CareerEmailCategory, string> = {
   follow_up: "bg-amber-50 text-amber-700",
   networking: "bg-teal-50 text-teal-700",
   unrelated: "bg-slate-100 text-slate-600",
+};
+
+const DETECTED_STATUS_STYLES: Record<DetectedCareerStatus, string> = {
+  screening: "bg-indigo-50 text-indigo-700",
+  interview: "bg-purple-50 text-purple-700",
+  offer: "bg-emerald-50 text-emerald-700",
+  rejected: "bg-red-50 text-red-700",
 };
 
 function formatCategory(category: CareerEmailCategory | undefined): string {
@@ -261,8 +269,9 @@ function CareerEmails() {
           </div>
           <p className="mt-4 text-xs text-slate-400">
             Emails are synced from your connected Gmail account on the
-            Integrations page. AI suggestions never change your application
-            status automatically.
+            Integrations page. Detected hiring-stage signals are shown for
+            review; high-confidence signals can update your application status
+            automatically when you enable that in Settings.
           </p>
         </div>
 
@@ -289,6 +298,7 @@ function CareerEmails() {
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Suggested Status</th>
+                  <th className="px-4 py-3">Detected</th>
                   <th className="px-4 py-3">Received</th>
                   <th className="px-4 py-3 text-right">Details</th>
                 </tr>
@@ -325,6 +335,23 @@ function CareerEmails() {
                       {email.suggestedApplicationStatus ? (
                         <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700">
                           {email.suggestedApplicationStatus}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {email.careerStatus ? (
+                        <span
+                          className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
+                            DETECTED_STATUS_STYLES[email.careerStatus]
+                          }`}
+                        >
+                          {email.careerStatus}
+                          {email.careerStatusConfidence != null
+                            ? ` ${Math.round(email.careerStatusConfidence * 100)}%`
+                            : ""}
+                          {email.autoStatusApplied ? " • auto" : ""}
                         </span>
                       ) : (
                         <span className="text-slate-400 text-xs">—</span>
@@ -513,13 +540,40 @@ function EmailDetailModal({
           )}
 
           <div className="border-t border-slate-200 pt-6">
+            {email.careerStatus && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4">
+                <h3 className="text-sm font-semibold text-indigo-900 mb-1">
+                  Detected Hiring Stage
+                </h3>
+                <p className="text-sm text-indigo-900 font-medium">
+                  {email.careerStatus}
+                  {email.careerStatusConfidence != null
+                    ? ` · ${Math.round(email.careerStatusConfidence * 100)}% confidence`
+                    : ""}
+                </p>
+                {email.autoStatusApplied ? (
+                  <p className="text-xs text-indigo-700 mt-2">
+                    This email automatically updated the linked application
+                    status to {email.careerStatus}. Reason:{" "}
+                    {email.autoStatusReason || "high-confidence signal detected"}.
+                  </p>
+                ) : (
+                  <p className="text-xs text-indigo-700 mt-2">
+                    Detected by the AI email classifier. High-confidence
+                    signals only update your application status when automatic
+                    tracking is enabled in Settings.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
               <h3 className="text-sm font-semibold text-blue-900 mb-1">
                 AI Suggested Status
               </h3>
               <p className="text-xs text-blue-700 mb-3">
-                This is a suggestion only. Your application status is never
-                changed unless you explicitly confirm the update below.
+                This is a suggestion only and never changes your application on
+                its own.
               </p>
               <p className="text-sm text-blue-900 font-medium">
                 {email.suggestedApplicationStatus || "No suggestion"}

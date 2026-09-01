@@ -11,6 +11,8 @@ export type CareerEmailCategory =
   | "networking"
   | "unrelated";
 
+export type DetectedCareerStatus = "screening" | "interview" | "offer" | "rejected";
+
 export type ApplicationStatus =
   | "saved"
   | "applied"
@@ -48,6 +50,11 @@ export interface CareerEmail {
   application?: CareerEmailLinkedApplication | null;
   classificationStatus?: "classified" | "failed";
   classifiedAt?: string;
+  careerStatus?: DetectedCareerStatus | null;
+  careerStatusConfidence?: number | null;
+  careerStatusDetectedAt?: string | null;
+  autoStatusApplied?: boolean;
+  autoStatusReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,4 +82,5 @@ export interface GmailSyncResult {
   classified: number;
   skipped: number;
   failed: number;
+  autoUpdated: number;
 }

@@ -22,20 +22,16 @@ import careerIntelligenceRoutes from "./routes/careerIntelligence";
 import notificationCenterRoutes from "./routes/notificationCenter";
 import settingsRoutes from "./routes/settings";
 import aiRoutes from "./routes/ai";
-import { registerJobSource } from "./integrations/jobs/jobSourceRegistry";
-import { MockJobSource } from "./integrations/jobs/sources/mockJobSource";
-import { AdzunaJobSource } from "./integrations/jobs/sources/adzunaJobSource";
-import { ArbeitnowJobSource } from "./integrations/jobs/sources/arbeitnowJobSource";
-import { RemoteOkJobSource } from "./integrations/jobs/sources/remoteOkJobSource";
+import { bootstrapJobSources } from "./integrations/jobs/bootstrap";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { NODE_ENV } from "./config";
 
-registerJobSource(() => new MockJobSource());
-registerJobSource(() => new AdzunaJobSource());
-registerJobSource(() => new ArbeitnowJobSource());
-registerJobSource(() => new RemoteOkJobSource());
-
 dotenv.config();
+
+// Register the live job sources (Adzuna, RemoteOK, Arbeitnow) at startup.
+// Adzuna is only registered when its API credentials are present; the Mock
+// source is excluded in production. Safe to run once at application startup.
+bootstrapJobSources();
 
 const app = express();
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";

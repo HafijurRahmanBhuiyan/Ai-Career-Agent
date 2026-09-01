@@ -52,6 +52,10 @@ export async function discoverJobs(
 
   if (uniqueJobs.length > 0) {
     const operations = uniqueJobs.map((job) => {
+      const sourcesSet = Array.isArray(job.metadata?.sources)
+        ? (job.metadata.sources as string[])
+        : [job.source];
+
       const setFields: Record<string, unknown> = {
         title: job.title,
         companyName: job.companyName,
@@ -75,6 +79,7 @@ export async function discoverJobs(
         rawSource: job.rawSource ?? {},
         lastSeenAt: now,
         isActive: true,
+        "metadata.canonicalFingerprint": job.canonicalFingerprint || null,
       };
 
       const setOnInsert: Record<string, unknown> = {
@@ -87,15 +92,25 @@ export async function discoverJobs(
         setOnInsert.fingerprint = job.fingerprint;
       }
 
+      // Upsert by canonical identity first (so the same vacancy from different
+      // providers collapses to one record), falling back to the strongest
+      // source-scoped identity (source + sourceJobId). Content is refreshed
+      // from the winning record and source attribution accumulates across runs
+      // via $addToSet.
+      const filter: Record<string, unknown> = {
+        $or: [
+          { "metadata.canonicalFingerprint": job.canonicalFingerprint || "" },
+          { source: job.source, sourceJobId: job.sourceJobId },
+        ],
+      };
+
       return {
         updateOne: {
-          filter: {
-            source: job.source,
-            sourceJobId: job.sourceJobId,
-          },
+          filter,
           update: {
             $set: setFields,
             $setOnInsert: setOnInsert,
+            $addToSet: { "metadata.sources": { $each: sourcesSet } },
           },
           upsert: true,
         },
@@ -105,11 +120,28 @@ export async function discoverJobs(
     await Job.bulkWrite(operations, { ordered: false });
   }
 
-  const jobs = await Job.find({
-    $or: uniqueJobs.map((j) => ({
+  // Retrieve the persisted records. Merged cross-source duplicates are matched
+  // by their canonical fingerprint; fall back to source + sourceJobId for any
+  // record that was inserted/updated purely on its source-scoped identity.
+  const fingerprintMatch: Record<string, unknown>[] = [];
+  const sourceIdMatch: Record<string, unknown>[] = [];
+  const canonicalFps = Array.from(
+    new Set(uniqueJobs.map((j) => j.canonicalFingerprint).filter(Boolean))
+  );
+  if (canonicalFps.length > 0) {
+    fingerprintMatch.push({
+      "metadata.canonicalFingerprint": { $in: canonicalFps },
+    });
+  }
+  sourceIdMatch.push(
+    ...uniqueJobs.map((j) => ({
       source: j.source,
       sourceJobId: j.sourceJobId,
-    })),
+    }))
+  );
+
+  const jobs = await Job.find({
+    $or: [...fingerprintMatch, ...sourceIdMatch],
   }).lean();
 
   return {

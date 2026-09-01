@@ -20,8 +20,33 @@ export type ApplyCapabilityResult = {
 
 const LINKEDIN_SOURCES = ["linkedin", "linkedin_jobs"];
 
-function hasHttpUrl(value: unknown): string | null {
-  return typeof value === "string" && /^https?:\/\//i.test(value) ? value : null;
+/**
+ * Canonical strict handoff-URL validator.
+ *
+ * Accepts ONLY http:// and https:// URLs that parse with `new URL()` and
+ * carry a real hostname. Rejects javascript:, data:, blob:, file:, about:,
+ * empty/whitespace-only values, malformed URLs and hostless "https://"-style
+ * values. Returns the trimmed URL when valid, otherwise null.
+ *
+ * This is the single source of truth for every external handoff the app
+ * returns or the client opens.
+ */
+export function validateHandoffUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  if (!parsed.hostname) return null;
+
+  return trimmed;
 }
 
 export function classifyApplyCapability(job: {
@@ -33,8 +58,8 @@ export function classifyApplyCapability(job: {
   metadata?: Record<string, unknown>;
 }): ApplyCapabilityResult {
   const source = (job.source || "").toLowerCase();
-  const applyUrl = hasHttpUrl(job.applyUrl);
-  const jobUrl = hasHttpUrl(job.jobUrl);
+  const applyUrl = validateHandoffUrl(job.applyUrl);
+  const jobUrl = validateHandoffUrl(job.jobUrl);
 
   const rawSource = job.rawSource || {};
   const metadata = job.metadata || {};

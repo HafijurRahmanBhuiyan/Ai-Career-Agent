@@ -24,6 +24,11 @@ export interface IProfile extends Document {
   };
   notificationEmail?: string;
   gmailNotifyEnabled?: boolean;
+  // Phase 2 Step 5: when true, high-confidence Gmail-detected hiring stages
+  // (screening/interview/offer/rejected) advance the linked application status
+  // automatically. Defaults to off; application status changes require the
+  // explicit approval flow otherwise.
+  gmailAutoStatusEnabled?: boolean;
   notificationsSeenAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -106,6 +111,10 @@ const profileSchema = new Schema<IProfile>(
     gmailNotifyEnabled: {
       type: Boolean,
       default: true,
+    },
+    gmailAutoStatusEnabled: {
+      type: Boolean,
+      default: false,
     },
     notificationsSeenAt: {
       type: Date,

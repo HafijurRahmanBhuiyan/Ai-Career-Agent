@@ -1,5 +1,6 @@
 import { Types } from "mongoose";
 import Job from "../models/Job";
+import JobMatch from "../models/JobMatch";
 import { Application } from "../models/Application";
 import { prepareMatchProfile } from "./jobMatchProfile";
 import { prepareMatchJob } from "./jobMatchJob";
@@ -27,6 +28,8 @@ export interface OpportunityItem {
     label: string;
   };
   alreadyApplied: boolean;
+  /** Additive: the user's Application status for this job, or null when none. */
+  applicationStatus: string | null;
 }
 
 export interface OpportunityFeedResult {
@@ -49,6 +52,91 @@ const DEFAULT_FEED_LIMIT = 20;
 
 function escapeRegexInput(str: string): string {
   return escapeRegex(str);
+}
+
+/** Load the most recent JobMatch per job for the user (for additive dashboard fields). */
+async function loadSavedMatches(userId: string, jobIds: string[]): Promise<Map<string, Record<string, unknown>>> {
+  if (jobIds.length === 0) return new Map();
+
+  const validIds = jobIds.filter((id) => Types.ObjectId.isValid(id));
+  if (validIds.length === 0) return new Map();
+
+  const docs = await JobMatch.aggregate<{ _id: string; doc: Record<string, unknown> }>([
+    { $match: { user: new Types.ObjectId(userId), job: { $in: validIds.map((id) => new Types.ObjectId(id)) } } },
+    { $sort: { analyzedAt: -1 } },
+    {
+      $group: {
+        _id: "$job",
+        doc: { $first: "$$ROOT" },
+      },
+    },
+  ]);
+
+  const map = new Map<string, Record<string, unknown>>();
+  for (const d of docs) {
+    map.set(String(d._id), d.doc);
+  }
+  return map;
+}
+
+function toSafeMatch(
+  deterministic: {
+    score: number;
+    matchLevel: string;
+    matchingSkills: string[];
+    missingSkills: string[];
+    matchingTechnologies: string[];
+    missingTechnologies: string[];
+    experienceMatch: string;
+    experienceGap: string;
+    locationMatch: string;
+    remoteMatch: string;
+    employmentTypeMatch: string;
+    salaryMatch: string;
+    educationMatch: string;
+    recommendation: string;
+    recommendationReason: string;
+    explanation: string[];
+  },
+  saved?: Record<string, unknown> | null
+): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    score: deterministic.score,
+    matchLevel: deterministic.matchLevel,
+    matchingSkills: deterministic.matchingSkills,
+    missingSkills: deterministic.missingSkills,
+    matchingTechnologies: deterministic.matchingTechnologies,
+    missingTechnologies: deterministic.missingTechnologies,
+    experienceMatch: deterministic.experienceMatch,
+    experienceGap: deterministic.experienceGap,
+    locationMatch: deterministic.locationMatch,
+    remoteMatch: deterministic.remoteMatch,
+    employmentTypeMatch: deterministic.employmentTypeMatch,
+    salaryMatch: deterministic.salaryMatch,
+    educationMatch: deterministic.educationMatch,
+    recommendation: deterministic.recommendation,
+    recommendationReason: deterministic.recommendationReason,
+    explanation: deterministic.explanation,
+  };
+
+  // Additive Phase 2 fields: when a persisted JobMatch exists, expose the
+  // decomposed deterministic/AI/final scores, gaps and narrative without
+  // removing any previously returned field (backward compatible).
+  if (saved) {
+    base.deterministicScore = saved.deterministicScore ?? deterministic.score;
+    base.aiScore = saved.aiScore ?? null;
+    base.finalScore = saved.finalScore ?? deterministic.score;
+    base.matchLevel = saved.matchLevel ?? deterministic.matchLevel;
+    base.recommendation = saved.recommendation ?? deterministic.recommendation;
+    base.summary = saved.summary ?? "";
+    base.strengths = saved.strengths ?? [];
+    base.weaknesses = saved.weaknesses ?? [];
+    base.gaps = saved.gaps ?? [];
+    base.analyzedAt = saved.analyzedAt ?? null;
+    base.algorithmVersion = saved.algorithmVersion ?? null;
+  }
+
+  return base;
 }
 
 export async function getOpportunityFeed(
@@ -144,16 +232,22 @@ export async function getOpportunityFeed(
 
   const pageItems = scored.slice(skip, skip + limit);
 
+  const savedMatches = await loadSavedMatches(
+    userId,
+    pageItems.map((item) => String(item.job._id))
+  );
+
   return {
     opportunities: pageItems.map(({ job, deterministic, capability, applied }) => ({
       job: toSafeJob(job),
-      match: toSafeMatch(deterministic),
+      match: toSafeMatch(deterministic, savedMatches.get(String(job._id)) ?? null),
       applyCapability: {
         capability: capability.capability,
         handoffUrl: capability.handoffUrl,
         label: capability.label,
       },
       alreadyApplied: applied !== null,
+      applicationStatus: applied ?? null,
     })),
     pagination: {
       page,
@@ -192,15 +286,23 @@ export async function getOpportunityDetail(
     .select("status")
     .lean();
 
+  const saved = await JobMatch.findOne({
+    user: new Types.ObjectId(userId),
+    job: new Types.ObjectId(jobId),
+  })
+    .sort({ analyzedAt: -1 })
+    .lean();
+
   return {
     job: toSafeJob(job),
-    match: toSafeMatch(deterministic),
+    match: toSafeMatch(deterministic, saved),
     applyCapability: {
       capability: capability.capability,
       handoffUrl: capability.handoffUrl,
       label: capability.label,
     },
     alreadyApplied: existing !== null,
+    applicationStatus: existing ? existing.status : null,
   };
 }
 
@@ -211,38 +313,3 @@ function toSafeJob<T extends object>(job: T): Record<string, unknown> {
   return safe;
 }
 
-function toSafeMatch(deterministic: {
-  score: number;
-  matchLevel: string;
-  matchingSkills: string[];
-  missingSkills: string[];
-  matchingTechnologies: string[];
-  missingTechnologies: string[];
-  experienceMatch: string;
-  experienceGap: string;
-  locationMatch: string;
-  remoteMatch: string;
-  employmentTypeMatch: string;
-  salaryMatch: string;
-  recommendation: string;
-  recommendationReason: string;
-  explanation: string[];
-}): Record<string, unknown> {
-  return {
-    score: deterministic.score,
-    matchLevel: deterministic.matchLevel,
-    matchingSkills: deterministic.matchingSkills,
-    missingSkills: deterministic.missingSkills,
-    matchingTechnologies: deterministic.matchingTechnologies,
-    missingTechnologies: deterministic.missingTechnologies,
-    experienceMatch: deterministic.experienceMatch,
-    experienceGap: deterministic.experienceGap,
-    locationMatch: deterministic.locationMatch,
-    remoteMatch: deterministic.remoteMatch,
-    employmentTypeMatch: deterministic.employmentTypeMatch,
-    salaryMatch: deterministic.salaryMatch,
-    recommendation: deterministic.recommendation,
-    recommendationReason: deterministic.recommendationReason,
-    explanation: deterministic.explanation,
-  };
-}

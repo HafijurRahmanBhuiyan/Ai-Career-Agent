@@ -19,6 +19,7 @@ interface JobSearchPreferences {
 
 interface Notifications {
   gmailNotifyEnabled: boolean;
+  gmailAutoStatusEnabled: boolean;
   notificationEmail: string | null;
 }
 
@@ -40,6 +41,7 @@ function Settings() {
   const [salaryMinimum, setSalaryMinimum] = useState("");
   const [notificationEmail, setNotificationEmail] = useState("");
   const [gmailNotifyEnabled, setGmailNotifyEnabled] = useState(true);
+  const [gmailAutoStatusEnabled, setGmailAutoStatusEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +65,9 @@ function Settings() {
         );
         setNotificationEmail(res.data.notifications.notificationEmail || "");
         setGmailNotifyEnabled(res.data.notifications.gmailNotifyEnabled);
+        setGmailAutoStatusEnabled(
+          res.data.notifications.gmailAutoStatusEnabled === true
+        );
       } catch (err: unknown) {
         const msg =
           axios.isAxiosError(err) && err.response?.data?.error
@@ -101,6 +106,7 @@ function Settings() {
         },
         notificationEmail,
         gmailNotifyEnabled,
+        gmailAutoStatusEnabled,
       });
       setSuccess("Settings saved.");
     } catch (err: unknown) {
@@ -297,6 +303,28 @@ function Settings() {
                     detected
                   </label>
                 </div>
+                <div className="md:col-span-2 flex items-center gap-3">
+                  <input
+                    id="gmailAutoStatusEnabled"
+                    type="checkbox"
+                    checked={gmailAutoStatusEnabled}
+                    onChange={(e) => setGmailAutoStatusEnabled(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="gmailAutoStatusEnabled"
+                    className="text-sm text-slate-700"
+                  >
+                    Automatically update my application status when a
+                    high-confidence hiring stage (shortlist, interview, offer,
+                    rejection) is detected in Gmail
+                  </label>
+                </div>
+                <p className="md:col-span-2 text-xs text-slate-400">
+                  Automatic updates apply only to high-confidence detections on
+                  the correct application and never set "applied" or revert a
+                  withdrawn application.
+                </p>
               </div>
             </section>
 
