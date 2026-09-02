@@ -30,6 +30,7 @@
           "timeout": 180000
         }
       },
+      "onError": "continueErrorOutput",
       "id": "22222222-2222-4222-8222-222222222222",
       "name": "Run automatic discovery",
       "type": "n8n-nodes-base.httpRequest",
@@ -47,6 +48,7 @@
           "timeout": 60000
         }
       },
+      "onError": "continueErrorOutput",
       "id": "33333333-3333-4333-8333-333333333333",
       "name": "Deactivate stale jobs",
       "type": "n8n-nodes-base.httpRequest",
@@ -91,11 +93,25 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Sync Gmail career emails",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Deactivate stale jobs": {
       "main": [
+        [
+          {
+            "node": "Sync Gmail career emails",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Sync Gmail career emails",

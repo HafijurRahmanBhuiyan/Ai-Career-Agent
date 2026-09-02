@@ -38,6 +38,14 @@ import {
 } from "../types/followUp";
 import { getErrorMessage } from "../utils/apiError";
 import { validateHandoffUrl } from "../utils/handoffUrl";
+import {
+  buildInterviewIcs,
+  buildReplyDraft,
+  careerActionHint,
+  copyToClipboard,
+  deadlineCountdown,
+  downloadIcs,
+} from "../utils/careerEvent";
 
 const API_BASE = "";
 const PAGE_SIZE = 10;
@@ -165,9 +173,43 @@ function CareerIntelligenceCard({
   const meetingLabel =
     event?.meetingPlatform ||
     (event?.meetingUrl ? "link provided" : null);
+  const countdown = deadlineCountdown(event?.deadlineAt);
+  const draft = buildReplyDraft(event ?? {});
+  const hint = careerActionHint(event);
+  const detection = app.careerEmailDetection;
+  const isOffer = event?.type === "offer";
+  const isTerminal =
+    app.status === "rejected" || app.status === "withdrawn";
+  const [copied, setCopied] = useState(false);
+  const [icsAdded, setIcsAdded] = useState(false);
+
+  const handleCopyDraft = async () => {
+    if (!draft) return;
+    const ok = await copyToClipboard(draft);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleAddToCalendar = () => {
+    const ics = buildInterviewIcs(event ?? {});
+    if (!ics || !event?.scheduledAt) return;
+    downloadIcs(`${style.label}-${company}.ics`, ics);
+    setIcsAdded(true);
+    setTimeout(() => setIcsAdded(false), 2000);
+  };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3">
+    <div
+      className={`rounded-xl p-4 flex flex-col gap-3 ${
+        isOffer
+          ? "bg-white border-2 border-purple-200"
+          : isTerminal
+          ? "bg-white border border-red-100"
+          : "bg-white border border-slate-200"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold text-slate-900 truncate">{company}</p>
@@ -189,12 +231,72 @@ function CareerIntelligenceCard({
             {Math.round(event.confidence * 100)}% confidence
           </span>
         )}
+        {event?.detectedAt && (
+          <span className="text-[10px] text-slate-400">
+            detected {formatDateTime(event.detectedAt)}
+          </span>
+        )}
       </div>
+
+      {isOffer && (
+        <div className="bg-purple-100/60 border border-purple-200 rounded-lg px-3 py-2">
+          <p className="text-sm font-semibold text-purple-900">
+            Offer received
+          </p>
+          <p className="text-xs text-purple-700">
+            Review the offer{event?.deadlineAt ? " and respond by the deadline" : ""}.
+          </p>
+        </div>
+      )}
+
+      {hint && (
+        <p className="text-xs font-medium text-slate-700">
+          Next step: <span className="text-slate-900">{hint}</span>
+        </p>
+      )}
+
+      {isTerminal && (
+        <p className="text-xs font-medium text-red-600">
+          {app.status === "withdrawn"
+            ? "This application was withdrawn — no further action needed."
+            : "This application has been rejected — no further action needed."}
+        </p>
+      )}
+
+      {detection?.careerStatus && (
+        <p className="text-xs text-slate-400">
+          Stage signal:{" "}
+          <span className="font-medium capitalize text-slate-600">
+            {detection.careerStatus}
+          </span>
+          {detection.careerStatusConfidence != null
+            ? ` · ${Math.round(detection.careerStatusConfidence * 100)}%`
+            : ""}
+          <span className="text-slate-400">
+            {detection.autoStatusApplied
+              ? " · auto-applied from Gmail"
+              : detection.manualStatusApplied
+              ? " · applied manually from Gmail"
+              : " · detection only"}
+          </span>
+        </p>
+      )}
+
+      {app.latestStatusEvent && (
+        <p className="text-xs text-slate-400">
+          Status change:{" "}
+          <span className="font-medium text-slate-600">
+            {app.latestStatusEvent.title}
+          </span>{" "}
+          · {formatDateTime(app.latestStatusEvent.eventDate)}
+        </p>
+      )}
 
       {(event?.scheduledAt ||
         meetingLabel ||
         event?.location ||
-        event?.phone) && (
+        event?.phone ||
+        event?.interviewerName) && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-700">
           {event?.scheduledAt && (
             <span>📅 {formatWhen(event.scheduledAt)}</span>
@@ -202,16 +304,24 @@ function CareerIntelligenceCard({
           {meetingLabel && (
             <span className="capitalize">🔗 {meetingLabel}</span>
           )}
+          {event?.interviewerName && (
+            <span>👤 {event.interviewerName}</span>
+          )}
           {event?.location && <span>📍 {event.location}</span>}
           {event?.phone && <span>📞 {event.phone}</span>}
         </div>
       )}
 
-      {event?.deadlineAt && event?.actionRequired && (
-        <p className="text-xs text-amber-700">
-          ⏰ Action required — reply by {formatWhen(event.deadlineAt)}
-        </p>
-      )}
+      {event?.deadlineAt &&
+        (event?.actionRequired || event?.type === "offer") && (
+          <p className="text-xs text-amber-700">
+            ⏰{" "}
+            {(event.actionRequired
+              ? `Action required — ${event.actionText || "respond"} · `
+              : "Deadline · ") + (countdown || "see deadline")}{" "}
+            ({formatWhen(event.deadlineAt)})
+          </p>
+        )}
 
       {quote && (
         <p className="text-sm text-slate-600 italic line-clamp-2">
@@ -222,7 +332,7 @@ function CareerIntelligenceCard({
         </p>
       )}
 
-      <div className="flex gap-2 mt-auto pt-1">
+      <div className="flex flex-wrap gap-2 mt-auto pt-1">
         <button
           onClick={onViewApplication}
           className="px-3 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
@@ -235,6 +345,22 @@ function CareerIntelligenceCard({
         >
           View Timeline
         </button>
+        {event?.scheduledAt && (
+          <button
+            onClick={handleAddToCalendar}
+            className="px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+          >
+            {icsAdded ? "Added ✓" : "Add to calendar"}
+          </button>
+        )}
+        {draft && (
+          <button
+            onClick={handleCopyDraft}
+            className="px-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+          >
+            {copied ? "Copied ✓" : "Copy draft"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -260,6 +386,10 @@ function Applications() {
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [automation, setAutomation] = useState<{
+    gmailAutoStatusEnabled: boolean;
+    gmailNotifyEnabled: boolean;
+  } | null>(null);
 
   const [editing, setEditing] = useState<Application | null>(null);
   const [deleting, setDeleting] = useState<Application | null>(null);
@@ -332,6 +462,28 @@ function Applications() {
     fetchApplications(1);
   }, [fetchApplications]);
 
+  // Surface existing automation/notification state from Settings (single
+  // request, not per-application).
+  useEffect(() => {
+    api
+      .get<{
+        notifications: {
+          gmailAutoStatusEnabled: boolean;
+          gmailNotifyEnabled: boolean;
+        };
+      }>("/settings")
+      .then((res) => {
+        setAutomation({
+          gmailAutoStatusEnabled:
+            res.data.notifications.gmailAutoStatusEnabled === true,
+          gmailNotifyEnabled: res.data.notifications.gmailNotifyEnabled === true,
+        });
+      })
+      .catch(() => {
+        // Settings are non-critical on this page; ignore fetch failures.
+      });
+  }, []);
+
   const handleFilter = () => {
     fetchApplications(1);
   };
@@ -397,6 +549,26 @@ function Applications() {
               Apply Filter
             </button>
           </div>
+          {automation && (
+            <p className="mt-4 text-xs text-slate-400">
+              Automation: auto status tracking{" "}
+              <span
+                className={automation.gmailAutoStatusEnabled ? "text-emerald-600 font-medium" : "text-slate-500"}
+              >
+                {automation.gmailAutoStatusEnabled ? "on" : "off"}
+              </span>
+              {" · "}email notifications{" "}
+              <span
+                className={automation.gmailNotifyEnabled ? "text-emerald-600 font-medium" : "text-slate-500"}
+              >
+                {automation.gmailNotifyEnabled ? "on" : "off"}
+              </span>
+              {" — managed in "}
+              <a href="/dashboard/settings" className="text-blue-600 hover:underline">
+                Settings
+              </a>
+            </p>
+          )}
         </div>
 
         {applications.filter((a) => a.latestCareerEvent?.type).length > 0 && (
@@ -480,6 +652,11 @@ function Applications() {
                       >
                         {app.status}
                       </span>
+                      {app.latestStatusEvent?.eventDate && (
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          changed {formatDate(app.latestStatusEvent.eventDate)}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {app.careerEmailDetection?.careerStatus ? (
@@ -513,9 +690,26 @@ function Applications() {
                                 app.careerEmailDetection.manualStatusReason}
                             </p>
                           ) : null}
+                          {app.careerEmailDetection.careerStatusDetectedAt && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              detected {formatDate(app.careerEmailDetection.careerStatusDetectedAt)}
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <span className="text-slate-400 text-xs">—</span>
+                      )}
+                      {app.latestCareerEvent?.type && (
+                        <div className="mt-1 inline-flex items-center gap-1">
+                          <span className="px-1.5 py-0.5 text-[9px] font-medium rounded-full border border-slate-200 bg-white text-slate-600">
+                            {careerEventStyle(app.latestCareerEvent.type).label}
+                          </span>
+                          {app.latestCareerEvent.detectedAt && (
+                            <span className="text-[9px] text-slate-400">
+                              {formatDate(app.latestCareerEvent.detectedAt)}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-slate-500 text-xs">
@@ -793,6 +987,8 @@ function ApplicationDetailModal({
 
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
+  const [eventCopied, setEventCopied] = useState(false);
+  const [eventIcsAdded, setEventIcsAdded] = useState(false);
 
   const [preparation, setPreparation] = useState<InterviewPreparation | null>(null);
   const [followUps, setFollowUps] = useState<ApplicationFollowUp[]>([]);
@@ -1066,6 +1262,22 @@ function ApplicationDetailModal({
                             : ""}
                         </p>
                       )}
+                      {latestCareerEvent.interviewerName && (
+                        <p className="text-xs text-slate-700 mt-1">
+                          Interviewer: {latestCareerEvent.interviewerName}
+                        </p>
+                      )}
+                      {latestCareerEvent.deadlineAt &&
+                        latestCareerEvent.actionRequired && (
+                          <p className="text-xs text-amber-700 mt-1">
+                            ⏰{" "}
+                            {deadlineCountdown(
+                              latestCareerEvent.deadlineAt
+                            ) || "Action required"}{" "}
+                            — respond by{" "}
+                            {formatDateTime(latestCareerEvent.deadlineAt)}
+                          </p>
+                        )}
                       {latestCareerEvent.meetingUrl &&
                         validateHandoffUrl(latestCareerEvent.meetingUrl) && (
                           <p className="mt-1">
@@ -1091,6 +1303,58 @@ function ApplicationDetailModal({
                           Action required:{" "}
                           {latestCareerEvent.actionText || "yes"}
                         </p>
+                      )}
+                      {(latestCareerEvent.scheduledAt ||
+                        buildReplyDraft(latestCareerEvent)) && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {latestCareerEvent.scheduledAt && (
+                            <button
+                              onClick={() => {
+                                const ics = buildInterviewIcs(
+                                  latestCareerEvent
+                                );
+                                if (!ics) return;
+                                downloadIcs(
+                                  `${latestCareerEvent.type}-${
+                                    latestCareerEvent.company || "event"
+                                  }.ics`,
+                                  ics
+                                );
+                                setEventIcsAdded(true);
+                                setTimeout(
+                                  () => setEventIcsAdded(false),
+                                  2000
+                                );
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-medium text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+                            >
+                              {eventIcsAdded
+                                ? "Added ✓"
+                                : "Add to calendar"}
+                            </button>
+                          )}
+                          {buildReplyDraft(latestCareerEvent) && (
+                            <button
+                              onClick={async () => {
+                                const draft = buildReplyDraft(
+                                  latestCareerEvent
+                                );
+                                if (!draft) return;
+                                const ok = await copyToClipboard(draft);
+                                if (ok) {
+                                  setEventCopied(true);
+                                  setTimeout(
+                                    () => setEventCopied(false),
+                                    2000
+                                  );
+                                }
+                              }}
+                              className="px-2.5 py-1 text-[11px] font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                            >
+                              {eventCopied ? "Copied ✓" : "Copy draft"}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}

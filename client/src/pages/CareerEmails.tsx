@@ -8,10 +8,18 @@ import {
   CareerEmailCategory,
   CareerEmailLinkedApplication,
   CareerEmailPagination,
+  CareerEvent,
   DetectedCareerStatus,
 } from "../types/careerEmail";
 import { getErrorMessage } from "../utils/apiError";
 import { validateHandoffUrl } from "../utils/handoffUrl";
+import {
+  buildInterviewIcs,
+  buildReplyDraft,
+  copyToClipboard,
+  deadlineCountdown,
+  downloadIcs,
+} from "../utils/careerEvent";
 
 const API_BASE = "";
 const PAGE_SIZE = 10;
@@ -365,20 +373,39 @@ function CareerEmails() {
                     </td>
                     <td className="px-4 py-3">
                       {email.careerStatus ? (
-                        <span
-                          className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
-                            DETECTED_STATUS_STYLES[email.careerStatus]
-                          }`}
-                        >
-                          {email.careerStatus}
-                          {email.careerStatusConfidence != null
-                            ? ` ${Math.round(email.careerStatusConfidence * 100)}%`
-                            : ""}
-                          {email.autoStatusApplied ? " • auto" : ""}
-                          {email.manualStatusApplied ? " • manual" : ""}
-                        </span>
+                        <div>
+                          <span
+                            className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
+                              DETECTED_STATUS_STYLES[email.careerStatus]
+                            }`}
+                          >
+                            {email.careerStatus}
+                            {email.careerStatusConfidence != null
+                              ? ` ${Math.round(email.careerStatusConfidence * 100)}%`
+                              : ""}
+                            {email.autoStatusApplied ? " • auto" : ""}
+                            {email.manualStatusApplied ? " • manual" : ""}
+                          </span>
+                          {email.careerStatusDetectedAt && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              detected {formatDateTime(email.careerStatusDetectedAt)}
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-slate-400 text-xs">—</span>
+                      )}
+                      {email.careerEvent?.type && (
+                        <div className="mt-1 inline-flex flex-wrap items-center gap-1">
+                          <span className="px-1.5 py-0.5 text-[9px] font-medium rounded-full border border-slate-200 bg-white text-emerald-700">
+                            {email.careerEvent.type.replace(/_/g, " ")}
+                          </span>
+                          {email.careerEvent.detectedAt && (
+                            <span className="text-[9px] text-slate-400">
+                              {formatDateTime(email.careerEvent.detectedAt)}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -631,6 +658,17 @@ function EmailDetailModal({
                   Evidence: “{email.careerEvent.evidence}”
                 </p>
               )}
+              {email.careerEvent.deadlineAt &&
+                email.careerEvent.actionRequired && (
+                  <p className="text-xs text-amber-700 mt-3">
+                    ⏰{" "}
+                    {deadlineCountdown(email.careerEvent.deadlineAt) ||
+                      "Action required"}{" "}
+                    — respond by{" "}
+                    {formatDateTime(email.careerEvent.deadlineAt)}
+                  </p>
+                )}
+              <CareerEventActions event={email.careerEvent} />
             </div>
           )}
 
@@ -769,6 +807,57 @@ function EmailDetailModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CareerEventActions({ event }: { event: CareerEvent }) {
+  const [copied, setCopied] = useState(false);
+  const [icsAdded, setIcsAdded] = useState(false);
+
+  const handleCopyDraft = async () => {
+    const draft = buildReplyDraft(event);
+    if (!draft) return;
+    const ok = await copyToClipboard(draft);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleAddToCalendar = () => {
+    const ics = buildInterviewIcs(event);
+    if (!ics) return;
+    downloadIcs(
+      `${event.type || "career-event"}-${event.company || "event"}.ics`,
+      ics
+    );
+    setIcsAdded(true);
+    setTimeout(() => setIcsAdded(false), 2000);
+  };
+
+  if (!event.scheduledAt && !buildReplyDraft(event)) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2 mt-3">
+      {event.scheduledAt && (
+        <button
+          onClick={handleAddToCalendar}
+          className="px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-100 transition-colors"
+        >
+          {icsAdded ? "Added ✓" : "Add to calendar"}
+        </button>
+      )}
+      {buildReplyDraft(event) && (
+        <button
+          onClick={handleCopyDraft}
+          className="px-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+        >
+          {copied ? "Copied ✓" : "Copy draft"}
+        </button>
+      )}
     </div>
   );
 }
