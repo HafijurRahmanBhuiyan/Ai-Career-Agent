@@ -1,10 +1,16 @@
 import { Request, Response, NextFunction } from "express";
 import Job from "../models/Job";
 import Profile from "../models/Profile";
+import User from "../models/User";
 import { discoverJobs } from "../services/jobDiscovery";
+import { deactivateStaleJobs } from "../services/jobMaintenance";
+import { runAutomaticDiscovery, collectEligibleUsers } from "../services/jobAutomaticDiscovery";
+import { ensureMatchBatch } from "../services/jobMatching";
 import { AppError } from "../middleware/errorHandler";
 import { jobSearchQuerySchema, jobDiscoverRequestSchema } from "../validators/job";
 import { searchParamsToFilter } from "../services/jobNormalization";
+import { resolveDiscoveryParams } from "../services/jobSearchPreferences";
+import { Role } from "../types";
 
 export const getJobs = async (
   req: Request,
@@ -33,22 +39,21 @@ export const getJobs = async (
     const limit = parsed.data.limit ?? 20;
     const skip = (page - 1) * limit;
 
-    let defaultKeyword: string | undefined;
     const profile = await Profile.findOne({ user: req.user!.id });
-    if (profile && profile.preferredRoles.length > 0 && !keywords) {
-      defaultKeyword = profile.preferredRoles[0];
-    }
-
-    const filter = searchParamsToFilter(
+    const resolved = resolveDiscoveryParams(
       {
         keywords,
         locations: location ? [location] : undefined,
         remote,
         employmentType,
         experienceLevel,
+        page,
+        limit,
       },
-      defaultKeyword
+      profile
     );
+
+    const filter = searchParamsToFilter(resolved, undefined);
 
     const [jobs, total] = await Promise.all([
       Job.find(filter).sort({ postedAt: -1 }).skip(skip).limit(limit).lean(),
@@ -89,7 +94,9 @@ export const discover = async (
       });
     }
 
-    const result = await discoverJobs(parsed.data);
+    const profile = await Profile.findOne({ user: req.user!.id });
+    const resolved = resolveDiscoveryParams(parsed.data, profile);
+    const result = await discoverJobs(resolved);
 
     res.status(200).json({
       jobs: result.jobs.map(toSafeJob),
@@ -117,6 +124,99 @@ export const getJob = async (
     }
 
     res.status(200).json({ job: toSafeJob(job) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const runJobMaintenance = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await deactivateStaleJobs();
+    // Only aggregate counts are exposed; no sensitive job data is returned.
+    res.status(200).json({
+      evaluated: result.evaluated,
+      deactivated: result.deactivated,
+      staleDays: result.staleDays,
+      cutoff: result.cutoff.toISOString(),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin-only internal trigger for canonical/global automatic discovery (Phase 1,
+ * Step 7). The n8n scheduler calls this instead of the per-user `/discover`.
+ *
+ * It loads all profiles and active end-user accounts once, then lets the service
+ * compute a single deduplicated query set across every eligible user. Only
+ * aggregate statistics are returned (no raw job payload, no per-user data) so the
+ * internal trigger is safe to run unattended and leaks no sensitive information.
+ *
+ * (Phase 2, Step 1) After ingestion it runs bounded automatic AI matching for
+ * each eligible user (outside the source-ingestion loop, reusing the versioned
+ * JobMatch cache) so the dashboard can display matches for discovered jobs.
+ */
+export const runAutomaticDiscoveryHandler = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const [profiles, users] = await Promise.all([
+      Profile.find()
+        .select("user preferredRoles preferredLocations workPreference jobSearchPreferences")
+        .lean(),
+      User.find({ isActive: true, role: Role.USER })
+        .select("_id isActive role")
+        .lean(),
+    ]);
+
+    const result = await runAutomaticDiscovery({
+      profiles,
+      users,
+    });
+
+    const { eligible } = collectEligibleUsers(profiles, users);
+
+    const rawLimit = parseInt(process.env.JOB_MATCH_AUTO_LIMIT || "10", 10);
+    const matchLimit = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : 10;
+
+    let matchedJobs = 0;
+    let fromCache = 0;
+    let deterministicOnly = 0;
+    let matchUsers = 0;
+
+    for (const eligibleUser of eligible) {
+      try {
+        const batch = await ensureMatchBatch(eligibleUser.userId, {
+          limit: matchLimit,
+        });
+        matchedJobs += batch.analyzed;
+        fromCache += batch.cached;
+        deterministicOnly += batch.deterministicOnly;
+        if (batch.analyzed > 0 || batch.cached > 0) matchUsers += 1;
+      } catch {
+        // A single user's matching must not abort the whole discovery run.
+      }
+    }
+
+    res.status(200).json({
+      count: result.count,
+      queryCount: result.queryCount,
+      stats: result.stats,
+      sources: result.sources,
+      matching: {
+        matchUsers,
+        matchedJobs,
+        fromCache,
+        deterministicOnly,
+      },
+    });
   } catch (error) {
     next(error);
   }

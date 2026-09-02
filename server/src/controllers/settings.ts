@@ -36,6 +36,7 @@ export const getSettings = async (
       },
       notifications: {
         gmailNotifyEnabled: profile?.gmailNotifyEnabled ?? true,
+        gmailAutoStatusEnabled: profile?.gmailAutoStatusEnabled ?? false,
         notificationEmail: profile?.notificationEmail ?? null,
       },
     });

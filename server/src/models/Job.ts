@@ -35,6 +35,24 @@ export interface IJob extends Document {
   isActive: boolean;
   rawSource: Record<string, unknown>;
   metadata: Record<string, unknown>;
+  /**
+   * (Phase 2, Step 3) Extracted structured job requirements derived from the
+   * description, persisted for reuse/re-caching so matching does not re-parse on
+   * every analysis. Additive; never changes existing job ingestion.
+   */
+  extractedRequirements?: {
+    required: string[];
+    preferred: string[];
+    technologies: string[];
+    experience?: { years?: number | null; level?: string | null } | null;
+    education?: { degree?: string | null; field?: string | null } | null;
+    location?: { cities: string[] } | null;
+    remote?: { type?: "remote" | "hybrid" | "onsite" | null } | null;
+    employment: string[];
+    salary?: { min?: number | null; max?: number | null; currency?: string | null; period?: string | null } | null;
+    other: string[];
+    unavailable: boolean;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -158,6 +176,66 @@ const jobSchema = new Schema<IJob>(
     metadata: {
       type: Schema.Types.Mixed,
       default: {},
+    },
+    extractedRequirements: {
+      type: new Schema(
+        {
+          required: { type: [String], default: [] },
+          preferred: { type: [String], default: [] },
+          technologies: { type: [String], default: [] },
+          experience: {
+            type: new Schema(
+              {
+                years: { type: Number, default: null },
+                level: { type: String, default: null },
+              },
+              { _id: false }
+            ),
+            default: null,
+          },
+          education: {
+            type: new Schema(
+              {
+                degree: { type: String, default: null },
+                field: { type: String, default: null },
+              },
+              { _id: false }
+            ),
+            default: null,
+          },
+          location: {
+            type: new Schema(
+              { cities: { type: [String], default: [] } },
+              { _id: false }
+            ),
+            default: null,
+          },
+          remote: {
+            type: new Schema(
+              { type: { type: String, enum: ["remote", "hybrid", "onsite"], default: null } },
+              { _id: false }
+            ),
+            default: null,
+          },
+          employment: { type: [String], default: [] },
+          salary: {
+            type: new Schema(
+              {
+                min: { type: Number, default: null },
+                max: { type: Number, default: null },
+                currency: { type: String, default: null },
+                period: { type: String, default: null },
+              },
+              { _id: false }
+            ),
+            default: null,
+          },
+          other: { type: [String], default: [] },
+          unavailable: { type: Boolean, default: true },
+        },
+        { _id: false }
+      ),
+      default: null,
     },
   },
   {

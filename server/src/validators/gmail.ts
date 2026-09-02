@@ -1,9 +1,13 @@
 import { z } from "zod";
 import { APPLICATION_STATUSES } from "../models/Application";
-import { CAREER_EMAIL_CATEGORIES } from "../models/CareerEmail";
+import {
+  CAREER_EMAIL_CATEGORIES,
+  DETECTED_CAREER_STATUSES,
+} from "../models/CareerEmail";
 
 const careerEmailCategorySchema = z.enum(CAREER_EMAIL_CATEGORIES);
 const applicationStatusSchema = z.enum(APPLICATION_STATUSES);
+const detectedCareerStatusSchema = z.enum(DETECTED_CAREER_STATUSES);
 
 export const emailListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -13,8 +17,11 @@ export const emailListQuerySchema = z.object({
   sort: z.enum(["newest", "oldest"]).default("newest"),
 });
 
+// Manual career-status application is restricted to the hiring stages Gmail
+// detection can derive (screening/interview/offer/rejected). "applied" is only
+// ever set by the explicit execution flow and "withdrawn" is never applied.
 export const applyStatusSchema = z.object({
-  status: applicationStatusSchema,
+  status: detectedCareerStatusSchema,
 });
 
 export const syncQuerySchema = z.object({

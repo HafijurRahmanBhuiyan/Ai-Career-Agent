@@ -14,10 +14,31 @@ import { ClaudeService } from "../integrations/claude/claude.service";
 import { EmailClassification } from "../integrations/claude/emailClassification.types";
 import { ApplicationEventType } from "../models/ApplicationEvent";
 import { createGmailEvent } from "./applicationTimeline";
+import { resolveCareerStatus } from "./careerStatusDetection";
+import {
+  resolveCareerEventExtraction,
+  CareerEventExtraction,
+} from "./careerEventExtraction";
+import {
+  HIGH_CONFIDENCE,
+  isAllowedStatusTransition,
+} from "./careerStatusTransitions";
 import { Types } from "mongoose";
 
 const MAX_BODY_CHARS = 6000;
-const DEFAULT_MAX_MESSAGES = 25;
+
+// Phase 2 Step 5: incremental Gmail sync window. Each sync scans only messages
+// received within this window, so repeated runs stay cheap. Defaults to 1440
+// minutes (24h) and is bounded to [60, 10080] (1h..1w).
+const DEFAULT_LOOKBACK_MINUTES = 1440;
+const MIN_LOOKBACK_MINUTES = 60;
+const MAX_LOOKBACK_MINUTES = 10080;
+
+function defaultMaxMessages(): number {
+  const raw = Number(process.env.GMAIL_SYNC_MAX_RESULTS);
+  if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
+  return 25;
+}
 
 const CAREER_KEYWORDS = [
   "interview",
@@ -49,6 +70,33 @@ const SELF_NOTIFY_CATEGORIES = new Set([
   "interview_reschedule",
   "offer",
   "recruiter_outreach",
+]);
+
+// High-value career events that warrant a self-notification even when no
+// application transition occurred (best-effort, idempotent per message).
+const SELF_NOTIFY_CAREER_EVENT_TYPES = new Set([
+  "interview",
+  "screening",
+  "assessment",
+  "shortlist",
+  "offer",
+]);
+
+// Maps a structured career event onto an existing timeline event type. There
+// are no dedicated "screening" or "shortlist" event types, so they map to the
+// generic "other"; application_update also maps to "other".
+const CAREER_EVENT_TIMELINE_TYPES = new Map<
+  string,
+  ApplicationEventType
+>([
+  ["interview", "interview_scheduled"],
+  ["screening", "other"],
+  ["shortlist", "other"],
+  ["assessment", "assessment"],
+  ["offer", "offer_received"],
+  ["rejection", "rejection_received"],
+  ["recruiter_contact", "recruiter_contact"],
+  ["application_update", "other"],
 ]);
 
 export class GmailService {
@@ -146,9 +194,20 @@ export class GmailService {
 
     const client = new GmailClient(accessToken);
 
-    const messageList = await client.listMessages(
-      Math.max(1, Math.min(maxMessages || DEFAULT_MAX_MESSAGES, 100))
+    const accountEmail = (
+      connection as unknown as { googleAccountEmail?: string }
+    ).googleAccountEmail;
+
+    const cap = Math.min(
+      Math.max(1, Math.min(maxMessages || defaultMaxMessages(), 100)),
+      100
     );
+    const lookbackMinutes = this.resolveLookbackMinutes();
+    const query = this.buildGmailLookbackQuery(lookbackMinutes);
+    const messageList = await client.listMessages(cap, query);
+
+    const profile = await Profile.findOne({ user: userId });
+    const autoStatusEnabled = profile?.gmailAutoStatusEnabled === true;
 
     const result: SyncResult = {
       synced: 0,
@@ -156,6 +215,8 @@ export class GmailService {
       classified: 0,
       skipped: 0,
       failed: 0,
+      autoUpdated: 0,
+      careerEvents: 0,
     };
 
     for (const message of messageList) {
@@ -176,6 +237,12 @@ export class GmailService {
         meta = await client.getMessageMeta(message.id);
       } catch {
         result.failed += 1;
+        continue;
+      }
+
+      // Never reclassify our own self-notification emails (loop prevention).
+      if (this.isFromSelfOrAgent(meta.from, meta.subject, accountEmail)) {
+        result.skipped += 1;
         continue;
       }
 
@@ -211,7 +278,48 @@ export class GmailService {
         continue;
       }
 
-      const matchedApplicationId = await this.matchApplication(userId, classification);
+      let careerStatus;
+      try {
+        careerStatus = await resolveCareerStatus({
+          subject: meta.subject,
+          from: meta.from,
+          snippet: meta.snippet,
+          body,
+          companyName: classification.companyName,
+          jobTitle: classification.jobTitle,
+        });
+      } catch {
+        careerStatus = null;
+      }
+
+      const matchedApplicationId = await this.matchApplication(
+        userId,
+        classification,
+        meta.from
+      );
+
+      // Phase 2 Step 6: structured career-event intelligence. Deterministic-
+      // first, with an AI upgrade (Claude -> Gemini -> OpenAI, Zod-validated)
+      // only when the deterministic signal is not already high confidence.
+      // Best-effort: any failure leaves the message classified without an event
+      // and must never break the sync.
+      let careerEvent: CareerEventExtraction | null = null;
+      try {
+        careerEvent = await resolveCareerEventExtraction(
+          {
+            subject: meta.subject,
+            from: meta.from,
+            snippet: meta.snippet,
+            body,
+            companyName: careerStatus?.companyName ?? classification.companyName,
+            jobTitle: careerStatus?.jobTitle ?? classification.jobTitle,
+          },
+          careerStatus,
+          classification
+        );
+      } catch {
+        careerEvent = null;
+      }
 
       const careerEmail = new CareerEmail({
         user: userId,
@@ -239,22 +347,89 @@ export class GmailService {
         classificationStatus: "classified",
         classifiedAt: new Date(),
         rawMetadata: {},
+        careerStatus: careerStatus?.status || null,
+        careerStatusConfidence: careerStatus?.confidence || null,
+        careerStatusDetectedAt: careerStatus ? new Date() : null,
+        autoStatusApplied: false,
+        autoStatusReason: null,
+        careerEvent: careerEvent || null,
       });
 
       try {
         await careerEmail.save();
         result.classified += 1;
 
+        let statusChange: { from: string; to: string } | null = null;
+
+        // Automatic tracking (opt-in, Profile.gmailAutoStatusEnabled): only a
+        // HIGH-confidence detected stage may advance the linked application,
+        // and only along an explicitly allowed transition. Never sets
+        // "applied" and never touches "withdrawn".
+        if (
+          autoStatusEnabled &&
+          matchedApplicationId &&
+          careerStatus?.status &&
+          careerStatus.confidence >= HIGH_CONFIDENCE
+        ) {
+          const application = await Application.findOne({
+            _id: matchedApplicationId,
+            user: userId,
+          });
+          if (
+            application &&
+            isAllowedStatusTransition(
+              application.status,
+              careerStatus.status
+            )
+          ) {
+            const from = application.status;
+            application.status = careerStatus.status;
+            await application.save();
+            statusChange = { from, to: careerStatus.status };
+
+            careerEmail.autoStatusApplied = true;
+            careerEmail.autoStatusReason =
+              careerStatus.reason ||
+              `${careerStatus.category} signal detected in Gmail`;
+            await careerEmail.save();
+            result.autoUpdated += 1;
+          }
+        }
+
         if (matchedApplicationId) {
           await this.createEventForEmail(
             userId,
             careerEmail,
             matchedApplicationId,
-            classification
+            classification,
+            statusChange
           );
         }
 
-        await this.maybeSendSelfNotification(userId, careerEmail, connection);
+        if (careerEmail.careerEvent) {
+          result.careerEvents += 1;
+        }
+
+        if (matchedApplicationId && careerEmail.careerEvent) {
+          try {
+            await this.createCareerEventTimeline(
+              userId,
+              careerEmail,
+              matchedApplicationId
+            );
+          } catch {
+            // Best-effort timeline: a failure must never fail the sync, and the
+            // unique (application, source, sourceId) index prevents duplicates.
+          }
+        }
+
+        await this.maybeSendSelfNotification(
+          userId,
+          careerEmail,
+          connection,
+          profile,
+          statusChange
+        );
       } catch {
         result.failed += 1;
       }
@@ -332,14 +507,25 @@ export class GmailService {
   private async maybeSendSelfNotification(
     userId: string,
     email: ICareerEmail,
-    connection: import("mongoose").HydratedDocument<unknown>
+    connection: import("mongoose").HydratedDocument<unknown>,
+    profile: import("../models/Profile").IProfile | null,
+    statusChange?: { from: string; to: string } | null
   ): Promise<void> {
     try {
-      if (!email.category || !SELF_NOTIFY_CATEGORIES.has(email.category)) {
+      const careerEvent = email.careerEvent;
+      const notifyCareerEvent =
+        Boolean(careerEvent?.type) &&
+        SELF_NOTIFY_CAREER_EVENT_TYPES.has(careerEvent?.type as string);
+
+      if (
+        !email.category ||
+        (!SELF_NOTIFY_CATEGORIES.has(email.category) &&
+          !statusChange &&
+          !notifyCareerEvent)
+      ) {
         return;
       }
 
-      const profile = await Profile.findOne({ user: userId });
       if (profile && profile.gmailNotifyEnabled === false) {
         return;
       }
@@ -347,7 +533,8 @@ export class GmailService {
       const conn = connection as unknown as {
         googleAccountEmail?: string;
       };
-      const recipient = profile?.notificationEmail?.trim() || conn.googleAccountEmail;
+      const recipient =
+        profile?.notificationEmail?.trim() || conn.googleAccountEmail;
       if (!recipient) {
         return;
       }
@@ -355,8 +542,8 @@ export class GmailService {
       const accessToken = await this.ensureValidAccessToken(connection);
       const client = new GmailClient(accessToken);
 
-      const subject = this.buildSelfNotificationSubject(email);
-      const body = this.buildSelfNotificationBody(email);
+      const subject = this.buildSelfNotificationSubject(email, statusChange);
+      const body = this.buildSelfNotificationBody(email, statusChange);
 
       await client.sendMessage(recipient, subject, body);
     } catch {
@@ -364,19 +551,44 @@ export class GmailService {
     }
   }
 
-  private buildSelfNotificationSubject(email: ICareerEmail): string {
-    const milestone = (email.category || "").replace(/_/g, " ");
+  private buildSelfNotificationSubject(
+    email: ICareerEmail,
+    statusChange?: { from: string; to: string } | null
+  ): string {
     const company = email.companyName ? ` at ${email.companyName}` : "";
+    if (statusChange) {
+      return `[Career Agent] Status updated to ${statusChange.to}${company}`;
+    }
+    const milestone = (
+      email.careerEvent?.type ||
+      email.category ||
+      ""
+    ).replace(/_/g, " ");
     return `[Career Agent] ${milestone}${company}`;
   }
 
-  private buildSelfNotificationBody(email: ICareerEmail): string {
+  private buildSelfNotificationBody(
+    email: ICareerEmail,
+    statusChange?: { from: string; to: string } | null
+  ): string {
     const lines: string[] = [];
-    const category = (email.category || "").replace(/_/g, " ");
 
-    lines.push(`Career milestone detected: ${category}`);
+    if (statusChange) {
+      lines.push(
+        `Application status updated automatically: ${statusChange.from} -> ${statusChange.to} (high-confidence email detection).`
+      );
+    } else {
+      const category = (email.category || "").replace(/_/g, " ");
+      lines.push(`Career milestone detected: ${category}`);
+    }
+
     if (email.companyName) lines.push(`Company: ${email.companyName}`);
     if (email.jobTitle) lines.push(`Role: ${email.jobTitle}`);
+    if (email.careerStatusConfidence != null) {
+      lines.push(
+        `Detection confidence: ${Math.round(email.careerStatusConfidence * 100)}%`
+      );
+    }
     if (email.interview?.scheduledAt) {
       lines.push(
         `Interview: ${this.parseIso(String(email.interview.scheduledAt))?.toUTCString() ?? email.interview.scheduledAt.toUTCString()}`
@@ -384,6 +596,27 @@ export class GmailService {
     }
     if (email.actionRequired) {
       lines.push(`Action required: yes${email.actionDeadline ? ` (by ${email.actionDeadline.toUTCString()})` : ""}`);
+    }
+    if (email.careerEvent?.type) {
+      lines.push("");
+      lines.push(`Event detected: ${email.careerEvent.type}`);
+      if (email.careerEvent.scheduledAt) {
+        lines.push(
+          `Scheduled: ${email.careerEvent.scheduledAt.toISOString()}${
+            email.careerEvent.timezone
+              ? ` (${email.careerEvent.timezone})`
+              : ""
+          }`
+        );
+      }
+      if (email.careerEvent.meetingUrl) {
+        lines.push(`Meeting: ${email.careerEvent.meetingUrl}`);
+      }
+      if (email.careerEvent.actionRequired) {
+        lines.push(
+          `Action required: ${email.careerEvent.actionText || "yes"}`
+        );
+      }
     }
     if (email.summary) lines.push("");
     if (email.summary) lines.push(email.summary.slice(0, 400));
@@ -457,6 +690,46 @@ export class GmailService {
     return CAREER_KEYWORDS.some((keyword) => haystack.includes(keyword));
   }
 
+  private resolveLookbackMinutes(): number {
+    const raw = Number(process.env.GMAIL_SYNC_LOOKBACK_MINUTES);
+    const value =
+      Number.isFinite(raw) && raw > 0
+        ? Math.floor(raw)
+        : DEFAULT_LOOKBACK_MINUTES;
+    return Math.min(
+      MAX_LOOKBACK_MINUTES,
+      Math.max(MIN_LOOKBACK_MINUTES, value)
+    );
+  }
+
+  private buildGmailLookbackQuery(minutes: number): string {
+    const since = new Date(Date.now() - minutes * 60 * 1000);
+    const y = since.getUTCFullYear();
+    const m = String(since.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(since.getUTCDate()).padStart(2, "0");
+    return `after:${y}/${m}/${d}`;
+  }
+
+  // Loop prevention: never re-process emails we sent ourselves (either to the
+  // connected account, or the "[Career Agent]" self-notifications).
+  private isFromSelfOrAgent(
+    from?: string,
+    subject?: string,
+    accountEmail?: string
+  ): boolean {
+    const subjectLower = (subject || "").toLowerCase();
+    if (
+      subjectLower.startsWith("[career agent]") ||
+      subjectLower.includes("re: [career agent]")
+    ) {
+      return true;
+    }
+
+    const acc = (accountEmail || "").toLowerCase();
+    if (!acc || !from) return false;
+    return from.toLowerCase().includes(acc);
+  }
+
   private buildInterviewInfo(
     classification: EmailClassification
   ): Record<string, unknown> | null {
@@ -514,24 +787,93 @@ export class GmailService {
     userId: string,
     email: ICareerEmail,
     applicationId: Types.ObjectId,
-    classification: EmailClassification
+    classification: EmailClassification,
+    statusChange?: { from: string; to: string } | null
   ): Promise<void> {
-    const eventType = this.eventTypeForCategory(classification.category);
+    const eventType = statusChange
+      ? ("status_changed" as const)
+      : this.eventTypeForCategory(classification.category);
     if (!eventType) return;
 
     const eventDate =
-      this.parseIso(classification.interviewDate) || email.receivedAt || new Date();
+      statusChange
+        ? email.receivedAt || new Date()
+        : this.parseIso(classification.interviewDate) || email.receivedAt || new Date();
 
-    const title = email.subject
-      ? email.subject.slice(0, 300)
-      : `${classification.category.replace(/_/g, " ")} update`;
+    let title: string;
+    let description: string | undefined;
+
+    if (statusChange) {
+      title = `Status changed to ${statusChange.to}`;
+      const confidence =
+        email.careerStatusConfidence != null
+          ? ` (confidence ${Math.round(email.careerStatusConfidence * 100)}%)`
+          : "";
+      description = `Detected "${classification.category}" in a Gmail message (${
+        email.threadId || email.gmailMessageId
+      }). Application status moved ${statusChange.from} -> ${statusChange.to}${confidence}. ${
+        email.autoStatusReason || ""
+      }`;
+    } else {
+      title = email.subject
+        ? email.subject.slice(0, 300)
+        : `${classification.category.replace(/_/g, " ")} update`;
+      description = classification.summary || undefined;
+    }
 
     await createGmailEvent(userId, String(applicationId), {
       type: eventType,
       title,
-      description: classification.summary || undefined,
+      description: description ? description.slice(0, 5000) : undefined,
       eventDate,
       sourceId: email.gmailMessageId,
+    });
+  }
+
+  // Phase 2 Step 6: create a gmail-sourced timeline event for a structured
+  // career event. Idempotent on (application, gmail, sourceId): the sourceId is
+  // namespaced per event type so it never collides with the status-change event
+  // that already uses the raw gmailMessageId.
+  private async createCareerEventTimeline(
+    userId: string,
+    email: ICareerEmail,
+    applicationId: Types.ObjectId
+  ): Promise<void> {
+    const event = email.careerEvent;
+    if (!event || !event.type) return;
+
+    const eventType = CAREER_EVENT_TIMELINE_TYPES.get(event.type);
+    if (!eventType) return;
+
+    const eventDate = event.scheduledAt || email.receivedAt || new Date();
+    const title =
+      event.title || `${event.type.replace(/_/g, " ")} detected`;
+
+    const detail: string[] = [];
+    if (event.scheduledAt) {
+      detail.push(
+        `Scheduled: ${event.scheduledAt.toISOString()}${
+          event.timezone ? ` (${event.timezone})` : ""
+        }.`
+      );
+    }
+    if (event.interviewerName) detail.push(`Interviewer: ${event.interviewerName}.`);
+    if (event.meetingUrl) detail.push(`Meeting: ${event.meetingUrl}.`);
+    if (event.actionRequired) {
+      detail.push(`Action required: ${event.actionText || "yes"}.`);
+    }
+
+    const description = [
+      `${event.type} detected in a Gmail message (${email.gmailMessageId}).`,
+      ...detail,
+    ].join(" ");
+
+    await createGmailEvent(userId, String(applicationId), {
+      type: eventType,
+      title,
+      description: description.slice(0, 5000),
+      eventDate,
+      sourceId: `${email.gmailMessageId}:career-${event.type}`,
     });
   }
 
@@ -587,24 +929,27 @@ export class GmailService {
 
   private async matchApplication(
     userId: string,
-    classification: EmailClassification
+    classification: EmailClassification,
+    from?: string
   ): Promise<Types.ObjectId | null> {
     const hints = classification.extractedApplicationHints || {};
     const companyRaw = classification.companyName || hints.companyName;
     const titleRaw = classification.jobTitle || hints.jobTitle;
 
-    if (!companyRaw || !titleRaw) {
+    if (!companyRaw && !titleRaw) {
       return null;
     }
 
-    const companyNorm = this.normalize(companyRaw);
-    const titleNorm = this.normalize(titleRaw);
+    const companyNorm = companyRaw ? this.normalize(companyRaw) : "";
+    const titleNorm = titleRaw ? this.normalize(titleRaw) : "";
+    const senderDomain = this.senderDomainLabel(from);
 
     const applications = await Application.find({ user: userId })
       .populate("job", "companyName title")
       .lean();
 
     const exact: Types.ObjectId[] = [];
+    const titleOnly: Types.ObjectId[] = [];
     const companyOnly: Types.ObjectId[] = [];
 
     for (const app of applications) {
@@ -614,22 +959,75 @@ export class GmailService {
       const jobCompany = this.normalize(job.companyName || "");
       const jobTitle = this.normalize(job.title || "");
 
-      if (jobCompany && companyNorm && jobCompany === companyNorm) {
-        if (titleNorm && jobTitle && jobTitle === titleNorm) {
-          exact.push(app._id);
-        } else {
-          companyOnly.push(app._id);
-        }
+      const companyMatches =
+        Boolean(companyNorm) &&
+        Boolean(jobCompany) &&
+        jobCompany === companyNorm;
+      const titleMatches =
+        Boolean(titleNorm) && Boolean(jobTitle) && jobTitle === titleNorm;
+
+      if (companyMatches && titleMatches) {
+        exact.push(app._id);
+      } else if (titleMatches) {
+        titleOnly.push(app._id);
+      } else if (companyMatches) {
+        companyOnly.push(app._id);
       }
     }
 
-    if (exact.length === 1) {
-      return exact[0];
+    const unambiguous = (
+      ids: Types.ObjectId[]
+    ): Types.ObjectId | null => (ids.length === 1 ? ids[0] : null);
+
+    const viaExact = unambiguous(exact);
+    if (viaExact) return viaExact;
+
+    if (exact.length === 0) {
+      const viaTitle = unambiguous(titleOnly);
+      if (viaTitle) return viaTitle;
     }
-    if (exact.length === 0 && companyOnly.length === 1) {
-      return companyOnly[0];
+
+    if (exact.length === 0 && titleOnly.length === 0) {
+      const viaCompany = unambiguous(companyOnly);
+      if (viaCompany) return viaCompany;
+
+      // Sender-domain fallback, only when nothing else matched and there is a
+      // company signal: the sender's domain label must appear in the job's
+      // company name, and exactly one application may qualify.
+      if (senderDomain && companyNorm) {
+        const domainMatches = applications.filter((app) => {
+          const job = (app as unknown as { job?: { companyName?: string; title?: string } }).job;
+          if (!job) return false;
+          return this.normalize(job.companyName || "").includes(senderDomain);
+        });
+        if (domainMatches.length === 1) return domainMatches[0]._id;
+      }
     }
+
     return null;
+  }
+
+  private senderDomainLabel(from?: string): string | null {
+    if (!from) return null;
+    const at = from.lastIndexOf("@");
+    if (at === -1) return null;
+    let host = from.slice(at + 1).trim().toLowerCase();
+    host = host.replace(/[>),;\s]/g, "");
+    if (!host) return null;
+    const labels = host.split(".").filter(Boolean);
+    if (labels.length === 0) return null;
+    let idx = labels.length - 1;
+    if (idx > 0) {
+      const last = labels[idx];
+      const secondLast = labels[idx - 1];
+      if (last.length !== 2 || secondLast.length !== 2) {
+        idx -= 1;
+      } else {
+        idx -= 2;
+      }
+    }
+    if (idx < 0) idx = 0;
+    return labels[idx] || null;
   }
 
   private normalize(value: string): string {
@@ -660,6 +1058,8 @@ export interface SyncResult {
   classified: number;
   skipped: number;
   failed: number;
+  autoUpdated: number;
+  careerEvents: number;
 }
 
 export default GmailService;

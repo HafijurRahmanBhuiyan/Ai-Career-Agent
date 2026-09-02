@@ -6,6 +6,7 @@ import Job from "../src/models/Job";
 import JobMatch from "../src/models/JobMatch";
 import Profile from "../src/models/Profile";
 import Skill from "../src/models/Skill";
+import { matchLevelFromScore } from "../src/validators/jobMatch";
 import { Types } from "mongoose";
 
 jest.mock("../src/integrations/claude/claudeClient", () => {
@@ -155,8 +156,16 @@ describe("Job Match - basic analysis", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.match.score).toBe(87);
-    expect(res.body.match.matchLevel).toBe("good_match");
+    // Phase 2 additive contract: aiScore holds the raw AI score; the effective
+    // score, finalScore, is the deterministic blend (0.6*ai + 0.4*deterministic).
+    expect(res.body.match.aiScore).toBe(87);
+    expect(res.body.match.score).toBe(res.body.match.finalScore);
+    expect(res.body.match.deterministicScore).toBeGreaterThanOrEqual(0);
+    expect(res.body.match.deterministicScore).toBeLessThanOrEqual(100);
+    expect(res.body.match.finalScore).toBeGreaterThanOrEqual(0);
+    expect(res.body.match.finalScore).toBeLessThanOrEqual(100);
+    expect(res.body.match.matchLevel).toBe(matchLevelFromScore(res.body.match.score));
+    expect(Array.isArray(res.body.match.gaps)).toBe(true);
     expect(res.body.match.matchingSkills).toContain("TypeScript");
     expect(res.body.match.missingSkills).toContain("Kubernetes");
     expect(res.body.match.experienceGap).toBeTruthy();
@@ -165,9 +174,9 @@ describe("Job Match - basic analysis", () => {
 
     const stored = await JobMatch.findOne({ user: user.id, job: job._id });
     expect(stored).not.toBeNull();
-    expect(stored!.matchLevel).toBe("good_match");
+    expect(stored!.matchLevel).toBe(matchLevelFromScore(stored!.finalScore));
     expect(stored!.aiModel).toBe("claude-sonnet-4-20250514");
-    expect(stored!.promptVersion).toBe("v1");
+    expect(stored!.promptVersion).toBe("v3");
     expect(stored!.expiresAt).toBeTruthy();
   });
 
@@ -221,7 +230,7 @@ describe("Job Match - profile and description handling", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.match.score).toBe(87);
+    expect(res.body.match.aiScore).toBe(87);
   });
 
   test("profile data (skills/preferences) are included in the prompt payload", async () => {
@@ -300,7 +309,7 @@ describe("Job Match - caching and reanalysis", () => {
       .expect(200);
 
     expect(claudeClient.analyzeProject).toHaveBeenCalledTimes(2);
-    expect(re.body.match.score).toBe(87);
+    expect(re.body.match.aiScore).toBe(87);
 
     const count = await JobMatch.countDocuments({ user: user.id, job: job._id });
     expect(count).toBe(1);
@@ -321,7 +330,7 @@ describe("Job Match - caching and reanalysis", () => {
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
 
-    expect(res.body.match.score).toBe(87);
+    expect(res.body.match.aiScore).toBe(87);
   });
 
   test("GET /api/jobs/:id/match returns 404 when no match exists", async () => {
@@ -338,7 +347,7 @@ describe("Job Match - caching and reanalysis", () => {
 describe("Job Match - AI output validation", () => {
   const mockClaude = () => require("../src/integrations/claude/claudeClient");
 
-  test("malformed JSON from Claude produces a safe error", async () => {
+  test("malformed JSON from Claude falls back safely to a deterministic match", async () => {
     const { token, user } = await registerUser();
     await seedProfile(token, user.id as string);
     const job = await seedJob();
@@ -348,32 +357,36 @@ describe("Job Match - AI output validation", () => {
     const res = await request(app)
       .post(`/api/jobs/${job._id}/match`)
       .set("Authorization", `Bearer ${token}`);
-    expect(res.status).toBe(500);
+    // Step 1H/1S: an AI failure must not crash matching; degrade to deterministic.
+    expect(res.status).toBe(200);
+    expect(res.body.match.aiScore).toBeNull();
+    expect(res.body.match.aiModel).toBe("deterministic");
+    expect(res.body.match.deterministicScore).toBeGreaterThanOrEqual(0);
 
     const stored = await JobMatch.countDocuments({ user: user.id });
-    expect(stored).toBe(0);
+    expect(stored).toBe(1);
   });
 
-  test("schema validation failure is not stored and returns 422", async () => {
+  test("schema validation failure falls back to a deterministic match (not 422)", async () => {
     const { token, user } = await registerUser();
     await seedProfile(token, user.id as string);
     const job = await seedJob();
 
     mockClaude().analyzeProject.mockResolvedValueOnce(
-      JSON.stringify({ score: 87 }) 
+      JSON.stringify({ score: 87 })
     );
 
     const res = await request(app)
       .post(`/api/jobs/${job._id}/match`)
       .set("Authorization", `Bearer ${token}`);
-    expect(res.status).toBe(422);
-    expect(res.body.error).toContain("Job match validation failed");
+    expect(res.status).toBe(200);
+    expect(res.body.match.aiScore).toBeNull();
 
     const stored = await JobMatch.countDocuments({ user: user.id });
-    expect(stored).toBe(0);
+    expect(stored).toBe(1);
   });
 
-  test("score below 0 rejected", async () => {
+  test("score below 0 falls back to a deterministic match", async () => {
     const { token, user } = await registerUser();
     await seedProfile(token, user.id as string);
     const job = await seedJob();
@@ -385,11 +398,12 @@ describe("Job Match - AI output validation", () => {
     const res = await request(app)
       .post(`/api/jobs/${job._id}/match`)
       .set("Authorization", `Bearer ${token}`);
-    expect(res.status).toBe(422);
-    expect(await JobMatch.countDocuments({ user: user.id })).toBe(0);
+    expect(res.status).toBe(200);
+    expect(res.body.match.aiScore).toBeNull();
+    expect(await JobMatch.countDocuments({ user: user.id })).toBe(1);
   });
 
-  test("score above 100 rejected", async () => {
+  test("score above 100 falls back to a deterministic match", async () => {
     const { token, user } = await registerUser();
     await seedProfile(token, user.id as string);
     const job = await seedJob();
@@ -401,11 +415,12 @@ describe("Job Match - AI output validation", () => {
     const res = await request(app)
       .post(`/api/jobs/${job._id}/match`)
       .set("Authorization", `Bearer ${token}`);
-    expect(res.status).toBe(422);
-    expect(await JobMatch.countDocuments({ user: user.id })).toBe(0);
+    expect(res.status).toBe(200);
+    expect(res.body.match.aiScore).toBeNull();
+    expect(await JobMatch.countDocuments({ user: user.id })).toBe(1);
   });
 
-  test("non-numeric score rejected", async () => {
+  test("non-numeric score falls back to a deterministic match", async () => {
     const { token, user } = await registerUser();
     await seedProfile(token, user.id as string);
     const job = await seedJob();
@@ -417,11 +432,12 @@ describe("Job Match - AI output validation", () => {
     const res = await request(app)
       .post(`/api/jobs/${job._id}/match`)
       .set("Authorization", `Bearer ${token}`);
-    expect(res.status).toBe(422);
-    expect(await JobMatch.countDocuments({ user: user.id })).toBe(0);
+    expect(res.status).toBe(200);
+    expect(res.body.match.aiScore).toBeNull();
+    expect(await JobMatch.countDocuments({ user: user.id })).toBe(1);
   });
 
-  test("match level is derived from score on the backend", async () => {
+  test("match level is derived from the effective final score on the backend", async () => {
     const { token, user } = await registerUser();
     await seedProfile(token, user.id as string);
     const job = await seedJob();
@@ -433,21 +449,23 @@ describe("Job Match - AI output validation", () => {
       [40, "weak_match"],
     ];
 
-    for (const [score, level] of cases) {
+    for (const [aiScore, expectedLevel] of cases) {
       await JobMatch.deleteMany({});
       mockClaude().analyzeProject.mockResolvedValueOnce(
-        JSON.stringify({ ...mockValidOutput(), score })
+        JSON.stringify({ ...mockValidOutput(), score: aiScore })
       );
       const res = await request(app)
         .post(`/api/jobs/${job._id}/match`)
         .set("Authorization", `Bearer ${token}`)
         .expect(200);
-      expect(res.body.match.score).toBe(score);
-      expect(res.body.match.matchLevel).toBe(level);
+      expect(res.body.match.aiScore).toBe(aiScore);
+      // The effective (final) score drives the match level; the AI score is
+      // blended with the deterministic score, so the final score is recomputed.
+      expect(res.body.match.matchLevel).toBe(matchLevelFromScore(res.body.match.score));
     }
   });
 
-  test("arrays with non-string items are rejected", async () => {
+  test("arrays with non-string items fall back to a deterministic match", async () => {
     const { token, user } = await registerUser();
     const job = await seedJob();
 
@@ -458,8 +476,9 @@ describe("Job Match - AI output validation", () => {
     const res = await request(app)
       .post(`/api/jobs/${job._id}/match`)
       .set("Authorization", `Bearer ${token}`);
-    expect(res.status).toBe(422);
-    expect(await JobMatch.countDocuments({ user: user.id })).toBe(0);
+    expect(res.status).toBe(200);
+    expect(res.body.match.aiScore).toBeNull();
+    expect(await JobMatch.countDocuments({ user: user.id })).toBe(1);
   });
 });
 

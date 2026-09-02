@@ -103,6 +103,36 @@ export function generateFingerprint(
   return hashCode(base);
 }
 
+/**
+ * Generate a stable canonical identity for a job that is independent of the
+ * provider it came from. It is based only on stable identity fields:
+ * company, title, locations, remote type, and employment type. It deliberately
+ * excludes source-specific identities (source/sourceJobId), descriptions,
+ * skills, salary, and URLs so that the same vacancy arriving through multiple
+ * providers collapses to one canonical key, while distinct vacancies remain
+ * separate.
+ */
+export function generateCanonicalFingerprint(job: {
+  companyName?: string;
+  title?: string;
+  locations?: string[];
+  remoteType?: RemoteType | string;
+  employmentType?: EmploymentType | string;
+}): string {
+  const company = normalizeCompany(job.companyName?.trim() ? job.companyName : "").toLowerCase();
+  const title = normalizeTitle(job.title?.trim() ? job.title : "").toLowerCase();
+
+  const locations = normalizeStringArray(job.locations ?? [])
+    .map((l) => l.toLowerCase())
+    .sort();
+
+  const remote = normalizeRemote(job.remoteType).toLowerCase();
+  const employment = normalizeEmployment(job.employmentType).toLowerCase();
+
+  const base = [company, title, locations.join("|"), remote, employment].join("::");
+  return hashCode(base);
+}
+
 export function normalizeSourceJobId(
   source: string,
   rawJob: RawJob
@@ -138,6 +168,13 @@ export function normalizeJob(source: string, rawJob: RawJob): NormalizedJob {
       rawJob.location ?? locations[0] ?? null,
       rawJob.applyUrl ?? rawJob.jobUrl ?? null
     ),
+    canonicalFingerprint: generateCanonicalFingerprint({
+      companyName: rawJob.companyName,
+      title: rawJob.title,
+      locations: locations.length > 0 ? locations : [rawJob.location ?? locations[0] ?? ""],
+      remoteType: rawJob.remoteType,
+      employmentType: rawJob.employmentType,
+    }),
     title: normalizeTitle(rawJob.title),
     companyName: normalizeCompany(rawJob.companyName),
     companyLogo: isValidUrl(rawJob.companyLogo) ?? undefined,

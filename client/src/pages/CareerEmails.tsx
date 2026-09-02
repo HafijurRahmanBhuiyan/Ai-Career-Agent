@@ -8,8 +8,18 @@ import {
   CareerEmailCategory,
   CareerEmailLinkedApplication,
   CareerEmailPagination,
+  CareerEvent,
+  DetectedCareerStatus,
 } from "../types/careerEmail";
 import { getErrorMessage } from "../utils/apiError";
+import { validateHandoffUrl } from "../utils/handoffUrl";
+import {
+  buildInterviewIcs,
+  buildReplyDraft,
+  copyToClipboard,
+  deadlineCountdown,
+  downloadIcs,
+} from "../utils/careerEvent";
 
 const API_BASE = "";
 const PAGE_SIZE = 10;
@@ -54,6 +64,27 @@ const CATEGORY_STYLES: Record<CareerEmailCategory, string> = {
   unrelated: "bg-slate-100 text-slate-600",
 };
 
+const DETECTED_STATUS_STYLES: Record<DetectedCareerStatus, string> = {
+  screening: "bg-indigo-50 text-indigo-700",
+  interview: "bg-purple-50 text-purple-700",
+  offer: "bg-emerald-50 text-emerald-700",
+  rejected: "bg-red-50 text-red-700",
+};
+
+// Manual status application may only target hiring stages Gmail detection can
+// derive. "applied" is reserved for the execution flow and "withdrawn" is
+// never applied from a career email.
+const DETECTED_STATUS_OPTIONS: { value: DetectedCareerStatus; label: string }[] = [
+  { value: "screening", label: "Screening" },
+  { value: "interview", label: "Interview" },
+  { value: "offer", label: "Offer" },
+  { value: "rejected", label: "Rejected" },
+];
+
+function isDetectedStatus(value: string | null | undefined): value is DetectedCareerStatus {
+  return !!value && DETECTED_STATUS_OPTIONS.some((o) => o.value === value);
+}
+
 function formatCategory(category: CareerEmailCategory | undefined): string {
   if (!category) return "Unclassified";
   const found = CATEGORY_OPTIONS.find((opt) => opt.value === category);
@@ -65,6 +96,13 @@ function formatDate(value?: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleDateString();
+}
+
+function formatDateTime(value?: string): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString();
 }
 
 function CareerEmails() {
@@ -261,8 +299,9 @@ function CareerEmails() {
           </div>
           <p className="mt-4 text-xs text-slate-400">
             Emails are synced from your connected Gmail account on the
-            Integrations page. AI suggestions never change your application
-            status automatically.
+            Integrations page. Detected hiring-stage signals are shown for
+            review; high-confidence signals can update your application status
+            automatically when you enable that in Settings.
           </p>
         </div>
 
@@ -289,6 +328,8 @@ function CareerEmails() {
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Suggested Status</th>
+                  <th className="px-4 py-3">Detected</th>
+                  <th className="px-4 py-3">Application</th>
                   <th className="px-4 py-3">Received</th>
                   <th className="px-4 py-3 text-right">Details</th>
                 </tr>
@@ -328,6 +369,62 @@ function CareerEmails() {
                         </span>
                       ) : (
                         <span className="text-slate-400 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {email.careerStatus ? (
+                        <div>
+                          <span
+                            className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
+                              DETECTED_STATUS_STYLES[email.careerStatus]
+                            }`}
+                          >
+                            {email.careerStatus}
+                            {email.careerStatusConfidence != null
+                              ? ` ${Math.round(email.careerStatusConfidence * 100)}%`
+                              : ""}
+                            {email.autoStatusApplied ? " • auto" : ""}
+                            {email.manualStatusApplied ? " • manual" : ""}
+                          </span>
+                          {email.careerStatusDetectedAt && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              detected {formatDateTime(email.careerStatusDetectedAt)}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
+                      {email.careerEvent?.type && (
+                        <div className="mt-1 inline-flex flex-wrap items-center gap-1">
+                          <span className="px-1.5 py-0.5 text-[9px] font-medium rounded-full border border-slate-200 bg-white text-emerald-700">
+                            {email.careerEvent.type.replace(/_/g, " ")}
+                          </span>
+                          {email.careerEvent.detectedAt && (
+                            <span className="text-[9px] text-slate-400">
+                              {formatDateTime(email.careerEvent.detectedAt)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {email.application ? (
+                        <span className="inline-flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-slate-600">
+                            {email.application.status || "—"}
+                          </span>
+                          <a
+                            href={`/dashboard/applications?id=${email.application._id}`}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            View
+                          </a>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">
+                          Not matched
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-slate-500 text-xs">
@@ -402,8 +499,12 @@ function EmailDetailModal({
   onClose: () => void;
   onUpdated: (updated: CareerEmail) => void;
 }) {
-  const [status, setStatus] = useState<ApplicationStatus>(
-    email.suggestedApplicationStatus || "applied"
+  const [status, setStatus] = useState<DetectedCareerStatus>(
+    email.careerStatus && isDetectedStatus(email.careerStatus)
+      ? email.careerStatus
+      : isDetectedStatus(email.suggestedApplicationStatus)
+      ? email.suggestedApplicationStatus
+      : "screening"
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -490,6 +591,87 @@ function EmailDetailModal({
             {info("Action Deadline", email.actionDeadline ? formatDate(email.actionDeadline) : null)}
           </dl>
 
+          {email.careerEvent?.type && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6">
+              <h3 className="text-sm font-semibold text-emerald-900 mb-1">
+                Detected Career Event
+              </h3>
+              <p className="text-sm text-emerald-900 font-medium capitalize">
+                {email.careerEvent.type.replace(/_/g, " ")}
+                {email.careerEvent.confidence != null
+                  ? ` · ${Math.round(email.careerEvent.confidence * 100)}% confidence`
+                  : ""}
+              </p>
+              {email.careerEvent.title && (
+                <p className="text-sm text-emerald-800 mt-1">
+                  {email.careerEvent.title}
+                </p>
+              )}
+              <dl className="grid grid-cols-2 gap-3 mt-3">
+                {info("Company", email.careerEvent.company ?? null)}
+                {info("Role", email.careerEvent.role ?? null)}
+                {email.careerEvent.scheduledAt
+                  ? info(
+                      "Scheduled",
+                      `${formatDateTime(email.careerEvent.scheduledAt)}${
+                        email.careerEvent.timezone
+                          ? ` (${email.careerEvent.timezone})`
+                          : ""
+                      }`
+                    )
+                  : null}
+                {info("Interviewer", email.careerEvent.interviewerName ?? null)}
+                {info("Location", email.careerEvent.location ?? null)}
+                {email.careerEvent.deadlineAt
+                  ? info("Deadline", formatDateTime(email.careerEvent.deadlineAt))
+                  : null}
+              </dl>
+              {email.careerEvent.meetingUrl &&
+                validateHandoffUrl(email.careerEvent.meetingUrl) && (
+                  <p className="mt-3">
+                    <a
+                      href={
+                        validateHandoffUrl(email.careerEvent.meetingUrl) ??
+                        undefined
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-emerald-700 underline font-medium"
+                    >
+                      Join meeting
+                      {email.careerEvent.meetingPlatform
+                        ? ` (${email.careerEvent.meetingPlatform})`
+                        : ""}
+                    </a>
+                  </p>
+                )}
+              {email.careerEvent.actionRequired && (
+                <p className="text-xs text-emerald-800 mt-3">
+                  Action required: {email.careerEvent.actionText || "yes"}
+                  {email.careerEvent.candidateResponseRequired
+                    ? " · reply requested"
+                    : ""}
+                </p>
+              )}
+              {email.careerEvent.evidence && (
+                <p className="text-xs text-emerald-700 mt-3 italic">
+                  Evidence: “{email.careerEvent.evidence}”
+                </p>
+              )}
+              {email.careerEvent.deadlineAt &&
+                email.careerEvent.actionRequired && (
+                  <p className="text-xs text-amber-700 mt-3">
+                    ⏰{" "}
+                    {deadlineCountdown(email.careerEvent.deadlineAt) ||
+                      "Action required"}{" "}
+                    — respond by{" "}
+                    {formatDateTime(email.careerEvent.deadlineAt)}
+                  </p>
+                )}
+              <CareerEventActions event={email.careerEvent} />
+            </div>
+          )}
+
           {email.summary && (
             <div className="mb-6">
               <p className="text-xs font-medium text-slate-500 mb-1">AI Summary</p>
@@ -513,13 +695,47 @@ function EmailDetailModal({
           )}
 
           <div className="border-t border-slate-200 pt-6">
+            {email.careerStatus && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4">
+                <h3 className="text-sm font-semibold text-indigo-900 mb-1">
+                  Detected Hiring Stage
+                </h3>
+                <p className="text-sm text-indigo-900 font-medium">
+                  {email.careerStatus}
+                  {email.careerStatusConfidence != null
+                    ? ` · ${Math.round(email.careerStatusConfidence * 100)}% confidence`
+                    : ""}
+                </p>
+                {email.autoStatusApplied ? (
+                  <p className="text-xs text-indigo-700 mt-2">
+                    This email automatically updated the linked application
+                    status to {email.careerStatus}. Reason:{" "}
+                    {email.autoStatusReason || "high-confidence signal detected"}.
+                  </p>
+                ) : email.manualStatusApplied ? (
+                  <p className="text-xs text-indigo-700 mt-2">
+                    You manually updated the linked application status to{" "}
+                    {email.careerStatus}.{" "}
+                    {email.manualStatusReason || "Status applied from this email."}
+                  </p>
+                ) : (
+                  <p className="text-xs text-indigo-700 mt-2">
+                    Detected by the AI email classifier. High-confidence
+                    signals only automatically update your application when
+                    tracking is enabled in Settings; otherwise you can approve
+                    the change below.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
               <h3 className="text-sm font-semibold text-blue-900 mb-1">
                 AI Suggested Status
               </h3>
               <p className="text-xs text-blue-700 mb-3">
-                This is a suggestion only. Your application status is never
-                changed unless you explicitly confirm the update below.
+                This is a suggestion only and never changes your application on
+                its own.
               </p>
               <p className="text-sm text-blue-900 font-medium">
                 {email.suggestedApplicationStatus || "No suggestion"}
@@ -546,10 +762,10 @@ function EmailDetailModal({
               <div className="flex gap-3">
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as ApplicationStatus)}
+                  onChange={(e) => setStatus(e.target.value as DetectedCareerStatus)}
                   className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {STATUS_OPTIONS.slice(1).map((opt) => (
+                  {DETECTED_STATUS_OPTIONS.map((opt) => (
                     <option key={opt.label} value={opt.value}>
                       {opt.label}
                     </option>
@@ -591,6 +807,57 @@ function EmailDetailModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CareerEventActions({ event }: { event: CareerEvent }) {
+  const [copied, setCopied] = useState(false);
+  const [icsAdded, setIcsAdded] = useState(false);
+
+  const handleCopyDraft = async () => {
+    const draft = buildReplyDraft(event);
+    if (!draft) return;
+    const ok = await copyToClipboard(draft);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleAddToCalendar = () => {
+    const ics = buildInterviewIcs(event);
+    if (!ics) return;
+    downloadIcs(
+      `${event.type || "career-event"}-${event.company || "event"}.ics`,
+      ics
+    );
+    setIcsAdded(true);
+    setTimeout(() => setIcsAdded(false), 2000);
+  };
+
+  if (!event.scheduledAt && !buildReplyDraft(event)) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2 mt-3">
+      {event.scheduledAt && (
+        <button
+          onClick={handleAddToCalendar}
+          className="px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-100 transition-colors"
+        >
+          {icsAdded ? "Added ✓" : "Add to calendar"}
+        </button>
+      )}
+      {buildReplyDraft(event) && (
+        <button
+          onClick={handleCopyDraft}
+          className="px-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+        >
+          {copied ? "Copied ✓" : "Copy draft"}
+        </button>
+      )}
     </div>
   );
 }

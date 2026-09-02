@@ -1,6 +1,7 @@
 import { IJob, RemoteType, EmploymentType, ExperienceLevel, SalaryPeriod } from "../models/Job";
 import { JobMatchJobPayload } from "./jobMatchTypes";
 import { limitDescription } from "./jobNormalization";
+import { deriveJobRequirementsFromDescription } from "./jobRequirementExtraction";
 
 export const JOB_MATCH_MAX_DESCRIPTION_CHARS_DEFAULT = 10000;
 
@@ -30,13 +31,20 @@ type MatchJobInput = Pick<
   | "skills"
   | "technologies"
   | "jobUrl"
+  | "extractedRequirements"
 >;
 
 export function prepareMatchJob(job: MatchJobInput): JobMatchJobPayload {
+  const description = limitDescription(String(job.description || "").slice(0, getJobMatchMaxDescriptionChars()));
+  const requirements =
+    job.extractedRequirements && !job.extractedRequirements.unavailable
+      ? job.extractedRequirements
+      : deriveJobRequirementsFromDescription(description);
+
   return {
     title: job.title,
     companyName: job.companyName,
-    description: limitDescription(String(job.description || "").slice(0, getJobMatchMaxDescriptionChars())),
+    description,
     locations: job.locations ?? [],
     remoteType: job.remoteType as RemoteType,
     employmentType: job.employmentType as EmploymentType,
@@ -56,5 +64,8 @@ export function prepareMatchJob(job: MatchJobInput): JobMatchJobPayload {
     skills: job.skills ?? [],
     technologies: job.technologies ?? [],
     jobUrl: job.jobUrl ?? null,
+    educationRequirement:
+      requirements.education ?? null,
+    requirements,
   };
 }

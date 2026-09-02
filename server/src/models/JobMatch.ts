@@ -6,12 +6,23 @@ export type MatchLevel =
   | "partial_match"
   | "weak_match";
 
+export type MatchRecommendation = "apply" | "maybe" | "skip";
+
 export interface IJobMatch extends Document {
   user: mongoose.Types.ObjectId;
   job: mongoose.Types.ObjectId;
   aiModel: string;
   promptVersion: string;
+  /** Effective final score (0–100): 0.6*ai + 0.4*deterministic when AI present, else deterministic. */
   score: number;
+  /**
+   * (Phase 2, Step 1) Decomposed scores. Deterministic is always computed;
+   * aiScore is null when no AI analysis succeeded. finalScore is the effective
+   * displayed score and equals `score`. All are finite and clamped to 0–100.
+   */
+  deterministicScore: number;
+  aiScore: number | null;
+  finalScore: number;
   matchLevel: MatchLevel;
   summary: string;
   matchingSkills: string[];
@@ -28,8 +39,15 @@ export interface IJobMatch extends Document {
   salaryMatch: string;
   strengths: string[];
   weaknesses: string[];
-  recommendation: string;
+  /** (Phase 2, Step 1) Structured actionable gaps (AI-derived, additive). */
+  gaps: string[];
+  recommendation: MatchRecommendation;
   recommendationReason: string;
+  /** (Phase 2, Step 1) Lightweight context hashes for cache invalidation. */
+  profileVersion: string | null;
+  jobVersion: string | null;
+  /** (Phase 2, Step 1) Matching algorithm version (bump to invalidate old matches). */
+  algorithmVersion: string | null;
   analyzedAt: Date;
   expiresAt?: Date | null;
   createdAt: Date;
@@ -59,6 +77,24 @@ const jobMatchSchema = new Schema<IJobMatch>(
     score: {
       type: Number,
       required: true,
+      min: [0, "Score must be at least 0"],
+      max: [100, "Score must be at most 100"],
+    },
+    deterministicScore: {
+      type: Number,
+      default: null,
+      min: [0, "Score must be at least 0"],
+      max: [100, "Score must be at most 100"],
+    },
+    aiScore: {
+      type: Number,
+      default: null,
+      min: [0, "Score must be at least 0"],
+      max: [100, "Score must be at most 100"],
+    },
+    finalScore: {
+      type: Number,
+      default: null,
       min: [0, "Score must be at least 0"],
       max: [100, "Score must be at most 100"],
     },
@@ -127,9 +163,13 @@ const jobMatchSchema = new Schema<IJobMatch>(
       type: [String],
       default: [],
     },
+    gaps: {
+      type: [String],
+      default: [],
+    },
     recommendation: {
       type: String,
-      default: "",
+      default: "maybe",
     },
     recommendationReason: {
       type: String,
@@ -138,6 +178,18 @@ const jobMatchSchema = new Schema<IJobMatch>(
     analyzedAt: {
       type: Date,
       default: Date.now,
+    },
+    profileVersion: {
+      type: String,
+      default: null,
+    },
+    jobVersion: {
+      type: String,
+      default: null,
+    },
+    algorithmVersion: {
+      type: String,
+      default: null,
     },
     expiresAt: {
       type: Date,

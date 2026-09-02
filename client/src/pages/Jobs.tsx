@@ -3,6 +3,7 @@ import axios from "axios";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
 import JobMatchModal from "../components/JobMatchModal";
+import { validateHandoffUrl } from "../utils/handoffUrl";
 
 interface Job {
   _id: string;
@@ -188,7 +189,13 @@ function Jobs() {
   };
 
   const handleApply = (job: Job) => {
-    if (job.applyUrl) window.open(job.applyUrl, "_blank", "noopener,noreferrer");
+    const url = validateHandoffUrl(job.applyUrl);
+    if (url) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } else {
+      setTrackMsg(null);
+      setError("This job has no valid application URL, so it could not be opened.");
+    }
   };
 
   const handleTrackApplication = async (job: Job) => {

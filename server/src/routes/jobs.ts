@@ -1,6 +1,12 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { getJobs, discover, getJob } from "../controllers/jobs";
+import {
+  getJobs,
+  discover,
+  getJob,
+  runJobMaintenance,
+  runAutomaticDiscoveryHandler,
+} from "../controllers/jobs";
 import {
   analyzeMatch,
   getMatch,
@@ -9,9 +15,12 @@ import {
 import {
   getOpportunities,
   getOpportunity,
+  applyOpportunity,
   ingestJobsHandler,
 } from "../controllers/opportunity.controller";
 import { authenticate } from "../middleware/auth";
+import { requireRole } from "../middleware/authorize";
+import { Role } from "../types";
 
 const router = Router();
 
@@ -49,6 +58,24 @@ router.post("/ingest", ingestLimiter, ingestJobsHandler);
 // "opportunities" path is not swallowed by the job detail catch-all.
 router.get("/opportunities", getOpportunities);
 router.get("/opportunities/:id", getOpportunity);
+
+// Opportunity dashboard Apply compose. Creates/reuses the user's local
+// Application (status "saved") and returns the handoff/preparation payload
+// from the existing execution flow. Never advances status to "applied" here;
+// the explicit confirmation in POST /api/applications/:id/execution does.
+router.post("/opportunities/:id/apply", applyOpportunity);
+
+// Admin-only maintenance: soft-deactivate stale jobs. Not publicly accessible
+// (requires authentication + ADMIN role). Registered before "/:id".
+router.post("/maintenance/stale", requireRole(Role.ADMIN), runJobMaintenance);
+
+// Admin-only internal trigger for canonical/global automatic discovery. The n8n
+// scheduler calls this (not the per-user /discover). Registered before "/:id".
+router.post(
+  "/discovery/run",
+  requireRole(Role.ADMIN),
+  runAutomaticDiscoveryHandler
+);
 
 router.post("/:id/match", analyzeMatch);
 router.get("/:id/match", getMatch);

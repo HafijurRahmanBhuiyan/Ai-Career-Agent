@@ -385,7 +385,7 @@ describe("Gmail Sync", () => {
       string
     ];
     expect(to).toBe("notify@example.com");
-    expect(subject).toContain("interview invitation");
+    expect(subject).toContain("interview");
     expect(body).toContain("Acme");
   });
 
@@ -412,7 +412,7 @@ describe("Gmail Sync", () => {
     expect(mockSendMessage()).not.toHaveBeenCalled();
   });
 
-  it("does not self-notify on a non-milestone category", async () => {
+  it("notifies when a career event is detected from a non-milestone category", async () => {
     const { token, user } = await registerUser();
     const userId = (user as { id: string }).id;
     await connectGmail(userId);
@@ -433,7 +433,7 @@ describe("Gmail Sync", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(mockSendMessage()).not.toHaveBeenCalled();
+    expect(mockSendMessage()).toHaveBeenCalledTimes(1);
   });
 
 

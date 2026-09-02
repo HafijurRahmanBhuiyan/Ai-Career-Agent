@@ -1,6 +1,8 @@
 import { JobMatchProfilePayload, JobMatchJobPayload } from "./jobMatchTypes";
 import { MatchLevel } from "../models/JobMatch";
 import { matchLevelFromScore } from "../validators/jobMatch";
+import { computeSalaryOverlap, salaryOverlapToEarned } from "./jobSalaryMatch";
+import { computeEducationMatch } from "./jobEducationMatch";
 
 export interface DeterministicMatchSegments {
   skills: { earned: number; possible: number; note: string };
@@ -10,6 +12,8 @@ export interface DeterministicMatchSegments {
   remote: { earned: number; possible: number; note: string };
   employment: { earned: number; possible: number; note: string };
   experience: { earned: number; possible: number; note: string };
+  salary: { earned: number; possible: number; note: string };
+  education: { earned: number; possible: number; note: string };
 }
 
 export interface DeterministicMatchResult {
@@ -25,6 +29,7 @@ export interface DeterministicMatchResult {
   remoteMatch: string;
   employmentTypeMatch: string;
   salaryMatch: string;
+  educationMatch: string;
   recommendation: "apply" | "maybe" | "skip";
   recommendationReason: string;
   explanation: string[];
@@ -33,6 +38,10 @@ export interface DeterministicMatchResult {
 
 function norm(value: string | null | undefined): string {
   return (value || "").toLowerCase().trim();
+}
+
+function isFiniteNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function tokenize(values: string[]): Set<string> {
@@ -108,6 +117,33 @@ export function computeDeterministicMatch(
   const roleHit = roleTokenIntersection.length > 0;
   const keywordHit = roleKeywords.some((k) => norm(job.title).includes(norm(k)));
 
+  // Effective user salary range: the profile's salaryExpectation forms the
+  // core range, and jobSearchPreferences.salaryMinimum (introduced in Phase 1
+  // Step 3) acts as a hard floor when it is higher than salaryExpectation.min.
+  const salaryExpectation = profile.profile?.salaryExpectation;
+  const prefSalaryMin = profile.profile?.jobSearchPreferences?.salaryMinimum;
+  const userSalaryMin =
+    salaryExpectation?.min != null &&
+    prefSalaryMin != null &&
+    isFiniteNumber(prefSalaryMin)
+      ? Math.max(salaryExpectation.min, prefSalaryMin)
+      : salaryExpectation?.min ?? prefSalaryMin ?? null;
+  const userSalaryMax = salaryExpectation?.max ?? null;
+
+  const salaryResult = computeSalaryOverlap(
+    {
+      userMin: userSalaryMin,
+      userMax: userSalaryMax,
+      userCurrency: salaryExpectation?.currency ?? null,
+    },
+    {
+      jobMin: job.salary?.min ?? null,
+      jobMax: job.salary?.max ?? null,
+      jobCurrency: job.salary?.currency ?? null,
+      jobPeriod: job.salary?.period ?? null,
+    }
+  );
+
   const segments: DeterministicMatchSegments = {
     skills: {
       earned: matchingSkills.length,
@@ -147,6 +183,16 @@ export function computeDeterministicMatch(
       earned: 0,
       possible: 1,
       note: "No direct experience comparison performed",
+    },
+    salary: {
+      earned: 0,
+      possible: salaryResult.comparable ? 1 : 0,
+      note: salaryResult.note,
+    },
+    education: {
+      earned: 0,
+      possible: 0,
+      note: "No education requirement compared",
     },
   };
 
@@ -197,7 +243,7 @@ export function computeDeterministicMatch(
     };
   }
 
-  if (job.experienceLevel) {
+  if (job.experienceLevel || job.requirements?.experience?.years != null) {
     const userExp = profile.experience.reduce((acc, e) => {
       const p = profile.profile?.preferredRoles ?? [];
       const isRelevant = p.some((r) => r.toLowerCase().includes(e.position.toLowerCase()));
@@ -205,17 +251,39 @@ export function computeDeterministicMatch(
       return Math.max(acc, e.durationYears ?? 0);
     }, 0);
     const target = seniorityWeight(job.experienceLevel);
-    const experienceMatch = userExp >= target;
+    const requiredYears = job.requirements?.experience?.years ?? null;
+    const yearsMatch = requiredYears != null ? userExp >= requiredYears : true;
+    const levelMatch = !!job.experienceLevel ? userExp >= target : true;
+    const experienceMatch = yearsMatch && levelMatch;
+    const targetLevelLabel = job.experienceLevel
+      ? `the ${job.experienceLevel} level`
+      : "the experience level";
     segments.experience = {
       earned: experienceMatch ? 1 : 0,
       possible: 1,
       note: userExp > 0
         ? experienceMatch
-          ? `Your ${userExp.toFixed(1)} yrs relevant experience fits the ${job.experienceLevel} level`
-          : `Your ${userExp.toFixed(1)} yrs relevant experience may fall short of the ${job.experienceLevel} level`
+          ? `Your ${userExp.toFixed(1)} yrs relevant experience fits ${targetLevelLabel}${requiredYears != null ? ` and the ${requiredYears}+ yr requirement` : ""}`
+          : `Your ${userExp.toFixed(1)} yrs relevant experience may fall short of ${targetLevelLabel}${requiredYears != null ? ` or the ${requiredYears}+ yr requirement` : ""}`
         : "No relevant experience measured",
     };
   }
+
+  segments.salary = {
+    earned: salaryOverlapToEarned(salaryResult),
+    possible: salaryResult.comparable ? 1 : 0,
+    note: salaryResult.note,
+  };
+
+  const educationResult = computeEducationMatch(
+    profile.education,
+    job.educationRequirement
+  );
+  segments.education = {
+    earned: educationResult.comparable && educationResult.kind === "strong" ? 1 : 0,
+    possible: educationResult.comparable ? 1 : 0,
+    note: educationResult.note,
+  };
 
   const weights: Record<keyof DeterministicMatchSegments, number> = {
     skills: 0.32,
@@ -225,6 +293,8 @@ export function computeDeterministicMatch(
     remote: 0.1,
     employment: 0.06,
     experience: 0.06,
+    salary: 0.05,
+    education: 0.05,
   };
 
   let total = 0;
@@ -238,12 +308,7 @@ export function computeDeterministicMatch(
   const score = Math.round(Math.min(100, total * 100));
   const matchLevel = matchLevelFromScore(score);
 
-  const salaryMatch =
-    job.salary?.min != null && profile.profile?.salaryExpectation?.max != null
-      ? job.salary.min <= profile.profile.salaryExpectation.max
-        ? "Salary range is within your expectation"
-        : "Salary range is above your upper expectation"
-      : "No salary comparison performed";
+  const salaryMatch = salaryResult.note;
 
   const appliedTarget = job.skills.length > 0
     ? matchingSkills.length / job.skills.length
@@ -288,6 +353,7 @@ export function computeDeterministicMatch(
     remoteMatch: segments.remote.note,
     employmentTypeMatch: segments.employment.note,
     salaryMatch,
+    educationMatch: educationResult.note,
     recommendation,
     recommendationReason,
     explanation,

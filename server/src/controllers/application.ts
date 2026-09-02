@@ -23,7 +23,7 @@ import {
 } from "../services/followUpClassification";
 
 const JOB_POPULATE_FIELDS =
-  "title companyName location locations remoteType employmentType source";
+  "title companyName location locations remoteType employmentType source jobUrl applyUrl applyCapability";
 
 const isDuplicateKeyError = (error: unknown): boolean => {
   return (
@@ -133,8 +133,110 @@ export const getApplications = async (
       Application.countDocuments(filter),
     ]);
 
+    // Batch-load per-application detection summary + latest status event for
+    // the current page only (avoids an N+1 query over the page's applications).
+    const appIds = applications.map((app) => app._id);
+    const [detections, statusEvents, careerEventRows] = await Promise.all([
+      appIds.length > 0
+        ? CareerEmail.find({
+            user: userId,
+            application: { $in: appIds },
+            careerStatus: { $ne: null },
+          })
+            .sort({ careerStatusDetectedAt: -1 })
+            .select(
+              "application careerStatus careerStatusConfidence careerStatusDetectedAt autoStatusApplied autoStatusReason manualStatusApplied manualStatusAppliedAt manualStatusReason"
+            )
+            .lean()
+        : [],
+      appIds.length > 0
+        ? ApplicationEvent.find({
+            user: userId,
+            application: { $in: appIds },
+            type: "status_changed",
+          })
+            .sort({ eventDate: -1, createdAt: -1 })
+            .select("application title eventDate source")
+            .lean()
+        : [],
+      appIds.length > 0
+        ? CareerEmail.find({
+            user: userId,
+            application: { $in: appIds },
+            careerEvent: { $ne: null },
+          })
+            .sort({ receivedAt: -1 })
+            .select("application receivedAt careerEvent")
+            .lean()
+        : [],
+    ]);
+
+    const detectionByApp = new Map<string, (typeof detections)[number]>();
+    for (const d of detections) {
+      const key = String(d.application);
+      if (!detectionByApp.has(key)) {
+        detectionByApp.set(key, d);
+      }
+    }
+
+    const eventByApp = new Map<string, (typeof statusEvents)[number]>();
+    for (const e of statusEvents) {
+      const key = String(e.application);
+      if (!eventByApp.has(key)) {
+        eventByApp.set(key, e);
+      }
+    }
+
+    const careerEventByApp = new Map<string, (typeof careerEventRows)[number]>();
+    for (const row of careerEventRows) {
+      const key = String(row.application);
+      if (!careerEventByApp.has(key)) {
+        careerEventByApp.set(key, row);
+      }
+    }
+
+    const enriched = applications.map((app) => {
+      const safe = toSafeApplication(app);
+      const appId = String(app._id);
+      const detection = detectionByApp.get(appId);
+      const event = eventByApp.get(appId);
+      const careerRow = careerEventByApp.get(appId);
+      return {
+        ...safe,
+        careerEmailDetection: detection
+          ? {
+              id: String(detection._id),
+              careerStatus: detection.careerStatus,
+              careerStatusConfidence:
+                detection.careerStatusConfidence ?? null,
+              careerStatusDetectedAt: detection.careerStatusDetectedAt
+                ? detection.careerStatusDetectedAt.toISOString()
+                : null,
+              autoStatusApplied: detection.autoStatusApplied ?? false,
+              autoStatusReason: detection.autoStatusReason ?? null,
+              manualStatusApplied: detection.manualStatusApplied ?? false,
+              manualStatusAppliedAt: detection.manualStatusAppliedAt
+                ? detection.manualStatusAppliedAt.toISOString()
+                : null,
+              manualStatusReason: detection.manualStatusReason ?? null,
+            }
+          : null,
+        latestCareerEvent: careerRow?.careerEvent
+          ? serializeCareerEvent(careerRow.careerEvent)
+          : null,
+        latestStatusEvent: event
+          ? {
+              id: String(event._id),
+              title: event.title,
+              eventDate: event.eventDate.toISOString(),
+              source: event.source,
+            }
+          : null,
+      };
+    });
+
     res.status(200).json({
-      applications: applications.map(toSafeApplication),
+      applications: enriched,
       pagination: {
         page,
         limit,
@@ -334,6 +436,47 @@ function toSafeApplication<T extends object>(
 const isValidObjectId = (id: string): boolean => {
   return /^[0-9a-fA-F]{24}$/.test(id);
 };
+
+// Serializes the careerEvent subdocument for the dashboard. Only safe, extracted
+// fields are exposed; Dates are converted to ISO strings. Meeting URLs are
+// already restricted to http(s) at extraction and re-validated here.
+function serializeCareerEvent(event: unknown): Record<string, unknown> {
+  const record = (event || {}) as Record<string, unknown>;
+  const isIso = (value: unknown): value is Date =>
+    value instanceof Date && !Number.isNaN(value.getTime());
+
+  const safe: Record<string, unknown> = {};
+  for (const key of [
+    "type",
+    "confidence",
+    "title",
+    "company",
+    "role",
+    "timezone",
+    "durationMinutes",
+    "interviewerName",
+    "interviewerEmail",
+    "meetingUrl",
+    "meetingPlatform",
+    "location",
+    "phone",
+    "actionRequired",
+    "actionText",
+    "candidateResponseRequired",
+    "evidence",
+  ]) {
+    const value = record[key];
+    if (value !== undefined && value !== null && value !== "") {
+      safe[key] = value;
+    }
+  }
+  if (isIso(record.scheduledAt)) safe.scheduledAt = record.scheduledAt.toISOString();
+  if (isIso(record.deadlineAt)) safe.deadlineAt = record.deadlineAt.toISOString();
+  if (isIso(record.detectedAt)) safe.detectedAt = record.detectedAt.toISOString();
+  if (record.deadlineTimezone != null) safe.deadlineTimezone = record.deadlineTimezone;
+
+  return safe;
+}
 
 interface EmailLike {
   _id: unknown;

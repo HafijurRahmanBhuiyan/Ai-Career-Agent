@@ -11,6 +11,42 @@ export type CareerEmailCategory =
   | "networking"
   | "unrelated";
 
+export type DetectedCareerStatus = "screening" | "interview" | "offer" | "rejected";
+
+export type CareerEventType =
+  | "interview"
+  | "screening"
+  | "assessment"
+  | "shortlist"
+  | "offer"
+  | "rejection"
+  | "recruiter_contact"
+  | "application_update";
+
+export interface CareerEvent {
+  type?: CareerEventType;
+  confidence?: number | null;
+  title?: string | null;
+  company?: string | null;
+  role?: string | null;
+  scheduledAt?: string | null;
+  timezone?: string | null;
+  durationMinutes?: number | null;
+  interviewerName?: string | null;
+  interviewerEmail?: string | null;
+  meetingUrl?: string | null;
+  meetingPlatform?: string | null;
+  location?: string | null;
+  phone?: string | null;
+  deadlineAt?: string | null;
+  deadlineTimezone?: string | null;
+  actionRequired?: boolean | null;
+  actionText?: string | null;
+  candidateResponseRequired?: boolean | null;
+  evidence?: string | null;
+  detectedAt?: string | null;
+}
+
 export type ApplicationStatus =
   | "saved"
   | "applied"
@@ -48,6 +84,15 @@ export interface CareerEmail {
   application?: CareerEmailLinkedApplication | null;
   classificationStatus?: "classified" | "failed";
   classifiedAt?: string;
+  careerStatus?: DetectedCareerStatus | null;
+  careerStatusConfidence?: number | null;
+  careerStatusDetectedAt?: string | null;
+  autoStatusApplied?: boolean;
+  autoStatusReason?: string | null;
+  manualStatusApplied?: boolean;
+  manualStatusAppliedAt?: string | null;
+  manualStatusReason?: string | null;
+  careerEvent?: CareerEvent | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,4 +120,6 @@ export interface GmailSyncResult {
   classified: number;
   skipped: number;
   failed: number;
+  autoUpdated: number;
+  careerEvents: number;
 }

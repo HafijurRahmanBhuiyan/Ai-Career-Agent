@@ -44,6 +44,8 @@ export interface NormalizedJob {
   source: string;
   sourceJobId: string;
   fingerprint?: string;
+  /** Stable canonical identity used to merge the same vacancy across sources. */
+  canonicalFingerprint?: string;
   title: string;
   companyName: string;
   companyLogo?: string | null;
@@ -64,6 +66,8 @@ export interface NormalizedJob {
   postedAt?: Date | null;
   expiresAt?: Date | null;
   rawSource?: Record<string, unknown>;
+  /** Free-form metadata associated with this normalized job (e.g. source attribution). */
+  metadata?: Record<string, unknown>;
 }
 
 export interface JobSourceResult {

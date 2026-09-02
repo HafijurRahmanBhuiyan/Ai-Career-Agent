@@ -13,6 +13,14 @@ import {
   buildEmailUserMessage,
 } from "./emailPrompts";
 import {
+  RESUME_EVIDENCE_SYSTEM_PROMPT,
+  buildResumeEvidenceUserMessage,
+} from "./resumeEvidencePrompts";
+import {
+  JOB_REQUIREMENTS_SYSTEM_PROMPT,
+  buildJobRequirementsUserMessage,
+} from "./jobRequirementPrompts";
+import {
   APPLICATION_SUMMARY_SYSTEM_PROMPT,
   buildApplicationSummaryUserMessage,
   ApplicationSummaryInput,
@@ -92,6 +100,63 @@ export class ClaudeService {
         userMessage,
       },
       provider
+    );
+
+    return this.parseResponse(rawResponse.text);
+  }
+
+  /**
+   * (Phase 2, Step 1) Job-match analysis with cross-provider fallback
+   * (Claude -> Gemini -> OpenAI -> throw). Uses the existing AI router
+   * fallback so a single provider outage does not fail job matching.
+   */
+  async analyzeJobMatchFallback(
+    profile: JobMatchProfilePayload,
+    job: JobMatchJobPayload,
+    preferredProvider?: AIProvider
+  ): Promise<unknown> {
+    const userMessage = buildJobMatchUserMessage(profile, job);
+
+    const rawResponse = await analyzeWithAIFallback(
+      {
+        systemPrompt: JOB_MATCH_SYSTEM_PROMPT,
+        userMessage,
+      },
+      preferredProvider
+    );
+
+    return this.parseResponse(rawResponse.text);
+  }
+
+  async analyzeResumeEvidence(
+    text: string,
+    preferredProvider?: AIProvider
+  ): Promise<unknown> {
+    const userMessage = buildResumeEvidenceUserMessage(text);
+
+    const rawResponse = await analyzeWithAIFallback(
+      {
+        systemPrompt: RESUME_EVIDENCE_SYSTEM_PROMPT,
+        userMessage,
+      },
+      preferredProvider
+    );
+
+    return this.parseResponse(rawResponse.text);
+  }
+
+  async analyzeJobRequirements(
+    description: string,
+    preferredProvider?: AIProvider
+  ): Promise<unknown> {
+    const userMessage = buildJobRequirementsUserMessage(description);
+
+    const rawResponse = await analyzeWithAIFallback(
+      {
+        systemPrompt: JOB_REQUIREMENTS_SYSTEM_PROMPT,
+        userMessage,
+      },
+      preferredProvider
     );
 
     return this.parseResponse(rawResponse.text);

@@ -42,6 +42,7 @@ export interface OpportunityMatch {
   remoteMatch: string;
   employmentTypeMatch: string;
   salaryMatch: string;
+  educationMatch: string;
   recommendation: "apply" | "maybe" | "skip";
   recommendationReason: string;
   explanation: string[];
@@ -58,6 +59,7 @@ export interface Opportunity {
   match: OpportunityMatch;
   applyCapability: ApplyCapability;
   alreadyApplied: boolean;
+  applicationStatus: import("./application").ApplicationStatus | null;
 }
 
 export interface OpportunityFeedResponse {

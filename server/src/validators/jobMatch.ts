@@ -5,6 +5,23 @@ export const JOB_MATCH_STRONG_MIN = 90;
 export const JOB_MATCH_GOOD_MIN = 75;
 export const JOB_MATCH_PARTIAL_MIN = 60;
 
+/**
+ * Clamp any raw score into the finite, valid 0–100 range.
+ *
+ * The AI service must never be trusted to return a sane score. NaN, Infinity,
+ * -Infinity, negatives, and values above 100 are coerced into the valid range
+ * at every persistence boundary so the stored/final score is always
+ * reproducible and never corrupts the schema (which also enforces min/max).
+ */
+export function clampMatchScore(value: unknown, fallback = 0): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return typeof fallback === "number" && Number.isFinite(fallback)
+      ? Math.max(0, Math.min(100, fallback))
+      : 0;
+  }
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
 export const jobMatchAIOutputSchema = z.object({
   score: z
     .number()
@@ -26,6 +43,7 @@ export const jobMatchAIOutputSchema = z.object({
   salaryMatch: z.string().default(""),
   strengths: z.array(z.string()).default([]),
   weaknesses: z.array(z.string()).default([]),
+  gaps: z.array(z.string()).default([]),
   recommendation: z.enum(["apply", "maybe", "skip"]).default("maybe"),
   recommendationReason: z.string().default(""),
 });
@@ -37,6 +55,21 @@ export function matchLevelFromScore(score: number): MatchLevel {
   if (score >= JOB_MATCH_GOOD_MIN) return "good_match";
   if (score >= JOB_MATCH_PARTIAL_MIN) return "partial_match";
   return "weak_match";
+}
+
+/**
+ * Derive a recommendation deterministically from a final score when the AI did
+ * not supply one (or its value was invalid). Mirrors the deterministic logic.
+ */
+export function deriveRecommendationFromScore(
+  score: number,
+  appliedRatio?: number
+): "apply" | "maybe" | "skip" {
+  if (score >= 75 || (appliedRatio !== undefined && appliedRatio >= 0.5)) {
+    return "apply";
+  }
+  if (score < 50) return "skip";
+  return "maybe";
 }
 
 export function validateJobMatchAIOutput(data: unknown): {
