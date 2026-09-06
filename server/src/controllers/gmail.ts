@@ -40,22 +40,40 @@ export const callback = async (
   try {
     const { code, state } = req.query;
 
-    if (!code || !state || typeof code !== "string" || typeof state !== "string") {
+    if (
+      !code ||
+      !state ||
+      typeof code !== "string" ||
+      typeof state !== "string"
+    ) {
       return next(new AppError("Missing authorization code or state", 400));
     }
 
     const stateValidation = validateOAuthState(state);
+
     if (!stateValidation.valid || !stateValidation.userId) {
-      return next(new AppError(stateValidation.error || "Invalid OAuth state", 400));
+      return next(
+        new AppError(
+          stateValidation.error || "Invalid OAuth state",
+          400
+        )
+      );
     }
 
-    if (stateValidation.userId !== req.user!.id) {
-      return next(new AppError("OAuth state does not belong to the authenticated user", 400));
-    }
+    /*
+     * Google redirects the user's browser directly to this callback URL.
+     * Therefore, the original Authorization header/JWT is not available here
+     * and req.user must not be used.
+     *
+     * The OAuth state has already been validated server-side and contains
+     * the user ID of the user who initiated the Gmail connection.
+     */
+    const userId = stateValidation.userId;
 
-    await gmailService.completeConnection(req.user!.id, code);
+    await gmailService.completeConnection(userId, code);
 
     const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+
     res.redirect(`${clientUrl}/dashboard/integrations?gmail=connected`);
   } catch (error) {
     next(error);
@@ -95,11 +113,13 @@ export const sync = async (
 ) => {
   try {
     const parsed = syncQuerySchema.safeParse(req.query);
+
     if (!parsed.success) {
       const details = parsed.error.issues.map((issue) => ({
         field: issue.path.join("."),
         message: issue.message,
       }));
+
       return res.status(422).json({
         error: "Validation failed",
         statusCode: 422,
@@ -111,6 +131,7 @@ export const sync = async (
       req.user!.id,
       parsed.data.max
     );
+
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -128,6 +149,7 @@ export const syncAll = async (
     });
 
     const results: { user: string; ok: boolean; error?: string }[] = [];
+
     let synced = 0;
     let careerEmails = 0;
     let classified = 0;
@@ -135,13 +157,20 @@ export const syncAll = async (
     let failed = 0;
     let autoUpdated = 0;
     let careerEvents = 0;
+
     const errors: { user: string; message: string }[] = [];
 
     for (const connection of connections) {
       const userId = String(connection.user);
+
       try {
         const result = await gmailService.syncEmails(userId);
-        results.push({ user: userId, ok: true });
+
+        results.push({
+          user: userId,
+          ok: true,
+        });
+
         synced += result.synced;
         careerEmails += result.careerEmails;
         classified += result.classified;
@@ -152,8 +181,17 @@ export const syncAll = async (
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Unknown error";
-        errors.push({ user: userId, message });
-        results.push({ user: userId, ok: false, error: message });
+
+        errors.push({
+          user: userId,
+          message,
+        });
+
+        results.push({
+          user: userId,
+          ok: false,
+          error: message,
+        });
       }
     }
 
@@ -180,11 +218,13 @@ export const listEmails = async (
 ) => {
   try {
     const parsed = emailListQuerySchema.safeParse(req.query);
+
     if (!parsed.success) {
       const details = parsed.error.issues.map((issue) => ({
         field: issue.path.join("."),
         message: issue.message,
       }));
+
       return res.status(422).json({
         error: "Validation failed",
         statusCode: 422,
@@ -192,7 +232,13 @@ export const listEmails = async (
       });
     }
 
-    const { page, limit, category, applicationStatus, sort } = parsed.data;
+    const {
+      page,
+      limit,
+      category,
+      applicationStatus,
+      sort,
+    } = parsed.data;
 
     const result = await gmailService.listEmails(req.user!.id, {
       page,
@@ -226,7 +272,10 @@ export const getEmail = async (
       req.user!.id,
       String(req.params.id)
     );
-    res.status(200).json({ email: toSafeEmail(email) });
+
+    res.status(200).json({
+      email: toSafeEmail(email),
+    });
   } catch (error) {
     next(error);
   }
@@ -239,11 +288,13 @@ export const applyStatus = async (
 ) => {
   try {
     const parsed = applyStatusSchema.safeParse(req.body);
+
     if (!parsed.success) {
       const details = parsed.error.issues.map((issue) => ({
         field: issue.path.join("."),
         message: issue.message,
       }));
+
       return res.status(422).json({
         error: "Validation failed",
         statusCode: 422,
@@ -255,18 +306,28 @@ export const applyStatus = async (
     const emailId = String(req.params.id);
 
     if (!Types.ObjectId.isValid(emailId)) {
-      return next(new AppError("Email intelligence not found", 404));
+      return next(
+        new AppError("Email intelligence not found", 404)
+      );
     }
 
-    const email = await CareerEmail.findOne({ _id: emailId, user: userId });
+    const email = await CareerEmail.findOne({
+      _id: emailId,
+      user: userId,
+    });
 
     if (!email) {
-      return next(new AppError("Email intelligence not found", 404));
+      return next(
+        new AppError("Email intelligence not found", 404)
+      );
     }
 
     if (!email.application) {
       return next(
-        new AppError("This email is not linked to a tracked application", 400)
+        new AppError(
+          "This email is not linked to a tracked application",
+          400
+        )
       );
     }
 
@@ -276,13 +337,15 @@ export const applyStatus = async (
     });
 
     if (!application) {
-      return next(new AppError("Linked application not found", 404));
+      return next(
+        new AppError("Linked application not found", 404)
+      );
     }
 
     const target = parsed.data.status;
 
-    // Server-side only: never trust the client to bypass detection guards. The
-    // manual flow may only apply hiring stages Gmail detection itself derives.
+    // Server-side only: never trust the client to bypass detection guards.
+    // The manual flow may only apply hiring stages Gmail detection itself derives.
     if (!isDetectedStatusTarget(target)) {
       return next(
         new AppError(
@@ -300,10 +363,14 @@ export const applyStatus = async (
 
     // Idempotent: applying the already-current status records the manual
     // metadata but never mutates the application or creates another event.
-    // Checked before the transition guard because same-status is a no-op, not
-    // an invalid forward move.
+    // Checked before the transition guard because same-status is a no-op,
+    // not an invalid forward move.
     if (application.status === target) {
-      await CareerEmail.updateOne({ _id: email._id }, { $set: manualMetadata });
+      await CareerEmail.updateOne(
+        { _id: email._id },
+        { $set: manualMetadata }
+      );
+
       return res.status(200).json({
         application: toSafeApplication(application),
         unchanged: true,
@@ -321,12 +388,17 @@ export const applyStatus = async (
     }
 
     application.status = target;
+
     await application.save();
 
-    await CareerEmail.updateOne({ _id: email._id }, { $set: manualMetadata });
+    await CareerEmail.updateOne(
+      { _id: email._id },
+      { $set: manualMetadata }
+    );
 
-    // Exactly one status_changed event per transition. createStatusChangedEvent
-    // is only called when the status actually changed, so re-posts are no-ops.
+    // Exactly one status_changed event per transition.
+    // createStatusChangedEvent is only called when the status actually changed,
+    // so re-posts are no-ops.
     await createStatusChangedEvent(
       userId,
       String(application._id),
@@ -344,10 +416,18 @@ export const applyStatus = async (
 
 function toSafeEmail(email: unknown): Record<string, unknown> {
   const record = email as Record<string, unknown>;
-  const { _id, user, rawMetadata, ...safe } = record;
+
+  const {
+    _id,
+    user,
+    rawMetadata,
+    ...safe
+  } = record;
+
   void user;
   void rawMetadata;
   void _id;
+
   return {
     ...safe,
     id: _id,

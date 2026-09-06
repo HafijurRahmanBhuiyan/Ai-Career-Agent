@@ -19,7 +19,7 @@ import { applyStatusSchema } from "../validators/gmail";
 const router = Router();
 
 router.get("/connect", authenticate, connect);
-router.get("/callback", authenticate, callback);
+router.get("/callback", callback);
 router.get("/status", authenticate, getStatus);
 router.post("/disconnect", authenticate, disconnect);
 router.post("/sync", authenticate, sync);
