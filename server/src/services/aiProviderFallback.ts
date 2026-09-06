@@ -60,8 +60,7 @@ const PROVIDER_ORDER: AIProvider[] = [
   "claude",
   "gemini",
   "openai",
-  "gemini-free",
-  "gemini-flash-lite",
+
 ];
 
 // Categories that indicate a capacity/provider-side problem and therefore
