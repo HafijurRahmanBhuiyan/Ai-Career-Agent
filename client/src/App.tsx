@@ -5,6 +5,8 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Profile from "./pages/Profile";
+import MakeCV from "./pages/MakeCV";
 import GitHubIntegrations from "./pages/GitHubIntegrations";
 import ProfessionalContent from "./pages/ProfessionalContent";
 import Jobs from "./pages/Jobs";
@@ -30,6 +32,22 @@ function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/make-cv"
+          element={
+            <ProtectedRoute>
+              <MakeCV />
             </ProtectedRoute>
           }
         />
