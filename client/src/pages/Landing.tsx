@@ -49,7 +49,11 @@ function Landing() {
           </a>
         </div>
 
-        <div id="features" className="mt-32 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+        <div id="features" className="mt-32 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
+          <FeatureCard
+            title="ATS-Friendly CV Making"
+            description="Build optimized, ATS-compliant resumes tailored to each job with AI-powered formatting."
+          />
           <FeatureCard
             title="GitHub Analysis"
             description="Auto-detect new projects and generate professional LinkedIn posts with AI."

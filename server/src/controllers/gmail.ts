@@ -74,7 +74,7 @@ export const callback = async (
 
     const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
-    res.redirect(`${clientUrl}/dashboard/integrations?gmail=connected`);
+    res.redirect(`${clientUrl}/dashboard/connections?gmail=connected`);
   } catch (error) {
     next(error);
   }

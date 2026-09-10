@@ -1,20 +1,52 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+export interface IWorkExperience {
+  company: string;
+  designation: string;
+  location: string;
+  startDate: string;
+  endDate: string;
+  current: boolean;
+  description: string;
+  highlights: string[];
+}
+
+export interface IEducation {
+  level: "ssc" | "hsc" | "bachelor" | "master";
+  institution: string;
+  degree: string;
+  fieldOfStudy: string;
+  session: string;
+  passingYear: string;
+  gpa: string;
+  cgpa: string;
+  startDate: string;
+  endDate: string;
+  certificateFileName: string | null;
+  certificateFileId: string | null;
+}
+
 export interface IProfile extends Document {
   user: mongoose.Types.ObjectId;
   fullName?: string;
+  email?: string;
   headline?: string;
   summary?: string;
   phone?: string;
   location?: string;
-  preferredRoles: string[];
-  preferredLocations: string[];
-  workPreference?: string;
+  skills: string[];
   salaryExpectation?: {
     min?: number;
     max?: number;
     currency?: string;
   };
+  workExperience: IWorkExperience[];
+  education: IEducation[];
+  cvFileName?: string;
+  cvFileId?: string;
+  preferredRoles: string[];
+  preferredLocations: string[];
+  workPreference?: string;
   jobSearchPreferences?: {
     roles: string[];
     locations: string[];
@@ -24,10 +56,6 @@ export interface IProfile extends Document {
   };
   notificationEmail?: string;
   gmailNotifyEnabled?: boolean;
-  // Phase 2 Step 5: when true, high-confidence Gmail-detected hiring stages
-  // (screening/interview/offer/rejected) advance the linked application status
-  // automatically. Defaults to off; application status changes require the
-  // explicit approval flow otherwise.
   gmailAutoStatusEnabled?: boolean;
   notificationsSeenAt?: Date;
   createdAt: Date;
@@ -46,6 +74,11 @@ const profileSchema = new Schema<IProfile>(
       type: String,
       trim: true,
       maxlength: [200, "Full name must be 200 characters or less"],
+    },
+    email: {
+      type: String,
+      trim: true,
+      maxlength: [320, "Email must be 320 characters or less"],
     },
     headline: {
       type: String,
@@ -66,6 +99,56 @@ const profileSchema = new Schema<IProfile>(
       type: String,
       trim: true,
       maxlength: [200, "Location must be 200 characters or less"],
+    },
+    skills: {
+      type: [String],
+      default: [],
+    },
+    workExperience: [
+      new Schema(
+        {
+          company: { type: String, trim: true, default: "" },
+          designation: { type: String, trim: true, default: "" },
+          location: { type: String, trim: true, default: "" },
+          startDate: { type: String, trim: true, default: "" },
+          endDate: { type: String, trim: true, default: "" },
+          current: { type: Boolean, default: false },
+          description: { type: String, trim: true, default: "" },
+          highlights: { type: [String], default: [] },
+        },
+        { _id: false }
+      ),
+    ],
+    education: [
+      new Schema(
+        {
+          level: {
+            type: String,
+            enum: ["ssc", "hsc", "bachelor", "master"],
+            required: true,
+          },
+          institution: { type: String, trim: true, default: "" },
+          degree: { type: String, trim: true, default: "" },
+          fieldOfStudy: { type: String, trim: true, default: "" },
+          session: { type: String, trim: true, default: "" },
+          passingYear: { type: String, trim: true, default: "" },
+          gpa: { type: String, trim: true, default: "" },
+          cgpa: { type: String, trim: true, default: "" },
+          startDate: { type: String, trim: true, default: "" },
+          endDate: { type: String, trim: true, default: "" },
+          certificateFileName: { type: String, default: null },
+          certificateFileId: { type: String, default: null },
+        },
+        { _id: false }
+      ),
+    ],
+    cvFileName: {
+      type: String,
+      default: null,
+    },
+    cvFileId: {
+      type: String,
+      default: null,
     },
     preferredRoles: {
       type: [String],

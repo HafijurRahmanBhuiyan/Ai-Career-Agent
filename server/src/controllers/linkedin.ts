@@ -40,7 +40,7 @@ export const callback = async (
     await linkedInService.completeConnection(stateValidation.userId, code);
 
     const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-    res.redirect(`${clientUrl}/dashboard/integrations?linkedin=connected`);
+    res.redirect(`${clientUrl}/dashboard/connections?linkedin=connected`);
   } catch (error) {
     next(error);
   }

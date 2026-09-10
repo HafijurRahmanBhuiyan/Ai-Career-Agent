@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import MakeCV from "./pages/MakeCV";
 import GitHubIntegrations from "./pages/GitHubIntegrations";
+import Connections from "./pages/Connections";
 import ProfessionalContent from "./pages/ProfessionalContent";
 import Jobs from "./pages/Jobs";
 import JobMatches from "./pages/JobMatches";
@@ -56,6 +57,14 @@ function App() {
           element={
             <ProtectedRoute>
               <GitHubIntegrations />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/connections"
+          element={
+            <ProtectedRoute>
+              <Connections />
             </ProtectedRoute>
           }
         />

@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import axios from "axios";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
-import { GmailStatus, GmailSyncResult } from "../types/careerEmail";
 import { getErrorMessage } from "../utils/apiError";
 
 interface GitHubStatus {
@@ -143,21 +142,12 @@ function GitHubIntegrations() {
     null
   );
   const [linkedInLoading, setLinkedInLoading] = useState(true);
-  const [linkedInConnectLoading, setLinkedInConnectLoading] = useState(false);
   const [linkedInContent, setLinkedInContent] = useState("");
   const [linkedInPreviewLoading, setLinkedInPreviewLoading] = useState(false);
   const [linkedInPublishing, setLinkedInPublishing] = useState(false);
   const [publishResult, setPublishResult] =
     useState<LinkedInPublishResult | null>(null);
   const [linkedInError, setLinkedInError] = useState<string | null>(null);
-
-  const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null);
-  const [gmailLoading, setGmailLoading] = useState(true);
-  const [gmailSyncLoading, setGmailSyncLoading] = useState(false);
-  const [gmailSyncResult, setGmailSyncResult] = useState<GmailSyncResult | null>(
-    null
-  );
-  const [gmailError, setGmailError] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -182,65 +172,7 @@ function GitHubIntegrations() {
     fetchStatus();
   }, [searchParams, fetchStatus]);
 
-  useEffect(() => {
-    if (searchParams.get("gmail") === "connected") {
-      fetchGmailStatus();
-    }
-  }, [searchParams]);
-
-  const fetchGmailStatus = async () => {
-    try {
-      const res = await api.get<GmailStatus>(`${API_BASE}/gmail/status`);
-      setGmailStatus(res.data);
-    } catch {
-      setGmailError("Failed to check Gmail connection status");
-    } finally {
-      setGmailLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchGmailStatus();
-  }, []);
-
-  const handleGmailConnect = async () => {
-    try {
-      const res = await api.get<{ authorizeUrl: string }>(
-        `${API_BASE}/gmail/connect`
-      );
-      window.location.href = res.data.authorizeUrl;
-    } catch {
-      setGmailError("Failed to initiate Gmail connection");
-    }
-  };
-
-  const handleGmailDisconnect = async () => {
-    try {
-      await api.post(`${API_BASE}/gmail/disconnect`);
-      setGmailStatus({ connected: false });
-      setGmailSyncResult(null);
-    } catch {
-      setGmailError("Failed to disconnect Gmail");
-    }
-  };
-
-  const handleGmailSync = async () => {
-    setGmailSyncLoading(true);
-    setGmailError(null);
-    try {
-      const res = await api.post<GmailSyncResult>(`${API_BASE}/gmail/sync`);
-      setGmailSyncResult(res.data);
-      fetchGmailStatus();
-    } catch (err: unknown) {
-      setGmailError(
-        getErrorMessage(err, "Failed to sync Gmail career emails")
-      );
-    } finally {
-      setGmailSyncLoading(false);
-    }
-  };
-
-    const fetchAIProviders = async () => {
+  const fetchAIProviders = async () => {
     try {
       const res = await api.get<{
         providers: AIProviderOption[];
@@ -302,33 +234,6 @@ function GitHubIntegrations() {
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to update repository approval"));
-    }
-  };
-
-  const handleConnectLinkedIn = async () => {
-    setLinkedInError(null);
-    setLinkedInConnectLoading(true);
-    try {
-      const res = await api.get<{ authorizeUrl: string }>(
-        `${API_BASE}/linkedin/connect`
-      );
-      window.location.assign(res.data.authorizeUrl);
-    } catch (err: unknown) {
-      setLinkedInConnectLoading(false);
-      setLinkedInError(
-        getErrorMessage(err, "Failed to start LinkedIn connection")
-      );
-    }
-  };
-
-  const handleDisconnectLinkedIn = async () => {
-    setLinkedInError(null);
-    try {
-      await api.post(`${API_BASE}/linkedin/disconnect`);
-      setLinkedInStatus({ connected: false });
-      setPublishResult(null);
-    } catch (err: unknown) {
-      setLinkedInError(getErrorMessage(err, "Failed to disconnect LinkedIn"));
     }
   };
 
@@ -412,34 +317,6 @@ function GitHubIntegrations() {
       setImportedRepos(res.data.repositories);
     } catch {
       setError("Failed to fetch imported repositories");
-    }
-  };
-
-  const handleConnect = async () => {
-    try {
-      const res = await api.get<{ authorizeUrl: string }>(
-        `${API_BASE}/github/connect`
-      );
-      window.location.href = res.data.authorizeUrl;
-    } catch {
-      setError("Failed to initiate GitHub connection");
-    }
-  };
-
-  const handleDisconnect = async () => {
-    try {
-      await api.post(`${API_BASE}/github/disconnect`);
-      setStatus({ connected: false });
-      setRepos([]);
-      setImportedRepos([]);
-      setSelectedRepo(null);
-      setAnalysis(null);
-      setAnalysisHistory([]);
-      setLinkedInContent("");
-      setPublishResult(null);
-      setLinkedInError(null);
-    } catch {
-      setError("Failed to disconnect GitHub");
     }
   };
 
@@ -592,10 +469,18 @@ function GitHubIntegrations() {
       <div className="max-w-7xl mx-auto">
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-slate-900">
-              GitHub Integration
+              GitHub Projects
             </h1>
             <p className="text-slate-500 mt-1">
-              Connect your GitHub account to import and analyze your repositories
+              Import and analyze your GitHub repositories. Manage your GitHub
+              connection from the{" "}
+              <Link
+                to="/dashboard/connections"
+                className="text-blue-600 hover:underline"
+              >
+                Connections
+              </Link>{" "}
+              page.
             </p>
           </div>
 
@@ -608,155 +493,18 @@ function GitHubIntegrations() {
             </div>
           )}
 
-          <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">
-              Connection Status
-            </h2>
-            {status?.connected ? (
-              <div className="flex items-center gap-4">
-                <img
-                  src={status.github?.avatarUrl}
-                  alt={status.github?.username}
-                  className="w-12 h-12 rounded-full border border-slate-200"
-                />
-                <div>
-                  <p className="text-sm font-medium text-slate-900">
-                    {status.github?.username}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Connected {new Date(status.github?.connectedAt || "").toLocaleDateString()}
-                  </p>
-                </div>
-                <button
-                  onClick={handleDisconnect}
-                  className="ml-auto px-4 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                >
-                  Disconnect
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
-                  <span className="text-slate-400 text-lg">GH</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-900">
-                    Not connected
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Connect your GitHub account to import repositories
-                  </p>
-                </div>
-                <button
-                  onClick={handleConnect}
-                  className="ml-auto px-4 py-2 text-sm text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors"
-                >
-                  Connect GitHub
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">
-              Gmail / Career Email Intelligence
-            </h2>
-            {gmailLoading ? (
-              <p className="text-sm text-slate-400">Checking connection...</p>
-            ) : gmailStatus?.connected ? (
-              <div>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
-                    <span className="text-slate-400 text-lg">@</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">
-                      {gmailStatus.gmail?.email}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      Connected{" "}
-                      {new Date(
-                        gmailStatus.gmail?.connectedAt || ""
-                      ).toLocaleDateString()}
-                      {gmailStatus.gmail?.lastSyncedAt &&
-                        ` · Last synced ${new Date(
-                          gmailStatus.gmail.lastSyncedAt
-                        ).toLocaleString()}`}
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleGmailDisconnect}
-                    className="ml-auto px-4 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                  >
-                    Disconnect
-                  </button>
-                </div>
-
-                <div className="mt-5 border-t border-slate-100 pt-5">
-                  <p className="text-xs text-slate-500 mb-3">
-                    Run a sync to read career-related emails from your Gmail and
-                    classify them with AI. Detection is read-only; application
-                    status changes automatically only for high-confidence
-                    signals when enabled in Settings.
-                  </p>
-                  <button
-                    onClick={handleGmailSync}
-                    disabled={gmailSyncLoading}
-                    className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {gmailSyncLoading ? "Syncing..." : "Sync Gmail"}
-                  </button>
-                  {gmailSyncResult && (
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded">
-                        Synced: {gmailSyncResult.synced}
-                      </span>
-                      <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded">
-                        Career emails: {gmailSyncResult.careerEmails}
-                      </span>
-                      <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
-                        Classified: {gmailSyncResult.classified}
-                      </span>
-                      {gmailSyncResult.autoUpdated > 0 && (
-                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded font-medium">
-                          Auto-updated: {gmailSyncResult.autoUpdated}
-                        </span>
-                      )}
-                      <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded">
-                        Skipped: {gmailSyncResult.skipped}
-                      </span>
-                      <span className="px-2 py-1 bg-red-50 text-red-700 rounded">
-                        Failed: {gmailSyncResult.failed}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
-                  <span className="text-slate-400 text-lg">@</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-slate-900">
-                    Not connected
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Connect your Gmail (read-only) to classify career emails
-                  </p>
-                </div>
-                <button
-                  onClick={handleGmailConnect}
-                  className="ml-auto px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Connect Gmail
-                </button>
-              </div>
-            )}
-            {gmailError && (
-              <div className="mt-4 text-sm text-red-600">{gmailError}</div>
-            )}
-          </div>
+          {!status?.connected && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-sm">
+              Your GitHub account is not connected. Connect it from the{" "}
+              <Link
+                to="/dashboard/connections"
+                className="font-medium underline"
+              >
+                Connections
+              </Link>{" "}
+              page to import and analyze repositories.
+            </div>
+          )}
 
           {status?.connected && (
             <>
@@ -1154,22 +902,16 @@ function GitHubIntegrations() {
                               Loading…
                             </span>
                           ) : linkedInStatus?.connected ? (
-                            <button
-                              onClick={handleDisconnectLinkedIn}
-                              className="px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                            >
-                              Disconnect
-                            </button>
+                            <span className="px-2 py-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full">
+                              Connected
+                            </span>
                           ) : (
-                            <button
-                              onClick={handleConnectLinkedIn}
-                              disabled={linkedInConnectLoading}
-                              className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                            <Link
+                              to="/dashboard/connections"
+                              className="px-3 py-1.5 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
                             >
-                              {linkedInConnectLoading
-                                ? "Connecting…"
-                                : "Connect LinkedIn"}
-                            </button>
+                              Connect in Connections
+                            </Link>
                           )}
                         </div>
                       </div>
@@ -1262,7 +1004,14 @@ function GitHubIntegrations() {
                       {selectedRepo?.approvedForProfessionalUse &&
                         !linkedInStatus?.connected && (
                           <p className="mt-2 text-xs text-slate-400 text-right">
-                            Connect LinkedIn to enable posting.
+                            Connect LinkedIn on the{" "}
+                            <Link
+                              to="/dashboard/connections"
+                              className="text-blue-600 hover:underline"
+                            >
+                              Connections
+                            </Link>{" "}
+                            page to enable posting.
                           </p>
                         )}
                     </section>

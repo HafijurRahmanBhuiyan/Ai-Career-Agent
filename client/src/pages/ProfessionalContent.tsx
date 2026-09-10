@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
 import { getErrorMessage } from "../utils/apiError";
@@ -7,7 +8,6 @@ import {
   ProfessionalEvidence,
   LinkedInSuggestion,
   LinkedInDraft,
-  LinkedInConnection,
 } from "../types/professionalContent";
 
 const API_BASE = "";
@@ -53,9 +53,6 @@ function ProfessionalContent() {
   const [saving, setSaving] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
 
-  const [linkedIn, setLinkedIn] = useState<LinkedInConnection | null>(null);
-  const [linkedInLoading, setLinkedInLoading] = useState(false);
-  const [connectLoading, setConnectLoading] = useState(false);
   const [publishTarget, setPublishTarget] = useState<LinkedInDraft | null>(null);
   const [publishing, setPublishing] = useState(false);
 
@@ -90,49 +87,6 @@ function ProfessionalContent() {
   useEffect(() => {
     loadDrafts();
   }, [loadDrafts]);
-
-  const fetchLinkedInStatus = useCallback(async () => {
-    setLinkedInLoading(true);
-    try {
-      const res = await api.get<LinkedInConnection>(
-        `${API_BASE}/linkedin/status`
-      );
-      setLinkedIn(res.data);
-    } catch {
-      setLinkedIn(null);
-    } finally {
-      setLinkedInLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchLinkedInStatus();
-  }, [fetchLinkedInStatus]);
-
-  const connectLinkedIn = async () => {
-    clearError();
-    setConnectLoading(true);
-    try {
-      const res = await api.get<{ authorizeUrl: string }>(
-        `${API_BASE}/linkedin/connect`
-      );
-      window.location.assign(res.data.authorizeUrl);
-    } catch (err) {
-      setError(getErrorMessage(err, "Failed to start LinkedIn connection"));
-      setConnectLoading(false);
-    }
-  };
-
-  const disconnectLinkedIn = async () => {
-    clearError();
-    try {
-      await api.post(`${API_BASE}/linkedin/disconnect`);
-      setLinkedIn({ connected: false });
-      setDraftNotice("LinkedIn account disconnected.");
-    } catch (err) {
-      setError(getErrorMessage(err, "Failed to disconnect LinkedIn"));
-    }
-  };
 
   const confirmPublish = (draft: LinkedInDraft) => {
     setPublishTarget(draft);
@@ -495,37 +449,18 @@ function ProfessionalContent() {
                         LinkedIn Publishing
                       </h2>
                       <p className="text-sm text-slate-500 mt-1">
-                        {linkedInLoading
-                          ? "Checking connection..."
-                          : linkedIn?.connected
-                          ? `Connected as ${linkedIn.linkedin?.displayName || linkedIn.linkedin?.memberId}`
-                          : "Connect your LinkedIn account to publish approved posts via the official API."}
+                        Publishing only ever happens when you explicitly approve a
+                        draft and click "Publish". Nothing is posted automatically,
+                        and no token is ever exposed to this page.
                       </p>
                     </div>
-                    {linkedInLoading ? (
-                      <span className="text-sm text-slate-400">Loading…</span>
-                    ) : linkedIn?.connected ? (
-                      <button
-                        onClick={disconnectLinkedIn}
-                        className="px-4 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                      >
-                        Disconnect
-                      </button>
-                    ) : (
-                      <button
-                        onClick={connectLinkedIn}
-                        disabled={connectLoading}
-                        className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                      >
-                        {connectLoading ? "Connecting…" : "Connect LinkedIn"}
-                      </button>
-                    )}
+                    <Link
+                      to="/dashboard/connections"
+                      className="px-4 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      Manage in Connections
+                    </Link>
                   </div>
-                  <p className="text-xs text-slate-400 mt-3">
-                    Publishing only ever happens when you explicitly approve a
-                    draft and click “Publish”. Nothing is posted automatically, and
-                    no token is ever exposed to this page.
-                  </p>
                 </section>
 
                 {selected.approvedForProfessionalUse && (

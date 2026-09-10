@@ -6,6 +6,7 @@ const NAV_ITEMS: { label: string; to: string }[] = [
   { label: "Dashboard", to: "/dashboard" },
   { label: "Profile", to: "/dashboard/profile" },
   { label: "Make CV", to: "/dashboard/make-cv" },
+  { label: "Connections", to: "/dashboard/connections" },
   { label: "GitHub Projects", to: "/dashboard/integrations" },
   { label: "Professional Content", to: "/dashboard/professional-content" },
   { label: "Jobs", to: "/dashboard/jobs" },

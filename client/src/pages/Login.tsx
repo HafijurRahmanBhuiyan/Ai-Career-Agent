@@ -10,7 +10,7 @@ interface FieldErrors {
 }
 
 function Login() {
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -111,6 +111,14 @@ function Login() {
           Create one
         </Link>
       </p>
+
+      <button
+        type="button"
+        onClick={() => navigate(isAuthenticated ? "/dashboard" : "/")}
+        className="w-full px-4 py-2.5 text-sm text-slate-600 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors mt-4"
+      >
+        Back to Dashboard
+      </button>
     </AuthLayout>
   );
 }

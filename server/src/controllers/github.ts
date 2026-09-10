@@ -131,7 +131,7 @@ export const callback = async (
       "http://localhost:5173";
 
     res.redirect(
-      `${clientUrl}/dashboard/integrations?github=connected`
+      `${clientUrl}/dashboard/connections?github=connected`
     );
   } catch (error) {
     next(error);

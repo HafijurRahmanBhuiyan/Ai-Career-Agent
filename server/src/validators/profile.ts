@@ -1,11 +1,43 @@
 import { z } from "zod";
 
+const workExperienceSchema = z.object({
+  company: z.string().trim().optional(),
+  designation: z.string().trim().optional(),
+  location: z.string().trim().optional(),
+  startDate: z.string().trim().optional(),
+  endDate: z.string().trim().optional(),
+  current: z.boolean().optional(),
+  description: z.string().trim().optional(),
+  highlights: z.array(z.string().trim()).optional(),
+});
+
+const educationSchema = z.object({
+  level: z.enum(["ssc", "hsc", "bachelor", "master"]),
+  institution: z.string().trim().optional(),
+  degree: z.string().trim().optional(),
+  fieldOfStudy: z.string().trim().optional(),
+  session: z.string().trim().optional(),
+  passingYear: z.string().trim().optional(),
+  gpa: z.string().trim().optional(),
+  cgpa: z.string().trim().optional(),
+  startDate: z.string().trim().optional(),
+  endDate: z.string().trim().optional(),
+  certificateFileName: z.string().nullable().optional(),
+  certificateFileId: z.string().nullable().optional(),
+});
+
 export const createProfileSchema = z.object({
   fullName: z.string().max(200).trim().optional(),
+  email: z.string().max(320).trim().optional(),
   headline: z.string().max(300).trim().optional(),
   summary: z.string().max(5000).trim().optional(),
   phone: z.string().max(30).trim().optional(),
   location: z.string().max(200).trim().optional(),
+  skills: z.array(z.string().trim().max(200)).optional(),
+  workExperience: z.array(workExperienceSchema).optional(),
+  education: z.array(educationSchema).optional(),
+  cvFileName: z.string().nullable().optional(),
+  cvFileId: z.string().nullable().optional(),
   preferredRoles: z.array(z.string().trim().max(200)).optional(),
   preferredLocations: z.array(z.string().trim().max(200)).optional(),
   workPreference: z.enum(["remote", "hybrid", "onsite", ""]).optional(),

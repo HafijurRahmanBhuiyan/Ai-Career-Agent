@@ -11,7 +11,7 @@ interface FieldErrors {
 }
 
 function Register() {
-  const { register } = useAuth();
+  const { register, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   const [name, setName] = useState("");
@@ -139,6 +139,14 @@ function Register() {
           Sign in
         </Link>
       </p>
+
+      <button
+        type="button"
+        onClick={() => navigate(isAuthenticated ? "/dashboard" : "/")}
+        className="w-full px-4 py-2.5 text-sm text-slate-600 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors mt-4"
+      >
+        Back to Dashboard
+      </button>
     </AuthLayout>
   );
 }
