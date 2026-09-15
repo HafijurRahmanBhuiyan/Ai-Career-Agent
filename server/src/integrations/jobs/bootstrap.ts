@@ -2,7 +2,6 @@ import { registerJobSource, getJobSource } from "./jobSourceRegistry";
 import { AdzunaJobSource } from "./sources/adzunaJobSource";
 import { ArbeitnowJobSource } from "./sources/arbeitnowJobSource";
 import { RemoteOkJobSource } from "./sources/remoteOkJobSource";
-import { MockJobSource } from "./sources/mockJobSource";
 
 /**
  * Decide which live job sources should be registered for the given
@@ -12,8 +11,6 @@ import { MockJobSource } from "./sources/mockJobSource";
  * Source availability rules:
  *  - Adzuna requires ADZUNA_APP_ID and ADZUNA_APP_KEY.
  *  - RemoteOK and Arbeitnow are public and require no credentials.
- *  - The Mock source is a development/test fixture only and is never
- *    registered in production.
  */
 export function selectJobSources(
   env: NodeJS.ProcessEnv = process.env
@@ -25,10 +22,6 @@ export function selectJobSources(
   }
 
   ids.push("arbeitnow", "remoteok");
-
-  if (env.NODE_ENV !== "production") {
-    ids.push("mock");
-  }
 
   return ids;
 }
@@ -45,9 +38,6 @@ function sourceIdsToFactories(ids: string[]): Array<{ id: string; factory: () =>
         break;
       case "remoteok":
         entries.push({ id, factory: () => new RemoteOkJobSource() });
-        break;
-      case "mock":
-        entries.push({ id, factory: () => new MockJobSource() });
         break;
       default:
         break;

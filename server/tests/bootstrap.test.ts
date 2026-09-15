@@ -52,12 +52,12 @@ describe("bootstrapJobSources - source selection", () => {
     expect(ids).toContain("remoteok");
   });
 
-  it("registers the Mock source outside production (test/development)", () => {
+  it("does not register the Mock source outside production (test/development)", () => {
     const ids = selectJobSources({
       NODE_ENV: "test",
     } as NodeJS.ProcessEnv);
 
-    expect(ids).toContain("mock");
+    expect(ids).not.toContain("mock");
     expect(ids).toContain("arbeitnow");
     expect(ids).toContain("remoteok");
   });

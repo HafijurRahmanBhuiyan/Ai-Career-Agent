@@ -3,6 +3,7 @@ import { app } from "../src/app";
 import { connectTestDB, disconnectTestDB, clearTestDB } from "./setup";
 import { registerUser } from "./helpers";
 import Profile from "../src/models/Profile";
+import { JobSource, RawJob, JobSearchParams } from "../src/integrations/jobs/jobSource.types";
 
 beforeAll(async () => {
   await connectTestDB();
@@ -22,9 +23,11 @@ beforeEach(() => {
   global.fetch = jest.fn().mockRejectedValue(
     new Error("network disabled in unit test")
   ) as unknown as typeof fetch;
+  jest.spyOn(require("../src/integrations/jobs/jobSourceRegistry"), "getEnabledJobSources").mockReturnValue([stubSource()]);
 });
 afterEach(() => {
   global.fetch = originalFetch;
+  jest.restoreAllMocks();
 });
 
 async function seedProfile(userId: unknown, overrides: Record<string, unknown> = {}) {
@@ -37,14 +40,134 @@ async function seedProfile(userId: unknown, overrides: Record<string, unknown> =
   });
 }
 
-const mockTemplateTitles = [
-  "Full Stack Developer",
-  "React Developer",
-  "Node.js Developer",
-  "Backend Engineer",
-  "Software Engineer",
-  "Frontend Engineer",
+const stubJobs: RawJob[] = [
+  {
+    title: "Full Stack Developer",
+    companyName: "Stub Corp",
+    description: "Full stack development role.",
+    locations: ["Remote", "New York, NY"],
+    remoteType: "remote",
+    employmentType: "full-time",
+    experienceLevel: "mid",
+    salaryMin: 90000,
+    salaryMax: 130000,
+    salaryCurrency: "USD",
+    salaryPeriod: "yearly",
+    jobUrl: "https://stub.example/jobs/fullstack",
+    applyUrl: "https://stub.example/apply/fullstack",
+    postedAt: new Date(),
+  },
+  {
+    title: "React Developer",
+    companyName: "Stub Corp",
+    description: "Build interfaces with React and Redux.",
+    locations: ["Remote", "San Francisco, CA"],
+    remoteType: "hybrid",
+    employmentType: "contract",
+    experienceLevel: "junior",
+    salaryMin: 50000,
+    salaryMax: 70000,
+    jobUrl: "https://stub.example/jobs/react",
+    applyUrl: "https://stub.example/apply/react",
+    postedAt: new Date(),
+  },
+  {
+    title: "Node.js Developer",
+    companyName: "Stub Corp",
+    description: "Build server-side APIs and integrations.",
+    locations: ["Remote", "Austin, TX"],
+    remoteType: "remote",
+    employmentType: "full-time",
+    experienceLevel: "senior",
+    salaryMin: 120000,
+    salaryMax: 160000,
+    jobUrl: "https://stub.example/jobs/node",
+    applyUrl: "https://stub.example/apply/node",
+    postedAt: new Date(),
+  },
+  {
+    title: "Backend Engineer",
+    companyName: "Stub Corp",
+    description: "Robust server-side systems.",
+    locations: ["Seattle, WA"],
+    remoteType: "onsite",
+    employmentType: "full-time",
+    experienceLevel: "senior",
+    salaryMin: 130000,
+    salaryMax: 170000,
+    jobUrl: "https://stub.example/jobs/backend",
+    applyUrl: "https://stub.example/apply/backend",
+    postedAt: new Date(),
+  },
+  {
+    title: "Software Engineer",
+    companyName: "Stub Corp",
+    description: "Generalist software engineering.",
+    locations: ["Boston, MA", "Remote"],
+    remoteType: "hybrid",
+    employmentType: "full-time",
+    experienceLevel: "mid",
+    salaryMin: 95000,
+    salaryMax: 140000,
+    jobUrl: "https://stub.example/jobs/sw",
+    applyUrl: "https://stub.example/apply/sw",
+    postedAt: new Date(),
+  },
+  {
+    title: "Frontend Engineer",
+    companyName: "Stub Corp",
+    description: "Craft delightful user experiences.",
+    locations: ["Remote", "Denver, CO"],
+    remoteType: "remote",
+    employmentType: "part-time",
+    experienceLevel: "entry",
+    salaryMin: 40000,
+    salaryMax: 55000,
+    jobUrl: "https://stub.example/jobs/frontend",
+    applyUrl: "https://stub.example/apply/frontend",
+    postedAt: new Date(),
+  },
 ];
+
+function matchesStubParams(job: RawJob, params: JobSearchParams): boolean {
+  if (params.keywords) {
+    const keyword = params.keywords.trim().toLowerCase();
+    const haystack = [job.title, job.companyName, job.description]
+      .join(" ")
+      .toLowerCase();
+    if (!haystack.includes(keyword)) return false;
+  }
+  if (params.locations && params.locations.length > 0) {
+    const locationQuery = params.locations.join(" ").toLowerCase();
+    const locationMatches = (job.locations || []).some((loc) =>
+      loc.toLowerCase().includes(locationQuery)
+    );
+    if (!locationMatches) return false;
+  }
+  if (params.remote && params.remote !== "any" && job.remoteType !== params.remote) {
+    return false;
+  }
+  if (params.employmentType && job.employmentType !== params.employmentType) {
+    return false;
+  }
+  if (params.experienceLevel && job.experienceLevel !== params.experienceLevel) {
+    return false;
+  }
+  if (params.salaryMinimum && (job.salaryMax ?? 0) < params.salaryMinimum) {
+    return false;
+  }
+  return true;
+}
+
+function stubSource(): JobSource {
+  return {
+    id: "stub",
+    name: "Stub Job Source",
+    async searchJobs(params: JobSearchParams) {
+      return { jobs: stubJobs.filter((job) => matchesStubParams(job, params)) };
+    },
+  };
+}
 
 async function discoverAllTitles(token: string): Promise<Set<string>> {  const res = await request(app)
     .post("/api/jobs/discover")
@@ -163,7 +286,7 @@ describe("Jobs API - profile preferences drive discovery (precedence)", () => {
     }
   });
 
-  test("F. experienceLevel preference respected where the source supports it (mock)", async () => {
+  test("F. experienceLevel preference respected where the source supports it", async () => {
     const { token, user } = await registerUser();
     await seedProfile(user.id, {
       jobSearchPreferences: {
@@ -179,13 +302,13 @@ describe("Jobs API - profile preferences drive discovery (precedence)", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ limit: 50 });
     expect(res.status).toBe(200);
-    // Mock Frontend Engineer is 'entry' level, so should be present.
+    // Stub Frontend Engineer is 'entry' level, so should be present.
     expect(
       res.body.jobs.every((j: { experienceLevel: string }) => j.experienceLevel === "entry")
     ).toBe(true);
   });
 
-  test("G. salaryMinimum preference respected where supported (mock)", async () => {
+  test("G. salaryMinimum preference respected where supported", async () => {
     const { token, user } = await registerUser();
     await seedProfile(user.id, {
       jobSearchPreferences: {
@@ -201,7 +324,7 @@ describe("Jobs API - profile preferences drive discovery (precedence)", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ limit: 50 });
     expect(res.status).toBe(200);
-    // Mock Frontend Engineer salary is 40000-55000, below the 200000 minimum,
+    // Stub Frontend Engineer salary is 40000-55000, below the 200000 minimum,
     // so no jobs should match.
     expect(res.body.count).toBe(0);
   });

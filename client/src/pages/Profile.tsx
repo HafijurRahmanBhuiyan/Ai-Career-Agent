@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent, ChangeEvent } from "react";
+import { useEffect, useState, ChangeEvent } from "react";
 import axios from "axios";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
@@ -104,7 +104,15 @@ const isImageFile = (fileName: string | null | undefined): boolean => {
 
 function Profile() {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+  const [editing, setEditing] = useState({
+    basic: false,
+    skills: false,
+    cv: false,
+    work: false,
+    education: false,
+    salary: false,
+  });
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -272,55 +280,73 @@ function Profile() {
     );
   };
 
-  const handleSave = async (e: FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+  const saveSection = async (
+    section: keyof typeof editing,
+    payload: Record<string, unknown>
+  ) => {
+    setSavingSection(section);
     setError(null);
     setSuccess(null);
-
-    const payload: Record<string, unknown> = {
-      fullName: fullName.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      location: location.trim(),
-      salaryExpectation: {
-        min: salaryMin.trim() === "" ? undefined : Number(salaryMin),
-        max: salaryMax.trim() === "" ? undefined : Number(salaryMax),
-        currency: salaryCurrency.trim(),
-      },
-      workExperience,
-      education: education.map((edu) => ({
-        level: edu.level,
-        institution: edu.institution,
-        degree: edu.degree,
-        fieldOfStudy: edu.fieldOfStudy,
-        startDate: edu.startDate,
-        endDate: edu.endDate,
-      })),
-    };
-
-    if (skills.length) payload.skills = skills;
-
     try {
       try {
         await api.patch("/profile", payload);
       } catch (patchErr) {
         if (axios.isAxiosError(patchErr) && patchErr.response?.status === 404) {
-          await api.post("/profile", {
-            ...payload,
-            skills,
-          });
+          await api.post("/profile", payload);
         } else {
           throw patchErr;
         }
       }
+      setEditing((prev) => ({ ...prev, [section]: false }));
       setSuccess("Profile saved.");
     } catch (err) {
       setError(getErrorMessage(err, "Could not save profile"));
     } finally {
-      setSaving(false);
+      setSavingSection(null);
     }
   };
+
+  const toggleEdit = (section: keyof typeof editing) =>
+    setEditing((prev) => ({ ...prev, [section]: !prev[section] }));
+
+  const saveBasic = () =>
+    saveSection("basic", {
+      fullName: fullName.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      location: location.trim(),
+    });
+
+  const saveSkills = () => saveSection("skills", { skills });
+
+  const saveSalary = () =>
+    saveSection("salary", {
+      salaryExpectation: {
+        min: salaryMin.trim() === "" ? undefined : Number(salaryMin),
+        max: salaryMax.trim() === "" ? undefined : Number(salaryMax),
+        currency: salaryCurrency.trim(),
+      },
+    });
+
+  const saveWork = () => saveSection("work", { workExperience });
+
+  const saveEducation = () =>
+    saveSection("education", {
+      education: education.map((edu) => ({
+        level: edu.level,
+        institution: edu.institution,
+        degree: edu.degree,
+        fieldOfStudy: edu.fieldOfStudy,
+        session: edu.session,
+        passingYear: edu.passingYear,
+        gpa: edu.gpa,
+        cgpa: edu.cgpa,
+        startDate: edu.startDate,
+        endDate: edu.endDate,
+        certificateFileName: edu.certificateFileName,
+        certificateFileId: edu.certificateFileId,
+      })),
+    });
 
   const handleCvUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -435,7 +461,7 @@ function Profile() {
   };
 
   const inputClass =
-    "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
+    "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed";
 
   const renderHighlightInput = (
     key: string,
@@ -457,13 +483,15 @@ function Profile() {
               onAdd();
             }
           }}
+          disabled={!editing.work}
           placeholder="Add a bullet point"
-          className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:cursor-not-allowed"
         />
         <button
           type="button"
           onClick={onAdd}
-          className="px-3 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+          disabled={!editing.work}
+          className="px-3 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Add
         </button>
@@ -479,7 +507,8 @@ function Profile() {
               <button
                 type="button"
                 onClick={() => onRemove(i)}
-                className="text-red-400 hover:text-red-600 text-xs"
+                disabled={!editing.work}
+                className="text-red-400 hover:text-red-600 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Remove
               </button>
@@ -487,6 +516,38 @@ function Profile() {
           ))}
         </ul>
       )}
+    </div>
+  );
+
+  const sectionHeader = (
+    title: string,
+    section: keyof typeof editing
+  ) => (
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+      <button
+        type="button"
+        onClick={() => toggleEdit(section)}
+        className="px-4 py-1.5 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+      >
+        {editing[section] ? "Cancel" : "Edit"}
+      </button>
+    </div>
+  );
+
+  const sectionSave = (
+    section: keyof typeof editing,
+    onClick: () => void
+  ) => (
+    <div className="flex justify-end mt-4">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={savingSection === section}
+        className="px-5 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+      >
+        {savingSection === section ? "Saving..." : "Save"}
+      </button>
     </div>
   );
 
@@ -526,11 +587,9 @@ function Profile() {
             <p className="text-slate-500 text-sm">Loading profile...</p>
           </div>
         ) : (
-          <form onSubmit={handleSave} className="space-y-6">
+          <div className="space-y-6">
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">
-                Basic Information
-              </h2>
+              {sectionHeader("Basic Information", "basic")}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">
@@ -541,6 +600,7 @@ function Profile() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Your full name"
+                    disabled={!editing.basic}
                     className={inputClass}
                   />
                 </div>
@@ -553,6 +613,7 @@ function Profile() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@gmail.com"
+                    disabled={!editing.basic}
                     className={inputClass}
                   />
                 </div>
@@ -565,6 +626,7 @@ function Profile() {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+8801XXXXXXXXX"
+                    disabled={!editing.basic}
                     className={inputClass}
                   />
                 </div>
@@ -577,16 +639,16 @@ function Profile() {
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder="e.g. Dhaka, Bangladesh"
+                    disabled={!editing.basic}
                     className={inputClass}
                   />
                 </div>
               </div>
+              {sectionSave("basic", saveBasic)}
             </section>
 
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">
-                Skills
-              </h2>
+              {sectionHeader("Skills", "skills")}
               <div className="flex gap-2 mb-2">
                 <input
                   type="text"
@@ -598,13 +660,15 @@ function Profile() {
                       addSkill();
                     }
                   }}
+                  disabled={!editing.skills}
                   placeholder="Add a skill"
-                  className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                 />
                 <button
                   type="button"
                   onClick={addSkill}
-                  className="px-3 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                  disabled={!editing.skills}
+                  className="px-3 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Add
                 </button>
@@ -620,7 +684,8 @@ function Profile() {
                       <button
                         type="button"
                         onClick={() => removeSkill(i)}
-                        className="text-red-400 hover:text-red-600 text-xs"
+                        disabled={!editing.skills}
+                        className="text-red-400 hover:text-red-600 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Remove
                       </button>
@@ -628,21 +693,25 @@ function Profile() {
                   ))}
                 </ul>
               )}
+              {sectionSave("skills", saveSkills)}
             </section>
 
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">
-                CV
-              </h2>
+              {sectionHeader("CV", "cv")}
               <div className="flex items-start gap-6">
                 <div className="flex-1">
                   <div className="flex items-center gap-4">
-                    <label className="cursor-pointer inline-flex px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+                    <label className={`inline-flex px-4 py-2 text-sm text-white bg-blue-600 rounded-lg transition-colors ${
+                      editing.cv
+                        ? "hover:bg-blue-700 cursor-pointer"
+                        : "opacity-50 cursor-not-allowed pointer-events-none"
+                    }`}>
                       {uploading === "cv" ? "Uploading..." : "Upload CV"}
                       <input
                         type="file"
                         accept=".pdf,.doc,.docx"
                         onChange={handleCvUpload}
+                        disabled={!editing.cv}
                         className="hidden"
                       />
                     </label>
@@ -652,7 +721,8 @@ function Profile() {
                         <button
                           type="button"
                           onClick={handleCvDelete}
-                          className="text-xs text-red-600 hover:underline"
+                          disabled={!editing.cv}
+                          className="text-xs text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Remove
                         </button>
@@ -676,6 +746,15 @@ function Profile() {
                     />
                   </button>
                 )}
+              </div>
+              <div className="flex justify-end mt-4">
+                <button
+                  type="button"
+                  onClick={() => toggleEdit("cv")}
+                  className="px-5 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Save
+                </button>
               </div>
             </section>
 
@@ -712,9 +791,7 @@ function Profile() {
             )}
 
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">
-                Work Experience
-              </h2>
+              {sectionHeader("Work Experience", "work")}
               <div className="space-y-6">
                 {workExperience.map((work, idx) => (
                   <div
@@ -729,7 +806,7 @@ function Profile() {
                             prev.filter((_, i) => i !== idx)
                           )
                         }
-                        className="absolute top-3 right-3 text-xs text-red-400 hover:text-red-600"
+                        className="absolute top-3 right-3 text-xs text-red-400 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Remove
                       </button>
@@ -745,6 +822,7 @@ function Profile() {
                           onChange={(e) =>
                             handleWorkChange(idx, "company", e.target.value)
                           }
+                          disabled={!editing.work}
                           className={inputClass}
                         />
                       </div>
@@ -758,6 +836,7 @@ function Profile() {
                           onChange={(e) =>
                             handleWorkChange(idx, "designation", e.target.value)
                           }
+                          disabled={!editing.work}
                           className={inputClass}
                         />
                       </div>
@@ -771,6 +850,7 @@ function Profile() {
                           onChange={(e) =>
                             handleWorkChange(idx, "location", e.target.value)
                           }
+                          disabled={!editing.work}
                           className={inputClass}
                         />
                       </div>
@@ -786,6 +866,7 @@ function Profile() {
                               handleWorkChange(idx, "startDate", e.target.value)
                             }
                             placeholder="e.g. Jan 2020"
+                            disabled={!editing.work}
                             className={inputClass}
                           />
                         </div>
@@ -800,7 +881,7 @@ function Profile() {
                               handleWorkChange(idx, "endDate", e.target.value)
                             }
                             placeholder="e.g. Present"
-                            disabled={work.current}
+                            disabled={!editing.work || work.current}
                             className={inputClass}
                           />
                         </div>
@@ -813,6 +894,7 @@ function Profile() {
                             onChange={(e) =>
                               handleWorkChange(idx, "current", e.target.checked)
                             }
+                            disabled={!editing.work}
                             className="h-4 w-4 text-blue-600 border-slate-300 rounded"
                           />
                           Currently working here
@@ -848,6 +930,7 @@ function Profile() {
                           handleWorkChange(idx, "description", e.target.value)
                         }
                         placeholder="Describe your responsibilities and achievements as a paragraph..."
+                        disabled={!editing.work}
                         className={`${inputClass} resize-none`}
                       />
                     </div>
@@ -859,16 +942,16 @@ function Profile() {
                 onClick={() =>
                   setWorkExperience((prev) => [...prev, { ...emptyWork }])
                 }
-                className="mt-4 text-sm text-blue-600 hover:text-blue-700"
+                disabled={!editing.work}
+                className="mt-4 text-sm text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 + Add another work experience
               </button>
+              {sectionSave("work", saveWork)}
             </section>
 
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">
-                Education
-              </h2>
+              {sectionHeader("Education", "education")}
               <div className="space-y-6">
                 {education.map((edu, i) => {
                   const isSecondary = edu.level === "ssc" || edu.level === "hsc";
@@ -893,6 +976,7 @@ function Profile() {
                               updateEducation(i, "institution", e.target.value)
                             }
                             className={inputClass}
+                            disabled={!editing.education}
                           />
                         </div>
                         <div>
@@ -906,6 +990,7 @@ function Profile() {
                               updateEducation(i, "degree", e.target.value)
                             }
                             className={inputClass}
+                            disabled={!editing.education}
                           />
                         </div>
                         {isSecondary ? (
@@ -921,6 +1006,7 @@ function Profile() {
                                   updateEducation(i, "fieldOfStudy", e.target.value)
                                 }
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                             <div>
@@ -935,6 +1021,7 @@ function Profile() {
                                 }
                                 placeholder="e.g. 2025-26"
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                             <div>
@@ -949,6 +1036,7 @@ function Profile() {
                                 }
                                 placeholder="e.g. 2025"
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                             <div>
@@ -963,6 +1051,7 @@ function Profile() {
                                 }
                                 placeholder="e.g. 4.50/5.00"
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                           </>
@@ -979,6 +1068,7 @@ function Profile() {
                                   updateEducation(i, "fieldOfStudy", e.target.value)
                                 }
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                             <div>
@@ -993,6 +1083,7 @@ function Profile() {
                                 }
                                 placeholder="e.g. 3.50 out of 4.00"
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                             <div>
@@ -1007,6 +1098,7 @@ function Profile() {
                                 }
                                 placeholder="e.g. Jan 2025"
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                             <div>
@@ -1021,6 +1113,7 @@ function Profile() {
                                 }
                                 placeholder="e.g. Dec 2026"
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                           </>
@@ -1037,6 +1130,7 @@ function Profile() {
                                   updateEducation(i, "fieldOfStudy", e.target.value)
                                 }
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                             <div>
@@ -1051,6 +1145,7 @@ function Profile() {
                                 }
                                 placeholder="e.g. 3.50 out of 4.00"
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                             <div>
@@ -1065,6 +1160,7 @@ function Profile() {
                                 }
                                 placeholder="e.g. Jan 2022"
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                             <div>
@@ -1079,6 +1175,7 @@ function Profile() {
                                 }
                                 placeholder="e.g. Dec 2025"
                                 className={inputClass}
+                                disabled={!editing.education}
                               />
                             </div>
                           </>
@@ -1091,7 +1188,11 @@ function Profile() {
                         <div className="flex items-start gap-6">
                           <div className="flex-1">
                             <div className="flex items-center gap-4">
-                              <label className="cursor-pointer inline-flex px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+                              <label className={`inline-flex px-4 py-2 text-sm text-white bg-blue-600 rounded-lg transition-colors ${
+                                editing.education
+                                  ? "hover:bg-blue-700 cursor-pointer"
+                                  : "opacity-50 cursor-not-allowed pointer-events-none"
+                              }`}>
                                 {uploading === `cert-${i}`
                                   ? "Uploading..."
                                   : "Upload Certificate"}
@@ -1099,6 +1200,7 @@ function Profile() {
                                   type="file"
                                   accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp"
                                   onChange={(e) => handleCertificateUpload(i, e)}
+                                  disabled={!editing.education}
                                   className="hidden"
                                 />
                               </label>
@@ -1108,7 +1210,8 @@ function Profile() {
                                   <button
                                     type="button"
                                     onClick={() => handleCertificateDelete(i)}
-                                    className="text-xs text-red-600 hover:underline"
+                                    disabled={!editing.education}
+                                    className="text-xs text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Remove
                                   </button>
@@ -1186,12 +1289,11 @@ function Profile() {
                   );
                 })}
               </div>
+              {sectionSave("education", saveEducation)}
             </section>
 
             <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">
-                Salary Range
-              </h2>
+              {sectionHeader("Salary Range", "salary")}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">
@@ -1204,6 +1306,7 @@ function Profile() {
                     onChange={(e) => setSalaryMin(e.target.value)}
                     placeholder="e.g. 50000"
                     className={inputClass}
+                    disabled={!editing.salary}
                   />
                 </div>
                 <div>
@@ -1217,6 +1320,7 @@ function Profile() {
                     onChange={(e) => setSalaryMax(e.target.value)}
                     placeholder="e.g. 120000"
                     className={inputClass}
+                    disabled={!editing.salary}
                   />
                 </div>
                 <div>
@@ -1230,21 +1334,13 @@ function Profile() {
                     onChange={(e) => setSalaryCurrency(e.target.value)}
                     placeholder="e.g. BDT, USD"
                     className={inputClass}
+                    disabled={!editing.salary}
                   />
                 </div>
               </div>
+              {sectionSave("salary", saveSalary)}
             </section>
-
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-5 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {saving ? "Saving..." : "Save Profile"}
-              </button>
-            </div>
-          </form>
+          </div>
         )}
       </div>
     </DashboardLayout>

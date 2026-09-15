@@ -3,6 +3,7 @@ import { app } from "../src/app";
 import { connectTestDB, disconnectTestDB, clearTestDB } from "./setup";
 import { registerUser } from "./helpers";
 import Job from "../src/models/Job";
+import { JobSource, RawJob, JobSearchParams } from "../src/integrations/jobs/jobSource.types";
 
 const mockJobBase = {
   source: "mock",
@@ -27,6 +28,99 @@ const mockJobBase = {
   discoveredAt: new Date(),
   isActive: true,
 };
+
+const stubJobs: RawJob[] = [
+  {
+    title: "Frontend Engineer",
+    companyName: "Stub Corp",
+    description: "Build web experiences with React and TypeScript.",
+    locations: ["Remote", "Boston, MA"],
+    remoteType: "remote",
+    employmentType: "part-time",
+    experienceLevel: "entry",
+    salaryMin: 40000,
+    salaryMax: 55000,
+    salaryCurrency: "USD",
+    salaryPeriod: "yearly",
+    skills: ["React"],
+    technologies: ["React"],
+    jobUrl: "https://stub.example/jobs/frontend",
+    applyUrl: "https://stub.example/apply/frontend",
+    postedAt: new Date(),
+  },
+  {
+    title: "Backend Engineer",
+    companyName: "Stub Corp",
+    description: "Design scalable services in Seattle.",
+    locations: ["Seattle, WA"],
+    remoteType: "onsite",
+    employmentType: "full-time",
+    experienceLevel: "senior",
+    salaryMin: 130000,
+    salaryMax: 170000,
+    salaryCurrency: "USD",
+    salaryPeriod: "yearly",
+    skills: ["Node.js"],
+    technologies: ["Node.js"],
+    jobUrl: "https://stub.example/jobs/backend",
+    applyUrl: "https://stub.example/apply/backend",
+    postedAt: new Date(),
+  },
+  {
+    title: "Contract React Developer",
+    companyName: "Stub Corp",
+    description: "Short-term contract building React UIs.",
+    locations: ["Remote"],
+    remoteType: "hybrid",
+    employmentType: "contract",
+    experienceLevel: "mid",
+    salaryMin: 50000,
+    salaryMax: 70000,
+    salaryCurrency: "USD",
+    salaryPeriod: "yearly",
+    skills: ["React"],
+    technologies: ["React"],
+    jobUrl: "https://stub.example/jobs/contract-react",
+    applyUrl: "https://stub.example/apply/contract-react",
+    postedAt: new Date(),
+  },
+];
+
+function matchesStubParams(job: RawJob, params: JobSearchParams): boolean {
+  if (params.keywords) {
+    const keyword = params.keywords.trim().toLowerCase();
+    const haystack = [job.title, job.companyName, job.description]
+      .join(" ")
+      .toLowerCase();
+    if (!haystack.includes(keyword)) return false;
+  }
+  if (params.locations && params.locations.length > 0) {
+    const locationQuery = params.locations.join(" ").toLowerCase();
+    const locationMatches = (job.locations || []).some((loc) =>
+      loc.toLowerCase().includes(locationQuery)
+    );
+    if (!locationMatches) return false;
+  }
+  if (params.remote && params.remote !== "any" && job.remoteType !== params.remote) {
+    return false;
+  }
+  if (params.employmentType && job.employmentType !== params.employmentType) {
+    return false;
+  }
+  return true;
+}
+
+function stubSource(): JobSource {
+  return {
+    id: "stub",
+    name: "Stub Job Source",
+    async searchJobs(params: JobSearchParams) {
+      return {
+        jobs: stubJobs.filter((job) => matchesStubParams(job, params)),
+      };
+    },
+  };
+}
 
 beforeAll(async () => {
   await connectTestDB();
@@ -89,10 +183,20 @@ describe("Jobs API - search page", () => {
 
   test("filters jobs by keywords", async () => {
     const { token } = await registerUser();
-    await request(app)
-      .post("/api/jobs/discover")
-      .set("Authorization", `Bearer ${token}`)
-      .send({});
+    await Job.create([
+      {
+        ...mockJobBase,
+        sourceJobId: "kw-1",
+        title: "Frontend Engineer",
+        companyName: "Acme",
+      },
+      {
+        ...mockJobBase,
+        sourceJobId: "kw-2",
+        title: "Backend Engineer",
+        companyName: "Globex",
+      },
+    ]);
     const res = await request(app)
       .get("/api/jobs")
       .query({ keywords: "Frontend" })
@@ -109,10 +213,20 @@ describe("Jobs API - search page", () => {
 
   test("filters jobs by remote type", async () => {
     const { token } = await registerUser();
-    await request(app)
-      .post("/api/jobs/discover")
-      .set("Authorization", `Bearer ${token}`)
-      .send({});
+    await Job.create([
+      {
+        ...mockJobBase,
+        sourceJobId: "remote-1",
+        title: "Remote Job",
+        remoteType: "remote",
+      },
+      {
+        ...mockJobBase,
+        sourceJobId: "remote-2",
+        title: "Onsite Job",
+        remoteType: "onsite",
+      },
+    ]);
     const res = await request(app)
       .get("/api/jobs")
       .query({ remote: "remote" })
@@ -126,10 +240,20 @@ describe("Jobs API - search page", () => {
 
   test("filters jobs by employment type", async () => {
     const { token } = await registerUser();
-    await request(app)
-      .post("/api/jobs/discover")
-      .set("Authorization", `Bearer ${token}`)
-      .send({});
+    await Job.create([
+      {
+        ...mockJobBase,
+        sourceJobId: "employment-1",
+        title: "Contract Job",
+        employmentType: "contract",
+      },
+      {
+        ...mockJobBase,
+        sourceJobId: "employment-2",
+        title: "Full Time Job",
+        employmentType: "full-time",
+      },
+    ]);
     const res = await request(app)
       .get("/api/jobs")
       .query({ employmentType: "contract" })
@@ -145,10 +269,22 @@ describe("Jobs API - search page", () => {
 
   test("filters jobs by location", async () => {
     const { token } = await registerUser();
-    await request(app)
-      .post("/api/jobs/discover")
-      .set("Authorization", `Bearer ${token}`)
-      .send({});
+    await Job.create([
+      {
+        ...mockJobBase,
+        sourceJobId: "loc-1",
+        title: "Seattle Job",
+        locations: ["Seattle, WA"],
+        location: "Seattle, WA",
+      },
+      {
+        ...mockJobBase,
+        sourceJobId: "loc-2",
+        title: "Boston Job",
+        locations: ["Boston, MA"],
+        location: "Boston, MA",
+      },
+    ]);
     const res = await request(app)
       .get("/api/jobs")
       .query({ location: "Seattle" })
@@ -231,19 +367,20 @@ describe("Jobs API - discovery endpoint", () => {
     expect(res.status).toBe(401);
   });
 
-  test("discovers jobs from the mock source and persists them", async () => {
+  test("discovers jobs from registered job sources and persists them", async () => {
+    jest.spyOn(require("../src/integrations/jobs/jobSourceRegistry"), "getEnabledJobSources").mockReturnValue([stubSource()]);
     const { token } = await registerUser();
     const res = await request(app)
       .post("/api/jobs/discover")
       .set("Authorization", `Bearer ${token}`)
       .send({});
     expect(res.status).toBe(200);
-    expect(res.body.sources.length).toBeGreaterThan(0);
     // Network-dependent live sources are disabled in this suite, so only the
-    // Mock source (registered in non-production) is expected to succeed.
-    const mockSource = res.body.sources.find((s: { source: string }) => s.source === "mock");
-    expect(mockSource).toBeDefined();
-    expect(mockSource.status).toBe("success");
+    // injected stub source is expected to succeed.
+    const stubReport = res.body.sources.find((s: { source: string }) => s.source === "stub");
+    expect(stubReport).toBeDefined();
+    expect(stubReport.status).toBe("success");
+    expect(res.body.sources.some((s: { source: string }) => s.source === "mock")).toBe(false);
     expect(res.body.count).toBeGreaterThan(0);
     expect(res.body.jobs.length).toBe(res.body.count);
 
@@ -252,6 +389,7 @@ describe("Jobs API - discovery endpoint", () => {
   });
 
   test("deduplicates identical jobs across repeated discovery", async () => {
+    jest.spyOn(require("../src/integrations/jobs/jobSourceRegistry"), "getEnabledJobSources").mockReturnValue([stubSource()]);
     const { token } = await registerUser();
     const first = await request(app)
       .post("/api/jobs/discover")
@@ -269,6 +407,7 @@ describe("Jobs API - discovery endpoint", () => {
   });
 
   test("discovery applies keyword filters", async () => {
+    jest.spyOn(require("../src/integrations/jobs/jobSourceRegistry"), "getEnabledJobSources").mockReturnValue([stubSource()]);
     const { token } = await registerUser();
     const res = await request(app)
       .post("/api/jobs/discover")
@@ -284,6 +423,7 @@ describe("Jobs API - discovery endpoint", () => {
   });
 
   test("discovery applies location filters", async () => {
+    jest.spyOn(require("../src/integrations/jobs/jobSourceRegistry"), "getEnabledJobSources").mockReturnValue([stubSource()]);
     const { token } = await registerUser();
     const res = await request(app)
       .post("/api/jobs/discover")
@@ -299,17 +439,18 @@ describe("Jobs API - discovery endpoint", () => {
   });
 
   test("discovery applies remote and employment filters together", async () => {
+    jest.spyOn(require("../src/integrations/jobs/jobSourceRegistry"), "getEnabledJobSources").mockReturnValue([stubSource()]);
     const { token } = await registerUser();
     const res = await request(app)
       .post("/api/jobs/discover")
       .set("Authorization", `Bearer ${token}`)
-      .send({ remote: "remote", employmentType: "full-time" });
+      .send({ remote: "remote", employmentType: "part-time" });
     expect(res.status).toBe(200);
     expect(res.body.count).toBeGreaterThan(0);
     expect(
       res.body.jobs.every(
         (j: { remoteType: string; employmentType: string }) =>
-          j.remoteType === "remote" && j.employmentType === "full-time"
+          j.remoteType === "remote" && j.employmentType === "part-time"
       )
     ).toBe(true);
   });

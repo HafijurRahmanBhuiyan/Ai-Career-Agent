@@ -39,7 +39,7 @@ describe("Settings endpoint", () => {
     const ids = sources.map((s) => s.id);
 
     // Adzuna is only registered when its API credentials exist at startup; the
-    // other live sources and the test/development Mock source are always present.
+    // other live sources are always present.
     const expected = selectJobSources(process.env);
     expect(ids.sort()).toEqual(expected.sort());
 
