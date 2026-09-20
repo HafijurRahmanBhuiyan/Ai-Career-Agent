@@ -202,12 +202,12 @@ function CareerIntelligenceCard({
 
   return (
     <div
-      className={`rounded-xl p-4 flex flex-col gap-3 ${
+      className={`rounded-2xl p-5 flex flex-col gap-3 bg-white shadow-card ${
         isOffer
-          ? "bg-white border-2 border-purple-200"
+          ? "border-2 border-brand-200 ring-1 ring-brand-100"
           : isTerminal
-          ? "bg-white border border-red-100"
-          : "bg-white border border-slate-200"
+          ? "border border-rose-100 ring-1 ring-rose-50"
+          : "border border-slate-200/80"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -239,11 +239,11 @@ function CareerIntelligenceCard({
       </div>
 
       {isOffer && (
-        <div className="bg-purple-100/60 border border-purple-200 rounded-lg px-3 py-2">
-          <p className="text-sm font-semibold text-purple-900">
+        <div className="bg-brand-50/70 border border-brand-200 rounded-xl px-3 py-2.5">
+          <p className="text-sm font-semibold text-brand-900">
             Offer received
           </p>
-          <p className="text-xs text-purple-700">
+          <p className="text-xs text-brand-700">
             Review the offer{event?.deadlineAt ? " and respond by the deadline" : ""}.
           </p>
         </div>
@@ -335,20 +335,20 @@ function CareerIntelligenceCard({
       <div className="flex flex-wrap gap-2 mt-auto pt-1">
         <button
           onClick={onViewApplication}
-          className="px-3 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+          className="btn btn-outline btn-sm"
         >
           View Application
         </button>
         <button
           onClick={onViewTimeline}
-          className="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+          className="btn btn-sm text-brand-700 border border-brand-200 bg-brand-50/50 hover:bg-brand-100"
         >
           View Timeline
         </button>
         {event?.scheduledAt && (
           <button
             onClick={handleAddToCalendar}
-            className="px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors"
+            className="btn btn-sm text-emerald-700 border border-emerald-200 bg-white hover:bg-emerald-50"
           >
             {icsAdded ? "Added ✓" : "Add to calendar"}
           </button>
@@ -356,7 +356,7 @@ function CareerIntelligenceCard({
         {draft && (
           <button
             onClick={handleCopyDraft}
-            className="px-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+            className="btn btn-sm text-violet-700 border border-violet-200 bg-white hover:bg-violet-50"
           >
             {copied ? "Copied ✓" : "Copy draft"}
           </button>
@@ -505,35 +505,36 @@ function Applications() {
 
   return (
     <DashboardLayout active="My Applications">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">My Applications</h1>
-          <p className="text-slate-500 mt-1">
+          <h1 className="page-title">My Applications</h1>
+          <p className="page-subtitle">
             Track every job you apply to — from saved to offer
           </p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center justify-between">
+          <div className="mb-6 alert-error">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 ml-4">
+            <button
+              onClick={() => setError(null)}
+              className="btn-ghost btn-sm text-red-600 hover:text-red-800 shrink-0 ml-4"
+            >
               Dismiss
             </button>
           </div>
         )}
 
-        <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
+        <div className="card p-6 mb-6">
           <div className="flex flex-wrap items-end gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">
-                Status
-              </label>
+              <label className="field-label">Status</label>
               <select
                 value={statusFilter}
                 onChange={(e) =>
                   handleStatusSelect(e.target.value as ApplicationStatus | "")
                 }
-                className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="select w-48"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.label} value={opt.value}>
@@ -544,13 +545,13 @@ function Applications() {
             </div>
             <button
               onClick={handleFilter}
-              className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              className="btn-primary"
             >
               Apply Filter
             </button>
           </div>
           {automation && (
-            <p className="mt-4 text-xs text-slate-400">
+            <p className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500">
               Automation: auto status tracking{" "}
               <span
                 className={automation.gmailAutoStatusEnabled ? "text-emerald-600 font-medium" : "text-slate-500"}
@@ -564,7 +565,7 @@ function Applications() {
                 {automation.gmailNotifyEnabled ? "on" : "off"}
               </span>
               {" — managed in "}
-              <a href="/dashboard/settings" className="text-blue-600 hover:underline">
+              <a href="/dashboard/settings" className="text-brand-600 font-medium hover:text-brand-700 hover:underline">
                 Settings
               </a>
             </p>
@@ -573,11 +574,12 @@ function Applications() {
 
         {applications.filter((a) => a.latestCareerEvent?.type).length > 0 && (
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-slate-900">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
                 Career Intelligence
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-500 inline-block"></span>
               </h2>
-              <span className="text-xs text-slate-400">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 border border-brand-200 text-brand-700 px-2.5 py-1 text-xs font-medium">
                 {applications.filter((a) => a.latestCareerEvent?.type).length}{" "}
                 active stage(s)
               </span>
@@ -599,11 +601,11 @@ function Applications() {
 
         {loading ? (
           <div className="text-center py-16">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+            <div className="spinner h-8 w-8 mb-4"></div>
             <p className="text-slate-500 text-sm">Loading applications...</p>
           </div>
         ) : applications.length === 0 ? (
-          <div className="text-center py-16 bg-white border border-slate-200 rounded-xl">
+          <div className="empty-state">
             <p className="text-slate-500 text-sm mb-1">No applications yet.</p>
             <p className="text-slate-400 text-xs mb-4">
               Track jobs you are interested in so you can follow them from saved to offer.
@@ -611,22 +613,23 @@ function Applications() {
             </p>
           </div>
         ) : (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 text-left text-xs">
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[1000px]">
+              <thead className="bg-surface-50 text-slate-500 text-left text-xs">
                 <tr>
-                  <th className="px-4 py-3">Job</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Detected</th>
-                  <th className="px-4 py-3">Applied</th>
-                  <th className="px-4 py-3">Notes</th>
-                  <th className="px-4 py-3"></th>
+                  <th className="th">Job</th>
+                  <th className="th">Status</th>
+                  <th className="th">Detected</th>
+                  <th className="th">Applied</th>
+                  <th className="th">Notes</th>
+                  <th className="th"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {applications.map((app) => (
-                  <tr key={app._id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
+                  <tr key={app._id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="td">
                       <p className="font-medium text-slate-900">
                         {app.job?.title || "Untitled Job"}
                       </p>
@@ -640,13 +643,13 @@ function Applications() {
                           href={validateHandoffUrl(app.job?.jobUrl) ?? undefined}
                           target="_blank"
                           rel="noreferrer noopener"
-                          className="text-xs text-blue-600 hover:underline"
+                          className="text-xs text-brand-600 font-medium hover:text-brand-700 hover:underline"
                         >
                           View job post
                         </a>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="td">
                       <span
                         className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_STYLES[app.status]}`}
                       >
@@ -658,7 +661,7 @@ function Applications() {
                         </p>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="td">
                       {app.careerEmailDetection?.careerStatus ? (
                         <div>
                           <span
@@ -712,28 +715,28 @@ function Applications() {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">
+                    <td className="td text-slate-500 text-xs">
                       {app.appliedAt ? formatDate(app.appliedAt) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-slate-600 text-xs max-w-[180px]">
+                    <td className="td text-slate-600 text-xs max-w-[180px]">
                       <span className="line-clamp-2">{app.notes || "—"}</span>
                     </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <td className="td text-right whitespace-nowrap">
                       <button
                         onClick={() => setViewing(app)}
-                        className="px-3 py-1.5 text-xs text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors mr-2"
+                        className="btn btn-outline btn-sm mr-2"
                       >
                         Details
                       </button>
                       <button
                         onClick={() => setEditing(app)}
-                        className="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors mr-2"
+                        className="btn btn-sm mr-2 text-brand-700 border border-brand-200 bg-brand-50/50 hover:bg-brand-100"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => setDeleting(app)}
-                        className="px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                        className="btn btn-danger-outline btn-sm"
                       >
                         Delete
                       </button>
@@ -742,25 +745,26 @@ function Applications() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
         {pagination.totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-6">
+          <div className="flex items-center justify-center gap-2 mt-8">
             <button
               onClick={() => handlePageChange(pagination.page - 1)}
               disabled={pagination.page <= 1 || loading}
-              className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+              className="btn btn-outline btn-sm disabled:opacity-50"
             >
               Previous
             </button>
-            <span className="text-sm text-slate-500">
+            <span className="rounded-full bg-surface-100 text-slate-600 px-3 py-1 text-xs font-medium">
               Page {pagination.page} of {pagination.totalPages}
             </span>
             <button
               onClick={() => handlePageChange(pagination.page + 1)}
               disabled={pagination.page >= pagination.totalPages || loading}
-              className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+              className="btn btn-outline btn-sm disabled:opacity-50"
             >
               Next
             </button>
@@ -803,8 +807,8 @@ function Applications() {
       )}
 
       {deleting && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl w-full max-w-sm p-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-sm p-6">
             <h2 className="text-lg font-semibold text-slate-900 mb-2">
               Delete application?
             </h2>
@@ -818,13 +822,13 @@ function Applications() {
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleting(null)}
-                className="flex-1 px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                className="btn btn-outline flex-1"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                className="btn btn-danger flex-1"
               >
                 Delete
               </button>
@@ -876,9 +880,9 @@ function EditApplicationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-xl w-full max-w-md">
-        <div className="flex items-start justify-between p-6 border-b border-slate-200">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-md">
+        <div className="flex items-start justify-between p-6 border-b border-slate-200/80">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Edit Application</h2>
             <p className="text-sm text-slate-600 mt-1">
@@ -887,28 +891,24 @@ function EditApplicationModal({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-xl leading-none"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 text-xl leading-none transition-colors"
             aria-label="Close"
           >
             ×
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 flex-1 overflow-y-auto">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
-            </div>
+            <div className="mb-4 alert-error">{error}</div>
           )}
 
           <div className="mb-4">
-            <label className="block text-xs font-medium text-slate-500 mb-1">
-              Status
-            </label>
+            <label className="field-label">Status</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as ApplicationStatus)}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="select"
             >
               {STATUS_OPTIONS.filter((o) => o.value !== "").map((opt) => (
                 <option key={opt.label} value={opt.value}>
@@ -919,42 +919,38 @@ function EditApplicationModal({
           </div>
 
           <div className="mb-4">
-            <label className="block text-xs font-medium text-slate-500 mb-1">
-              Applied Date
-            </label>
+            <label className="field-label">Applied Date</label>
             <input
               type="date"
               value={appliedAt}
               onChange={(e) => setAppliedAt(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input"
             />
           </div>
 
           <div className="mb-4">
-            <label className="block text-xs font-medium text-slate-500 mb-1">
-              Notes
-            </label>
+            <label className="field-label">Notes</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
               maxLength={5000}
               placeholder="Add notes about this application..."
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="textarea"
             />
           </div>
 
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              className="btn btn-outline flex-1"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="btn btn-primary flex-1"
             >
               {saving ? "Saving..." : "Save"}
             </button>
@@ -1111,9 +1107,9 @@ function ApplicationDetailModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-start justify-between p-6 border-b border-slate-200">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-2xl">
+        <div className="flex items-start justify-between p-6 border-b border-slate-200/80 shrink-0">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">{jobTitle}</h2>
             <p className="text-sm text-slate-600 mt-1">{companyName}</p>
@@ -1122,7 +1118,7 @@ function ApplicationDetailModal({
                 href={jobUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="text-xs text-blue-600 hover:underline inline-block mt-1 break-all"
+                className="text-xs text-brand-600 font-medium hover:text-brand-700 hover:underline inline-block mt-1 break-all"
               >
                 View job post
               </a>
@@ -1130,23 +1126,21 @@ function ApplicationDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-xl leading-none"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 text-xl leading-none transition-colors"
             aria-label="Close"
           >
             ×
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto" ref={bodyRef}>
+        <div className="p-6 overflow-y-auto flex-1 min-h-0" ref={bodyRef}>
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
-            </div>
+            <div className="mb-4 alert-error">{error}</div>
           )}
 
           {loading ? (
             <div className="text-center py-10">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3"></div>
+              <div className="spinner h-8 w-8 mb-3"></div>
               <p className="text-slate-500 text-sm">Loading details...</p>
             </div>
           ) : (
@@ -1154,7 +1148,7 @@ function ApplicationDetailModal({
               <div>
                 <h3 className="text-sm font-semibold text-slate-800 mb-2">Overview</h3>
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-slate-50 rounded-lg p-3">
+                  <div className="bg-surface-50 rounded-xl p-3">
                     <p className="text-xs text-slate-500">Status</p>
                     <span
                       className={`inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_STYLES[detail?.application?.status || application.status]}`}
@@ -1162,7 +1156,7 @@ function ApplicationDetailModal({
                       {detail?.application?.status || application.status}
                     </span>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3">
+                  <div className="bg-surface-50 rounded-xl p-3">
                     <p className="text-xs text-slate-500">Applied</p>
                     <p className="font-medium text-slate-900 mt-1">
                       {detail?.application?.appliedAt
@@ -1170,13 +1164,13 @@ function ApplicationDetailModal({
                         : "—"}
                     </p>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3 col-span-2">
+                  <div className="bg-surface-50 rounded-xl p-3 col-span-2">
                     <p className="text-xs text-slate-500">Notes</p>
                     <p className="font-medium text-slate-900 mt-1 whitespace-pre-wrap break-words">
                       {detail?.application?.notes || "—"}
                     </p>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3 col-span-2">
+                  <div className="bg-surface-50 rounded-xl p-3 col-span-2">
                     <p className="text-xs text-slate-500">
                       Detected career stage
                     </p>
@@ -1222,7 +1216,7 @@ function ApplicationDetailModal({
                       </p>
                     )}
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-3 col-span-2">
+                  <div className="bg-surface-50 rounded-xl p-3 col-span-2">
                     <p className="text-xs text-slate-500">Latest status change</p>
                     {latestEvent ? (
                       <>
@@ -1241,8 +1235,8 @@ function ApplicationDetailModal({
                     )}
                   </div>
                   {latestCareerEvent?.type && (
-                    <div className="bg-emerald-50 rounded-lg p-3 col-span-2">
-                      <p className="text-xs text-emerald-700">
+                    <div className="bg-brand-50/60 border border-brand-100 rounded-xl p-3 col-span-2">
+                      <p className="text-xs text-brand-700 font-medium">
                         Latest career event
                       </p>
                       <p className="font-medium text-slate-900 mt-1 capitalize">
@@ -1326,7 +1320,7 @@ function ApplicationDetailModal({
                                   2000
                                 );
                               }}
-                              className="px-2.5 py-1 text-[11px] font-medium text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+                              className="btn btn-sm text-emerald-700 border border-emerald-200 bg-white hover:bg-emerald-50"
                             >
                               {eventIcsAdded
                                 ? "Added ✓"
@@ -1349,7 +1343,7 @@ function ApplicationDetailModal({
                                   );
                                 }
                               }}
-                              className="px-2.5 py-1 text-[11px] font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                              className="btn btn-sm text-violet-700 border border-violet-200 bg-white hover:bg-violet-50"
                             >
                               {eventCopied ? "Copied ✓" : "Copy draft"}
                             </button>
@@ -1363,7 +1357,7 @@ function ApplicationDetailModal({
 
               <div>
                 <h3
-                  className="text-sm font-semibold text-slate-800 mb-2"
+                  className="text-sm font-semibold text-slate-800 mb-2 tracking-tight"
                   data-timeline
                 >
                   Timeline ({events.length})
@@ -1375,7 +1369,7 @@ function ApplicationDetailModal({
                     events.map((event) => (
                       <div
                         key={event.id}
-                        className="flex items-start justify-between gap-2 border border-slate-200 rounded-lg p-3"
+                        className="flex items-start justify-between gap-2 border border-slate-200/80 rounded-xl p-3 bg-white shadow-sm"
                       >
                         <div>
                           <div className="flex items-center gap-2">
@@ -1403,7 +1397,7 @@ function ApplicationDetailModal({
                         {event.source === "user" && (
                           <button
                             onClick={() => handleDeleteEvent(event.id)}
-                            className="text-xs text-red-500 hover:text-red-700 shrink-0"
+                            className="text-xs font-medium text-red-500 hover:text-red-700 shrink-0"
                             title="Delete event"
                           >
                             Delete
@@ -1414,13 +1408,13 @@ function ApplicationDetailModal({
                   )}
                 </div>
 
-                <div className="mt-3 border border-slate-200 rounded-lg p-3 space-y-2">
+                <div className="mt-3 border border-slate-200/80 rounded-xl p-3 space-y-2 bg-surface-50/50">
                   <p className="text-xs font-medium text-slate-600">Add manual event</p>
                   <div className="flex gap-2">
                     <select
                       value={newType}
                       onChange={(e) => setNewType(e.target.value as TimelineEventType)}
-                      className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
                     >
                       {EVENT_TYPE_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
@@ -1432,7 +1426,7 @@ function ApplicationDetailModal({
                       type="date"
                       value={newDate}
                       onChange={(e) => setNewDate(e.target.value)}
-                      className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
                     />
                   </div>
                   <input
@@ -1440,18 +1434,18 @@ function ApplicationDetailModal({
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     placeholder="Event title (e.g. Called recruiter)"
-                    className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
                   />
                   <input
                     type="text"
                     value={newDescription}
                     onChange={(e) => setNewDescription(e.target.value)}
                     placeholder="Optional description"
-                    className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
                   />
                   <button
                     onClick={handleAddEvent}
-                    className="w-full px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                    className="btn btn-primary btn-sm btn-block"
                   >
                     Add event
                   </button>
@@ -1460,14 +1454,14 @@ function ApplicationDetailModal({
 
               {(detail?.emails?.length ?? 0) > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-2 tracking-tight">
                     Related emails ({detail?.emails.length})
                   </h3>
                   <div className="space-y-2">
                     {detail?.emails.map((email) => (
                       <div
                         key={email.id || email.gmailMessageId}
-                        className="border border-slate-200 rounded-lg p-3"
+                        className="border border-slate-200/80 rounded-xl p-3 bg-surface-50/50"
                       >
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-medium text-slate-900">
@@ -1501,10 +1495,10 @@ function ApplicationDetailModal({
                 detail?.interview?.type ||
                 detail?.interview?.location) && (
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-800 mb-2">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-2 tracking-tight">
                     Upcoming interview
                   </h3>
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-1 text-sm">
+                  <div className="bg-violet-50/70 border border-violet-200 rounded-xl p-3.5 space-y-1 text-sm">
                     {detail?.interview?.scheduledAt && (
                       <p className="text-slate-800">
                         <span className="text-slate-500">When: </span>
@@ -1580,19 +1574,19 @@ function ApplicationDetailModal({
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-slate-800">
+                  <h3 className="text-sm font-semibold text-slate-800 tracking-tight">
                     AI summary
                   </h3>
                   <button
                     onClick={handleGenerateSummary}
                     disabled={summaryLoading}
-                    className="px-3 py-1.5 text-xs text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                    className="btn btn-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
                   >
                     {summaryLoading ? "Generating..." : summary ? "Regenerate" : "Generate summary"}
                   </button>
                 </div>
                 {summary ? (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2 text-sm">
+                  <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-2 text-sm">
                     <p className="text-slate-800">{String(summary.summary || "")}</p>
                     {Boolean(summary.currentSituation) && (
                       <p className="text-slate-600">
@@ -1738,9 +1732,9 @@ function ApplicationExecutionSection({
   const alreadyApplied = info?.application.status === "applied";
 
   return (
-    <div className="border border-indigo-200 bg-indigo-50/40 rounded-lg p-3 space-y-3">
+    <div className="border border-brand-200 bg-brand-50/40 rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">Apply & Track</h3>
+        <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Apply & Track</h3>
         {loading && <p className="text-xs text-slate-400">Loading...</p>}
       </div>
 
@@ -1762,13 +1756,13 @@ function ApplicationExecutionSection({
               <button
                 onClick={handlePrepare}
                 disabled={preparing}
-                className="px-3 py-1.5 text-xs text-indigo-700 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                className="btn btn-sm text-brand-700 border border-brand-200 bg-white hover:bg-brand-50 disabled:opacity-50"
               >
                 {preparing ? "Preparing..." : "Review & prepare"}
               </button>
               <button
                 onClick={() => setConfirmingOpen(true)}
-                className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                className="btn btn-primary btn-sm"
               >
                 Confirm applied
               </button>
@@ -1781,7 +1775,7 @@ function ApplicationExecutionSection({
                 href={handoffUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block px-3 py-1.5 text-xs text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+                className="btn btn-primary btn-sm"
               >
                 Open application site
               </a>
@@ -1804,8 +1798,8 @@ function ApplicationExecutionSection({
       )}
 
       {confirmingOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl w-full max-w-sm p-5 space-y-3">
+        <div className="modal-backdrop z-[60]">
+          <div className="modal-panel max-w-sm p-5 space-y-3">
             <h4 className="text-sm font-semibold text-slate-900">Confirm applied?</h4>
             <p className="text-xs text-slate-600">
               Confirm only if you actually completed and submitted the application on
@@ -1815,14 +1809,14 @@ function ApplicationExecutionSection({
               <button
                 onClick={() => setConfirmingOpen(false)}
                 disabled={confirming}
-                className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-slate-50"
+                className="btn btn-outline btn-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmApplied}
                 disabled={confirming}
-                className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="btn btn-primary btn-sm"
               >
                 {confirming ? "Confirming..." : "Confirm"}
               </button>
@@ -1862,13 +1856,13 @@ function JobFitAssistSection({
   const a = result?.assessment;
 
   return (
-    <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+    <div className="border border-slate-200/80 rounded-xl p-4 space-y-2 bg-surface-50/40">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">Job-fit assist</h3>
+        <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Job-fit assist</h3>
         <button
           onClick={handleAssist}
           disabled={loading}
-          className="px-3 py-1.5 text-xs text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+          className="btn btn-primary btn-sm"
         >
           {loading ? "Analyzing..." : result ? "Re-run" : "Run assist"}
         </button>
@@ -2065,17 +2059,17 @@ function PreparationSection({
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold text-slate-800">Interview preparation</h3>
+        <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Interview preparation</h3>
         <button
           onClick={handleAssist}
           disabled={assistLoading}
-          className="px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors disabled:opacity-50"
+          className="btn btn-sm text-emerald-700 border border-emerald-200 bg-white hover:bg-emerald-50 disabled:opacity-50"
         >
           {assistLoading ? "Generating..." : "Ask AI for suggestions"}
         </button>
       </div>
 
-      <div className="border border-slate-200 rounded-lg p-3 space-y-4">
+      <div className="border border-slate-200/80 rounded-xl p-4 space-y-5">
         <div>
           <p className="text-xs font-medium text-slate-600 mb-1">Checklist</p>
           <div className="space-y-1.5">
@@ -2088,7 +2082,7 @@ function PreparationSection({
                   type="checkbox"
                   checked={item.completed}
                   onChange={() => toggleChecklist(item.key)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                 />
                 <span
                   className={
@@ -2103,7 +2097,7 @@ function PreparationSection({
         </div>
 
         {suggestions && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+          <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-2">
             <p className="text-xs font-semibold text-emerald-800">
               AI suggestions (click to add)
             </p>
@@ -2115,7 +2109,7 @@ function PreparationSection({
                     <button
                       key={s}
                       onClick={() => applySuggestion("goals", s)}
-                      className="text-xs px-2 py-0.5 bg-white border border-emerald-300 rounded-full hover:bg-emerald-100"
+                      className="text-xs px-2 py-0.5 bg-white border border-emerald-300 rounded-full hover:bg-emerald-50 hover:border-emerald-400 transition-colors"
                     >
                       + {s}
                     </button>
@@ -2131,7 +2125,7 @@ function PreparationSection({
                     <button
                       key={s}
                       onClick={() => applySuggestion("talkingPoints", s)}
-                      className="text-xs px-2 py-0.5 bg-white border border-emerald-300 rounded-full hover:bg-emerald-100"
+                      className="text-xs px-2 py-0.5 bg-white border border-emerald-300 rounded-full hover:bg-emerald-50 hover:border-emerald-400 transition-colors"
                     >
                       + {s}
                     </button>
@@ -2147,7 +2141,7 @@ function PreparationSection({
                     <button
                       key={s}
                       onClick={() => applySuggestion("questionsToAsk", s)}
-                      className="text-xs px-2 py-0.5 bg-white border border-emerald-300 rounded-full hover:bg-emerald-100"
+                      className="text-xs px-2 py-0.5 bg-white border border-emerald-300 rounded-full hover:bg-emerald-50 hover:border-emerald-400 transition-colors"
                     >
                       + {s}
                     </button>
@@ -2166,7 +2160,7 @@ function PreparationSection({
             rows={2}
             maxLength={10000}
             placeholder="Overall preparation notes..."
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="textarea"
           />
         </div>
 
@@ -2205,7 +2199,7 @@ function PreparationSection({
             rows={2}
             maxLength={10000}
             placeholder="Notes about the company..."
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="textarea"
           />
         </div>
 
@@ -2217,14 +2211,14 @@ function PreparationSection({
             rows={2}
             maxLength={10000}
             placeholder="Notes for this specific role..."
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="textarea"
           />
         </div>
 
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full px-3 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="btn btn-primary btn-block"
         >
           {saving ? "Saving..." : "Save Preparation"}
         </button>
@@ -2265,7 +2259,7 @@ function StringListEditor({
               type="button"
               onClick={() => onChange(items.filter((_, i) => i !== index))}
               title="Remove"
-              className="text-xs px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-full hover:bg-red-50 hover:text-red-600"
+              className="text-xs px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-full hover:bg-red-50 hover:text-red-600 transition-colors"
             >
               {item} ×
             </button>
@@ -2278,7 +2272,7 @@ function StringListEditor({
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="input"
       />
     </div>
   );
@@ -2460,7 +2454,7 @@ function FollowUpsSection({
     return (
       <div
         key={f.id}
-        className="flex items-start justify-between gap-2 border border-slate-100 rounded-lg p-2.5"
+        className="flex items-start justify-between gap-2 border border-slate-200/80 rounded-xl p-3 bg-surface-50/50"
       >
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -2494,19 +2488,19 @@ function FollowUpsSection({
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => openEdit(f)}
-            className="text-xs px-2 py-1 text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+            className="btn btn-outline btn-sm"
           >
             Edit
           </button>
           <button
             onClick={() => toggleComplete(f)}
-            className="text-xs px-2 py-1 text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+            className="btn btn-sm text-slate-700 border border-slate-200 bg-white hover:bg-slate-50"
           >
             {f.completed ? "Reopen" : "Complete"}
           </button>
           <button
             onClick={() => setConfirmDelete(f)}
-            className="text-xs px-2 py-1 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+            className="btn btn-danger-outline btn-sm"
           >
             Delete
           </button>
@@ -2518,25 +2512,25 @@ function FollowUpsSection({
   return (
     <div>
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-        <h3 className="text-sm font-semibold text-slate-800">Follow-ups</h3>
+        <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Follow-ups</h3>
         <button
           onClick={handleAssist}
           disabled={assistLoading}
-          className="px-3 py-1.5 text-xs text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors disabled:opacity-50"
+          className="btn btn-sm text-emerald-700 border border-emerald-200 bg-white hover:bg-emerald-50 disabled:opacity-50"
         >
           {assistLoading ? "Generating..." : "Ask AI for follow-up suggestions"}
         </button>
       </div>
 
       {suggestions.length > 0 && (
-        <div className="mb-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+        <div className="mb-4 bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-2">
           <p className="text-xs font-semibold text-emerald-800">
             AI follow-up suggestions (review and click to add)
           </p>
           {suggestions.map((s, idx) => (
             <div
               key={idx}
-              className="bg-white border border-emerald-300 rounded-lg p-2.5"
+              className="bg-white border border-emerald-200 rounded-xl p-3 shadow-sm"
             >
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-medium text-slate-900">
@@ -2562,7 +2556,7 @@ function FollowUpsSection({
               <button
                 onClick={() => addSuggestion(s)}
                 disabled={adding}
-                className="mt-2 px-3 py-1 text-xs text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                className="btn btn-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
               >
                 Add suggestion
               </button>
@@ -2571,7 +2565,7 @@ function FollowUpsSection({
         </div>
       )}
 
-      <div className="border border-slate-200 rounded-lg p-3 space-y-3">
+      <div className="border border-slate-200/80 rounded-xl p-4 space-y-4">
         <div>
           <p className="text-xs font-semibold text-slate-600 mb-1.5">
             Open ({open.length})
@@ -2600,7 +2594,7 @@ function FollowUpsSection({
             <select
               value={action}
               onChange={(e) => setAction(e.target.value as FollowUpAction)}
-              className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 min-w-[130px] px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
             >
               {FOLLOW_UP_ACTIONS.map((a) => (
                 <option key={a} value={a}>
@@ -2612,12 +2606,12 @@ function FollowUpsSection({
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 min-w-[130px] px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
             />
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as FollowUpPriority)}
-              className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 min-w-[130px] px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
             >
               {FOLLOW_UP_PRIORITIES.map((p) => (
                 <option key={p} value={p}>
@@ -2631,12 +2625,12 @@ function FollowUpsSection({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Optional note"
-            className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
           />
           <button
             onClick={handleAdd}
             disabled={adding}
-            className="w-full px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="btn btn-primary btn-sm btn-block"
           >
             {adding ? "Adding..." : "Add follow-up"}
           </button>
@@ -2644,20 +2638,20 @@ function FollowUpsSection({
       </div>
 
       {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl w-full max-w-md p-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-md p-6">
             <h2 className="text-lg font-semibold text-slate-900 mb-2">
               Edit follow-up
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-3 flex-1 overflow-y-auto">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
+                <label className="field-label">
                   Action
                 </label>
                 <select
                   value={editAction}
                   onChange={(e) => setEditAction(e.target.value as FollowUpAction)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="select"
                 >
                   {FOLLOW_UP_ACTIONS.map((a) => (
                     <option key={a} value={a}>
@@ -2667,18 +2661,18 @@ function FollowUpsSection({
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
+                <label className="field-label">
                   Due date
                 </label>
                 <input
                   type="date"
                   value={editDueDate}
                   onChange={(e) => setEditDueDate(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="input"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
+                <label className="field-label">
                   Priority
                 </label>
                 <select
@@ -2686,7 +2680,7 @@ function FollowUpsSection({
                   onChange={(e) =>
                     setEditPriority(e.target.value as FollowUpPriority)
                   }
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="select"
                 >
                   {FOLLOW_UP_PRIORITIES.map((p) => (
                     <option key={p} value={p}>
@@ -2696,7 +2690,7 @@ function FollowUpsSection({
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
+                <label className="field-label">
                   Note
                 </label>
                 <input
@@ -2704,19 +2698,19 @@ function FollowUpsSection({
                   value={editNote}
                   onChange={(e) => setEditNote(e.target.value)}
                   placeholder="Optional note"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="input"
                 />
               </div>
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={() => setEditing(null)}
-                  className="flex-1 px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="btn btn-outline flex-1"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                  className="btn btn-primary flex-1"
                 >
                   Save
                 </button>
@@ -2727,8 +2721,8 @@ function FollowUpsSection({
       )}
 
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-xl w-full max-w-sm p-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-sm p-6">
             <h2 className="text-lg font-semibold text-slate-900 mb-2">
               Delete follow-up?
             </h2>
@@ -2739,13 +2733,13 @@ function FollowUpsSection({
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="flex-1 px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                className="btn btn-outline flex-1"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                className="btn btn-danger flex-1"
               >
                 Delete
               </button>
@@ -2771,30 +2765,30 @@ function ActionCenter({
 
   return (
     <div>
-      <h3 className="text-sm font-semibold text-slate-800 mb-2">
+      <h3 className="text-sm font-semibold text-slate-800 mb-2 tracking-tight">
         Action Center
       </h3>
-      <div className="border border-slate-200 rounded-lg p-3">
+      <div className="border border-slate-200/80 rounded-xl p-4 bg-surface-50/40">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-          <div className="bg-slate-50 rounded-lg p-3">
+          <div className="bg-white border border-slate-200/70 rounded-xl p-3">
             <p className="text-2xl font-bold text-slate-900">
               {actionSummary?.open ?? 0}
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">Open actions</p>
           </div>
-          <div className="bg-red-50 rounded-lg p-3">
-            <p className="text-2xl font-bold text-red-700">
+          <div className="bg-rose-50 rounded-xl p-3">
+            <p className="text-2xl font-bold text-rose-700">
               {actionSummary?.overdue ?? 0}
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">Overdue</p>
           </div>
-          <div className="bg-amber-50 rounded-lg p-3">
+          <div className="bg-amber-50 rounded-xl p-3">
             <p className="text-2xl font-bold text-amber-700">
               {actionSummary?.dueToday ?? 0}
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">Due today</p>
           </div>
-          <div className="bg-emerald-50 rounded-lg p-3">
+          <div className="bg-emerald-50 rounded-xl p-3">
             <p className="text-2xl font-bold text-emerald-700">
               {actionSummary?.completed ?? 0}
             </p>
@@ -2819,7 +2813,7 @@ function ActionCenter({
             <div className="flex items-center gap-2">
               <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-blue-600 rounded-full transition-all"
+                  className="h-full bg-gradient-to-r from-brand-500 to-violet-500 rounded-full transition-all"
                   style={{ width: `${preparationSummary.completionPercent}%` }}
                 />
               </div>

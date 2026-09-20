@@ -432,12 +432,12 @@ function MakeCV() {
             }
           }}
           placeholder="Add a bullet point"
-          className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 input"
         />
         <button
           type="button"
           onClick={onAdd}
-          className="px-3 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+          className="btn-secondary"
         >
           Add
         </button>
@@ -447,13 +447,13 @@ function MakeCV() {
           {items.map((item, i) => (
             <li
               key={i}
-              className="flex items-center justify-between text-sm text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg"
+              className="flex items-center justify-between gap-3 text-sm text-slate-700 bg-slate-50/70 border border-slate-100 px-3.5 py-2 rounded-xl"
             >
-              <span className="mr-2">{item}</span>
+              <span>{item}</span>
               <button
                 type="button"
                 onClick={() => onRemove(i)}
-                className="text-red-400 hover:text-red-600 text-xs"
+                className="text-red-500 hover:text-red-700 text-xs font-medium"
               >
                 Remove
               </button>
@@ -503,14 +503,13 @@ function MakeCV() {
     }
   };
 
-  const inputClass =
-    "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const inputClass = "input";
 
   if (loading) {
     return (
       <DashboardLayout active="Make CV">
-        <div className="text-center py-16">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+        <div className="empty-state">
+          <div className="spinner h-8 w-8 mb-4"></div>
           <p className="text-slate-500 text-sm">Loading CV...</p>
         </div>
       </DashboardLayout>
@@ -519,37 +518,40 @@ function MakeCV() {
 
   return (
     <DashboardLayout active="Make CV">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">Make CV</h1>
-          <p className="text-slate-500 mt-1">
-            Build an ATS-friendly CV step by step
-          </p>
+      <div className="max-w-6xl mx-auto px-4 sm:px-0">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Make CV</h1>
+            <p className="page-subtitle">Build an ATS-friendly CV step by step</p>
+          </div>
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center justify-between">
+          <div className="alert-error mb-6">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="text-red-500 ml-4">
+            <button
+              onClick={() => setError(null)}
+              className="text-red-500 hover:text-red-700 font-medium ml-4 whitespace-nowrap"
+            >
               Dismiss
             </button>
           </div>
         )}
         {success && (
-          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm flex items-center justify-between">
+          <div className="alert-success mb-6">
             <span>{success}</span>
             <button
               onClick={() => setSuccess(null)}
-              className="text-green-500 ml-4"
+              className="text-emerald-500 hover:text-emerald-700 font-medium ml-4 whitespace-nowrap"
             >
               Dismiss
             </button>
           </div>
         )}
 
-        <div className="flex gap-8">
-          <nav className="w-56 flex-shrink-0">
-            <div className="bg-white border border-slate-200 rounded-xl p-4 sticky top-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          <nav className="lg:w-60 lg:flex-shrink-0">
+            <div className="card p-4 sticky top-8">
               <div className="space-y-1">
                 {STEPS.map((step, idx) => (
                   <button
@@ -557,13 +559,13 @@ function MakeCV() {
                     onClick={() => setCurrentStep(idx)}
                     className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors ${
                       idx === currentStep
-                        ? "bg-blue-50 text-blue-700 font-medium"
+                        ? "bg-brand-50 text-brand-700 font-medium"
                         : idx < currentStep
                         ? "text-slate-600 hover:bg-slate-50"
                         : "text-slate-400"
                     }`}
                   >
-                    <span className="mr-2">
+                    <span className="mr-2 font-medium">
                       {idx < currentStep ? "✓" : `${idx + 1}.`}
                     </span>
                     {step}
@@ -576,13 +578,13 @@ function MakeCV() {
           <div className="flex-1 min-w-0">
             <form onSubmit={handleSubmit}>
               {currentStep === 0 && (
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <h2 className="text-base font-semibold text-slate-900 mb-4">
+                <section className="card p-6">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-5">
                     Personal Information
                   </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="field-label">
                         CV Title
                       </label>
                       <input
@@ -596,7 +598,7 @@ function MakeCV() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="field-label">
                         Full Name *
                       </label>
                       <input
@@ -609,7 +611,7 @@ function MakeCV() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="field-label">
                         Email *
                       </label>
                       <input
@@ -622,7 +624,7 @@ function MakeCV() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="field-label">
                         Phone *
                       </label>
                       <input
@@ -635,7 +637,7 @@ function MakeCV() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="field-label">
                         Location *
                       </label>
                       <input
@@ -649,7 +651,7 @@ function MakeCV() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="field-label">
                         LinkedIn
                       </label>
                       <input
@@ -663,7 +665,7 @@ function MakeCV() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="field-label">
                         Website
                       </label>
                       <input
@@ -681,11 +683,11 @@ function MakeCV() {
               )}
 
               {currentStep === 1 && (
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <h2 className="text-base font-semibold text-slate-900 mb-4">
+                <section className="card p-6">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-5">
                     Professional Summary
                   </h2>
-                  <p className="text-xs text-slate-500 mb-3">
+                  <p className="text-sm text-slate-500 mb-4">
                     A 2-4 sentence overview of your experience and career goals.
                     Keep it concise and keyword-rich for ATS.
                   </p>
@@ -699,7 +701,7 @@ function MakeCV() {
                       }))
                     }
                     placeholder="e.g. Software engineer with 5+ years of experience building scalable web applications..."
-                    className={`${inputClass} resize-none`}
+                    className="textarea"
                   />
                   <p className="text-xs text-slate-400 mt-1">
                     {data.professionalSummary.length}/2000 characters
@@ -708,15 +710,15 @@ function MakeCV() {
               )}
 
               {currentStep === 3 && (
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <h2 className="text-base font-semibold text-slate-900 mb-4">
+                <section className="card p-6">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-5">
                     Work Experience
                   </h2>
                   <div className="space-y-6">
                     {data.workExperience.map((work, idx) => (
                       <div
                         key={idx}
-                        className="border border-slate-100 rounded-lg p-4 relative"
+                        className="rounded-xl border border-slate-100 bg-slate-50/40 p-4 relative"
                       >
                         {data.workExperience.length > 1 && (
                           <button
@@ -729,14 +731,14 @@ function MakeCV() {
                                 ),
                               }))
                             }
-                            className="absolute top-3 right-3 text-xs text-red-400 hover:text-red-600"
+                            className="absolute top-3 right-3 text-xs text-red-500 hover:text-red-700 font-medium"
                           >
                             Remove
                           </button>
                         )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               Company *
                             </label>
                             <input
@@ -749,7 +751,7 @@ function MakeCV() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               Designation *
                             </label>
                             <input
@@ -762,7 +764,7 @@ function MakeCV() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               Location
                             </label>
                             <input
@@ -776,7 +778,7 @@ function MakeCV() {
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Start Date
                               </label>
                               <input
@@ -794,7 +796,7 @@ function MakeCV() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 End Date
                               </label>
                               <input
@@ -814,7 +816,7 @@ function MakeCV() {
                             </div>
                           </div>
                           <div className="md:col-span-2">
-                            <label className="flex items-center gap-2 text-sm text-slate-700">
+                            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
                               <input
                                 type="checkbox"
                                 checked={work.current}
@@ -825,14 +827,14 @@ function MakeCV() {
                                     e.target.checked
                                   )
                                 }
-                                className="h-4 w-4 text-blue-600 border-slate-300 rounded"
+                                className="h-4 w-4 text-brand-600 border-slate-300 rounded"
                               />
                               Currently working here
                             </label>
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-1">
+                          <label className="field-label">
                             Highlights
                           </label>
                           {renderHighlightInput(
@@ -843,14 +845,14 @@ function MakeCV() {
                           )}
                         </div>
                         <div className="flex items-center gap-3">
-                          <div className="flex-1 border-t border-slate-200"></div>
+                          <div className="flex-1 border-t border-slate-200/70"></div>
                           <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
                             OR
                           </span>
-                          <div className="flex-1 border-t border-slate-200"></div>
+                          <div className="flex-1 border-t border-slate-200/70"></div>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-1">
+                          <label className="field-label">
                             Description
                           </label>
                           <textarea
@@ -864,7 +866,7 @@ function MakeCV() {
                               )
                             }
                             placeholder="Describe your responsibilities and achievements as a paragraph..."
-                            className={`${inputClass} resize-none`}
+                            className="textarea"
                           />
                         </div>
                       </div>
@@ -881,7 +883,7 @@ function MakeCV() {
                         ],
                       }))
                     }
-                    className="mt-4 text-sm text-blue-600 hover:text-blue-700"
+                    className="mt-4 btn-secondary"
                   >
                     + Add another work experience
                   </button>
@@ -889,15 +891,15 @@ function MakeCV() {
               )}
 
               {currentStep === 2 && (
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <h2 className="text-base font-semibold text-slate-900 mb-4">
+                <section className="card p-6">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-5">
                     Education
                   </h2>
                   <div className="space-y-6">
                     {data.education.map((edu, idx) => (
                       <div
                         key={idx}
-                        className="border border-slate-100 rounded-lg p-4 relative"
+                        className="rounded-xl border border-slate-100 bg-slate-50/40 p-4 relative"
                       >
                         {data.education.length > 1 && (
                           <button
@@ -910,14 +912,14 @@ function MakeCV() {
                                 ),
                               }))
                             }
-                            className="absolute top-3 right-3 text-xs text-red-400 hover:text-red-600"
+                            className="absolute top-3 right-3 text-xs text-red-500 hover:text-red-700 font-medium"
                           >
                             Remove
                           </button>
                         )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               Institution *
                             </label>
                             <input
@@ -930,7 +932,7 @@ function MakeCV() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               Degree Type
                             </label>
                             <select
@@ -938,7 +940,7 @@ function MakeCV() {
                               onChange={(e) =>
                                 handleEduDegreeTypeChange(idx, e.target.value)
                               }
-                              className={inputClass}
+                              className="select"
                             >
                               <option value="">Select degree type</option>
                               <option value="SSC">SSC</option>
@@ -949,7 +951,7 @@ function MakeCV() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               Degree *
                             </label>
                             <input
@@ -964,7 +966,7 @@ function MakeCV() {
                           </div>
                           {SCHOOL_DEGREE_TYPES.includes(edu.degreeType) && (
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Group
                               </label>
                               <select
@@ -972,7 +974,7 @@ function MakeCV() {
                                 onChange={(e) =>
                                   handleEduChange(idx, "field", e.target.value)
                                 }
-                                className={inputClass}
+                                className="select"
                               >
                                 <option value="">Select group</option>
                                 {EDUCATION_GROUPS.map((g) => (
@@ -985,7 +987,7 @@ function MakeCV() {
                           )}
                           {MAJOR_DEGREE_TYPES.includes(edu.degreeType) && (
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Major
                               </label>
                               <input
@@ -1001,7 +1003,7 @@ function MakeCV() {
                           )}
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Start
                               </label>
                               <input
@@ -1015,7 +1017,7 @@ function MakeCV() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 End
                               </label>
                               <input
@@ -1031,7 +1033,7 @@ function MakeCV() {
                           </div>
                           {SCHOOL_DEGREE_TYPES.includes(edu.degreeType) && (
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 GPA Value
                               </label>
                               <input
@@ -1048,7 +1050,7 @@ function MakeCV() {
                           )}
                           {MAJOR_DEGREE_TYPES.includes(edu.degreeType) && (
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 CGPA Value
                               </label>
                               <input
@@ -1065,7 +1067,7 @@ function MakeCV() {
                           )}
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-1">
+                          <label className="field-label">
                             Highlights
                           </label>
                           {renderHighlightInput(
@@ -1086,7 +1088,7 @@ function MakeCV() {
                         education: [...d.education, { ...emptyEducation }],
                       }))
                     }
-                    className="mt-4 text-sm text-blue-600 hover:text-blue-700"
+                    className="mt-4 btn-secondary"
                   >
                     + Add another education
                   </button>
@@ -1094,11 +1096,11 @@ function MakeCV() {
               )}
 
               {currentStep === 4 && (
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <h2 className="text-base font-semibold text-slate-900 mb-4">
+                <section className="card p-6">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-5">
                     Skills
                   </h2>
-                  <p className="text-xs text-slate-500 mb-3">
+                  <p className="text-sm text-slate-500 mb-4">
                     Add your skills as bullet points. These will be
                     searchable by ATS systems.
                   </p>
@@ -1107,15 +1109,15 @@ function MakeCV() {
               )}
 
               {currentStep === 5 && (
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <h2 className="text-base font-semibold text-slate-900 mb-4">
+                <section className="card p-6">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-5">
                     Projects
                   </h2>
                   <div className="space-y-6">
                     {data.projects.map((proj, idx) => (
                       <div
                         key={idx}
-                        className="border border-slate-100 rounded-lg p-4 relative"
+                        className="rounded-xl border border-slate-100 bg-slate-50/40 p-4 relative"
                       >
                         {data.projects.length > 1 && (
                           <button
@@ -1128,14 +1130,14 @@ function MakeCV() {
                                 ),
                               }))
                             }
-                            className="absolute top-3 right-3 text-xs text-red-400 hover:text-red-600"
+                            className="absolute top-3 right-3 text-xs text-red-500 hover:text-red-700 font-medium"
                           >
                             Remove
                           </button>
                         )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               Project Name *
                             </label>
                             <input
@@ -1148,7 +1150,7 @@ function MakeCV() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               GitHub Repository Link
                             </label>
                             <input
@@ -1162,7 +1164,7 @@ function MakeCV() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               Live Link
                             </label>
                             <input
@@ -1176,7 +1178,7 @@ function MakeCV() {
                             />
                           </div>
                           <div className="md:col-span-2">
-                            <label className="block text-xs font-medium text-slate-500 mb-1">
+                            <label className="field-label">
                               Description
                             </label>
                             <textarea
@@ -1189,12 +1191,12 @@ function MakeCV() {
                                   e.target.value
                                 )
                               }
-                              className={`${inputClass} resize-none`}
+                              className="textarea"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-1">
+                          <label className="field-label">
                             Highlights
                           </label>
                           {renderHighlightInput(
@@ -1215,7 +1217,7 @@ function MakeCV() {
                         projects: [...d.projects, { ...emptyProject }],
                       }))
                     }
-                    className="mt-4 text-sm text-blue-600 hover:text-blue-700"
+                    className="mt-4 btn-secondary"
                   >
                     + Add another project
                   </button>
@@ -1223,11 +1225,11 @@ function MakeCV() {
               )}
 
               {currentStep === 6 && (
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <h2 className="text-base font-semibold text-slate-900 mb-4">
+                <section className="card p-6">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-5">
                     Achievements
                   </h2>
-                  <p className="text-xs text-slate-500 mb-3">
+                  <p className="text-sm text-slate-500 mb-4">
                     Notable accomplishments, awards, or recognitions.
                   </p>
                   {renderHighlightInput(
@@ -1240,16 +1242,16 @@ function MakeCV() {
               )}
 
               {currentStep === 7 && (
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <h2 className="text-base font-semibold text-slate-900 mb-4">
+                <section className="card p-6">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-5">
                     Additional Information
                   </h2>
-                  <p className="text-xs text-slate-500 mb-3">
+                  <p className="text-sm text-slate-500 mb-4">
                     Anything else you'd like to share with employers.
                   </p>
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-sm font-medium text-slate-700 mb-2">
+                      <h3 className="text-sm font-semibold text-slate-700 mb-2">
                         Bullet Points
                       </h3>
                       {renderHighlightInput(
@@ -1260,14 +1262,14 @@ function MakeCV() {
                       )}
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="flex-1 border-t border-slate-200"></div>
+                      <div className="flex-1 border-t border-slate-200/70"></div>
                       <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
                         OR
                       </span>
-                      <div className="flex-1 border-t border-slate-200"></div>
+                      <div className="flex-1 border-t border-slate-200/70"></div>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-slate-700 mb-2">
+                      <h3 className="text-sm font-semibold text-slate-700 mb-2">
                         Description
                       </h3>
                       <textarea
@@ -1283,7 +1285,7 @@ function MakeCV() {
                           }))
                         }
                         placeholder="Enter additional information as a paragraph..."
-                        className={`${inputClass} resize-none`}
+                        className="textarea"
                       />
                     </div>
                   </div>
@@ -1291,14 +1293,14 @@ function MakeCV() {
               )}
 
               {currentStep === 8 && (
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <h2 className="text-base font-semibold text-slate-900 mb-4">
+                <section className="card p-6">
+                  <h2 className="text-lg font-semibold text-slate-900 mb-5">
                     Review & Download
                   </h2>
 
                   <div className="space-y-6">
-                    <div className="border border-slate-100 rounded-lg p-4">
-                      <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                      <h3 className="text-sm font-semibold text-slate-900 mb-3">
                         Personal Info
                       </h3>
                       <p className="text-sm text-slate-600">
@@ -1318,8 +1320,8 @@ function MakeCV() {
                     </div>
 
                     {data.professionalSummary && (
-                      <div className="border border-slate-100 rounded-lg p-4">
-                        <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                        <h3 className="text-sm font-semibold text-slate-900 mb-3">
                           Summary
                         </h3>
                         <p className="text-sm text-slate-600 whitespace-pre-line">
@@ -1329,8 +1331,8 @@ function MakeCV() {
                     )}
 
                     {data.workExperience.some((w) => w.company) && (
-                      <div className="border border-slate-100 rounded-lg p-4">
-                        <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                        <h3 className="text-sm font-semibold text-slate-900 mb-3">
                           Work Experience ({data.workExperience.length})
                         </h3>
                         {data.workExperience
@@ -1363,8 +1365,8 @@ function MakeCV() {
                     )}
 
                     {data.education.some((e) => e.institution) && (
-                      <div className="border border-slate-100 rounded-lg p-4">
-                        <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                        <h3 className="text-sm font-semibold text-slate-900 mb-3">
                           Education ({data.education.length})
                         </h3>
                         {data.education
@@ -1398,15 +1400,15 @@ function MakeCV() {
                     )}
 
                     {data.skills.length > 0 && (
-                      <div className="border border-slate-100 rounded-lg p-4">
-                        <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                        <h3 className="text-sm font-semibold text-slate-900 mb-3">
                           Skills ({data.skills.length})
                         </h3>
                         <div className="flex flex-wrap gap-1.5">
                           {data.skills.map((s, i) => (
                             <span
                               key={i}
-                              className="px-2 py-0.5 text-xs bg-slate-100 text-slate-700 rounded-full"
+                              className="badge bg-slate-100 text-slate-700"
                             >
                               {s}
                             </span>
@@ -1416,8 +1418,8 @@ function MakeCV() {
                     )}
 
                     {data.projects.some((p) => p.name) && (
-                      <div className="border border-slate-100 rounded-lg p-4">
-                        <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                        <h3 className="text-sm font-semibold text-slate-900 mb-3">
                           Projects ({data.projects.length})
                         </h3>
                         {data.projects
@@ -1433,7 +1435,7 @@ function MakeCV() {
                                 </p>
                               )}
                               {(p.githubLink || p.liveLink) && (
-                                <p className="text-xs text-blue-600 mt-0.5">
+                                <p className="text-xs text-brand-600 mt-0.5">
                                   {p.githubLink && <span className="mr-3">{p.githubLink}</span>}
                                   {p.liveLink}
                                 </p>
@@ -1444,8 +1446,8 @@ function MakeCV() {
                     )}
 
                     {data.achievements.length > 0 && (
-                      <div className="border border-slate-100 rounded-lg p-4">
-                        <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                        <h3 className="text-sm font-semibold text-slate-900 mb-3">
                           Achievements
                         </h3>
                         <ul className="text-sm text-slate-600">
@@ -1458,8 +1460,8 @@ function MakeCV() {
 
                     {(data.additionalInfo.bullets.length > 0 ||
                       data.additionalInfo.description.trim()) && (
-                      <div className="border border-slate-100 rounded-lg p-4">
-                        <h3 className="text-sm font-semibold text-slate-900 mb-2">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50/40 p-4">
+                        <h3 className="text-sm font-semibold text-slate-900 mb-3">
                           Additional Information
                         </h3>
                         {data.additionalInfo.bullets.length > 0 && (
@@ -1482,7 +1484,7 @@ function MakeCV() {
                         type="button"
                         onClick={handleSubmit}
                         disabled={saving}
-                        className="px-5 py-2 text-sm text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                        className="btn-primary"
                       >
                         {saving ? "Saving..." : "Save"}
                       </button>
@@ -1490,7 +1492,7 @@ function MakeCV() {
                         type="button"
                         onClick={downloadPdf}
                         disabled={!saved}
-                        className="px-5 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        className="btn-secondary"
                       >
                         Download PDF
                       </button>
@@ -1509,7 +1511,7 @@ function MakeCV() {
                   type="button"
                   onClick={handleBack}
                   disabled={currentStep === 0}
-                  className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-40"
+                  className="btn-outline"
                 >
                   Back
                 </button>
@@ -1519,7 +1521,7 @@ function MakeCV() {
                       type="button"
                       onClick={handleNext}
                       disabled={!stepValid()}
-                      className="px-5 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      className="btn-primary"
                     >
                       Next
                     </button>

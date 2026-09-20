@@ -63,79 +63,66 @@ function Register() {
 
   return (
     <AuthLayout title="Create your account" subtitle="Get started with AI Career Agent">
-      {apiError && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {apiError}
-        </div>
-      )}
+      {apiError && <div className="alert-error mb-4">{apiError}</div>}
 
-      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-            Name
-          </label>
+          <label className="field-label">Name</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Jane Smith"
-            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              fieldErrors.name ? "border-red-300" : "border-slate-200"
-            }`}
+            className={`input ${fieldErrors.name ? "!border-red-400 focus:!border-red-400 focus:!ring-red-500/20" : ""}`}
           />
           {fieldErrors.name && (
-            <p className="text-xs text-red-600 mt-1">{fieldErrors.name}</p>
+            <p className="text-xs text-red-600 mt-1.5">{fieldErrors.name}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-            Email
-          </label>
+          <label className="field-label">Email</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              fieldErrors.email ? "border-red-300" : "border-slate-200"
-            }`}
+            className={`input ${fieldErrors.email ? "!border-red-400 focus:!border-red-400 focus:!ring-red-500/20" : ""}`}
           />
           {fieldErrors.email && (
-            <p className="text-xs text-red-600 mt-1">{fieldErrors.email}</p>
+            <p className="text-xs text-red-600 mt-1.5">{fieldErrors.email}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
-            Password
-          </label>
+          <label className="field-label">Password</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="At least 8 characters"
-            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              fieldErrors.password ? "border-red-300" : "border-slate-200"
-            }`}
+            className={`input ${fieldErrors.password ? "!border-red-400 focus:!border-red-400 focus:!ring-red-500/20" : ""}`}
           />
           {fieldErrors.password && (
-            <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>
+            <p className="text-xs text-red-600 mt-1.5">{fieldErrors.password}</p>
           )}
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full px-4 py-2.5 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-        >
-          {loading ? "Creating account..." : "Create account"}
+        <button type="submit" disabled={loading} className="btn-primary btn-block btn-lg">
+          {loading ? (
+            <>
+              <span className="spinner h-4 w-4 !border-white"></span>
+              Creating account…
+            </>
+          ) : (
+            "Create account"
+          )}
         </button>
       </form>
 
       <p className="text-sm text-slate-500 mt-6 text-center">
         Already have an account?{" "}
-        <Link to="/login" className="text-blue-600 hover:text-blue-700">
+        <Link to="/login" className="font-semibold text-brand-600 hover:text-brand-700">
           Sign in
         </Link>
       </p>
@@ -143,9 +130,9 @@ function Register() {
       <button
         type="button"
         onClick={() => navigate(isAuthenticated ? "/dashboard" : "/")}
-        className="w-full px-4 py-2.5 text-sm text-slate-600 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors mt-4"
+        className="btn-outline btn-block mt-4"
       >
-        Back to Dashboard
+        Back to Home
       </button>
     </AuthLayout>
   );

@@ -2,9 +2,239 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans text-slate-900 antialiased;
+    margin: 0;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    @apply bg-brand-600 text-white;
+  }
+
+  *:focus-visible {
+    @apply outline-none ring-2 ring-brand-500/60 ring-offset-1;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-300;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white border border-slate-200/80 rounded-2xl shadow-card;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-card-hover hover:border-slate-300;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium
+      transition-all duration-150 select-none disabled:opacity-50 disabled:cursor-not-allowed
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60
+      focus-visible:ring-offset-1 px-4 py-2 cursor-pointer;
+  }
+
+  .btn-primary {
+    @apply btn text-white bg-gradient-to-br from-brand-600 to-violet-600
+      shadow-glow-primary hover:from-brand-700 hover:to-violet-700
+      hover:shadow-glow-violet active:from-brand-800 active:to-violet-800;
+  }
+
+  .btn-secondary {
+    @apply btn text-brand-700 bg-brand-50 border border-brand-200
+      hover:bg-brand-100 hover:border-brand-300 active:bg-brand-200;
+  }
+
+  .btn-outline {
+    @apply btn text-slate-700 bg-white border border-slate-300
+      hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100;
+  }
+
+  .btn-ghost {
+    @apply btn text-slate-600 bg-transparent hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  .btn-danger {
+    @apply btn text-white bg-gradient-to-br from-red-500 to-rose-600
+      shadow-[0_8px_20px_-8px_rgb(239_68_68/0.55)] hover:from-red-600 hover:to-rose-700;
+  }
+
+  .btn-danger-outline {
+    @apply btn text-red-600 bg-white border border-red-200
+      hover:bg-red-50 hover:border-red-300;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs rounded-lg;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base rounded-xl;
+  }
+
+  .btn-block {
+    @apply w-full;
+  }
+
+  .field-label {
+    @apply block text-xs font-semibold text-slate-600 mb-1.5 tracking-wide uppercase;
+  }
+
+  .input {
+    @apply w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl
+      text-slate-900 placeholder:text-slate-400 shadow-sm
+      transition-colors focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20
+      disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed;
+  }
+
+  .select {
+    @apply input appearance-none bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.6rem center;
+    background-size: 1.1em;
+  }
+
+  .textarea {
+    @apply input resize-none min-h-[80px];
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium whitespace-nowrap;
+  }
+
+  .page-header {
+    @apply mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.65rem];
+  }
+
+  .page-subtitle {
+    @apply mt-1.5 text-sm text-slate-500;
+  }
+
+  .stat-card {
+    @apply card p-5 flex flex-col;
+  }
+
+  .section-title {
+    @apply text-sm font-semibold uppercase tracking-wider text-slate-500;
+  }
+
+  .divider {
+    @apply border-t border-slate-200/80;
+  }
+
+  .table-wrap {
+    @apply card overflow-hidden;
+  }
+
+  .th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap;
+  }
+
+  .td {
+    @apply px-4 py-3.5 text-sm text-slate-700 align-middle;
+  }
+
+  .alert {
+    @apply rounded-xl border p-4 text-sm flex items-start justify-between gap-3;
+  }
+
+  .alert-error {
+    @apply alert bg-red-50 border-red-200 text-red-800;
+  }
+
+  .alert-success {
+    @apply alert bg-emerald-50 border-emerald-200 text-emerald-800;
+  }
+
+  .alert-info {
+    @apply alert bg-brand-50 border-brand-200 text-brand-800;
+  }
+
+  .alert-warning {
+    @apply alert bg-amber-50 border-amber-200 text-amber-800;
+  }
+
+  .modal-backdrop {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm;
+    animation: fade-in 0.2s ease-out both;
+  }
+
+  .modal-panel {
+    @apply card w-full max-h-[92vh] flex flex-col overflow-hidden shadow-pop;
+    animation: fade-in-up 0.25s ease-out both;
+  }
+
+  .spinner {
+    @apply inline-block animate-spin rounded-full border-b-2 border-brand-600;
+  }
+
+  .empty-state {
+    @apply text-center py-16 card;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600
+      transition-colors hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  .nav-link-active {
+    @apply bg-gradient-to-r from-brand-600 to-violet-600 text-white shadow-glow-primary hover:from-brand-700 hover:to-violet-700 hover:text-white;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-brand-500 via-violet-500 to-cyan-500 bg-clip-text text-transparent;
+  }
+
+  .line-clamp-1 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .line-clamp-3 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
 }

@@ -98,64 +98,60 @@ export default function JobMatchModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
-        <div className="flex items-start justify-between p-6 border-b border-slate-200 sticky top-0 bg-white">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">
-              AI Job Match
-            </h2>
-            <p className="text-sm text-slate-600 mt-1">
-              {jobMeta.title || jobTitle} · {jobMeta.companyName || jobCompany}
-            </p>
-            {match && (
-              <p className="text-xs text-slate-400 mt-1">
-                Analyzed {formatAnalyzedDate(match.analyzedAt)}
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-3xl">
+        <div className="overflow-y-auto">
+          <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5">
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-slate-900">
+                AI Job Match
+              </h2>
+              <p className="mt-0.5 text-sm text-slate-600">
+                {jobMeta.title || jobTitle} · {jobMeta.companyName || jobCompany}
               </p>
-            )}
+              {match && (
+                <p className="mt-1 text-xs text-slate-400">
+                  Analyzed {formatAnalyzedDate(match.analyzedAt)}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="btn-ghost btn-sm shrink-0 text-lg text-slate-400 hover:text-slate-600"
+              aria-label="Close"
+            >
+              ×
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-xl leading-none"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
 
-        <div className="p-6">
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-              {error}
-            </div>
-          )}
-          {info && (
-            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
-              {info}
-            </div>
-          )}
+          <div className="p-6">
+          {error && <div className="alert-error mb-4">{error}</div>}
+          {info && <div className="alert-warning mb-4">{info}</div>}
           {cached && match && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-700 text-xs">
+            <div className="alert-info mb-4 px-3 py-2.5 text-xs">
               Showing cached analysis from a previous run.
             </div>
           )}
 
           {loading && !match && (
-            <div className="text-center py-16">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-              <p className="text-slate-500 text-sm">Analyzing match...</p>
+            <div className="py-16 text-center">
+              <div className="spinner mb-4 h-8 w-8"></div>
+              <p className="text-sm text-slate-500">Analyzing match...</p>
             </div>
           )}
 
           {!loading && !match && !error && (
-            <div className="text-center py-12">
-              <p className="text-slate-500 mb-4 text-sm">
+            <div className="py-14 text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-violet-600 text-lg font-bold text-white shadow-glow-primary">
+                AI
+              </div>
+              <p className="mb-5 text-sm text-slate-500">
                 Run an AI analysis to see how well this job matches your
                 career profile.
               </p>
               <button
                 onClick={() => runAnalysis(false)}
-                className="px-5 py-2.5 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                className="btn-primary px-5 py-2.5"
               >
                 Analyze Match
               </button>
@@ -164,74 +160,78 @@ export default function JobMatchModal({
 
           {match && <MatchResult match={match} />}
 
-          <div className="flex gap-3 mt-6">
-            {match ? (
-              <>
-                <button
-                  onClick={() => {
-                    setInfo(null);
-                    runAnalysis(false);
-                  }}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  {loading ? "Analyzing..." : "Refresh Analysis"}
-                </button>
-                <button
-                  onClick={() => {
-                    setInfo(null);
-                    runAnalysis(true);
-                  }}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  {loading ? "Reanalyzing..." : "Force Re-analysis"}
-                </button>
-              </>
-            ) : (
-              !loading && (
-                <button
-                  onClick={onClose}
-                  className="flex-1 px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  Close
-                </button>
-              )
-            )}
           </div>
-        </div>
+      </div>
+      <div className="flex gap-3 border-t border-slate-200 bg-white px-6 py-4">
+        {match ? (
+          <>
+            <button
+              onClick={() => {
+                setInfo(null);
+                runAnalysis(false);
+              }}
+              disabled={loading}
+              className="btn-primary flex-1"
+            >
+              {loading ? "Analyzing..." : "Refresh Analysis"}
+            </button>
+            <button
+              onClick={() => {
+                setInfo(null);
+                runAnalysis(true);
+              }}
+              disabled={loading}
+              className="btn-outline flex-1"
+            >
+              {loading ? "Reanalyzing..." : "Force Re-analysis"}
+            </button>
+          </>
+        ) : (
+          !loading && (
+            <button onClick={onClose} className="btn-outline flex-1">
+              Close
+            </button>
+          )
+        )}
       </div>
     </div>
+  </div>
   );
 }
 
 function MatchResult({ match }: { match: JobMatch }) {
   return (
     <div>
-      <div className="flex items-center gap-5 mb-6 p-4 bg-slate-50 rounded-xl">
-        <div className={`text-5xl font-bold ${scoreRingColor(match.score)}`}>
-          {match.score}
+      <div className="mb-6 flex items-center gap-6 rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 via-white to-violet-50 p-6 shadow-card">
+        <div className="shrink-0 text-center">
+          <div className={`text-6xl font-black leading-none tracking-tight tabular-nums ${scoreRingColor(match.score)}`}>
+            {match.score}
+            <span className="text-sm font-semibold text-slate-400">/100</span>
+          </div>
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Match Score
+          </p>
         </div>
-        <div>
+        <div className="min-w-0">
           <span
-            className={`inline-block px-3 py-1 text-sm font-medium rounded-full ${matchLevelBadgeClass(
+            className={`badge ${matchLevelBadgeClass(
               match.matchLevel
             )}`}
           >
             {matchLevelLabel[match.matchLevel] || match.matchLevel}
           </span>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="mt-2 text-sm text-slate-600">
             Recommendation:{" "}
-            <span className="font-medium text-slate-700">
+            <span className="font-semibold text-slate-800">
               {recommendationLabel(match.recommendation)}
             </span>
           </p>
         </div>
       </div>
 
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-slate-900 mb-1">Summary</h3>
-        <p className="text-sm text-slate-700 leading-relaxed">
+      <div className="mb-5">
+        <h3 className="section-title mb-2">Summary</h3>
+        <p className="text-sm leading-relaxed text-slate-700">
           {match.summary || "No summary provided."}
         </p>
       </div>
@@ -255,14 +255,15 @@ function MatchResult({ match }: { match: JobMatch }) {
       <InfoSection title="Strengths" items={match.strengths} />
       <InfoSection title="Weaknesses" items={match.weaknesses} muted />
 
-      <div className="mt-5 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-        <h3 className="text-sm font-semibold text-blue-900 mb-1">
-          Recommendation
+      <div className="mt-5 rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 to-violet-50 p-5 shadow-card">
+        <h3 className="mb-1.5 flex items-center gap-2 text-sm font-bold text-brand-800">
+          <span className="inline-block h-2 w-2 rounded-full bg-brand-500"></span>
+          AI Recommendation
         </h3>
-        <p className="text-sm text-blue-800">{match.recommendationReason || match.recommendation}</p>
+        <p className="text-sm leading-relaxed text-brand-900/90">{match.recommendationReason || match.recommendation}</p>
       </div>
 
-      <p className="text-xs text-slate-400 mt-3">
+      <p className="mt-5 text-xs text-slate-400">
         This match score is an objective estimate of skill/experience alignment. A high
         score does not guarantee an interview or job.
       </p>
@@ -281,16 +282,16 @@ function InfoSection({
 }) {
   return (
     <div className="mb-4">
-      <h3 className="text-sm font-semibold text-slate-900 mb-2">{title}</h3>
+      <h3 className="section-title mb-2">{title}</h3>
       {items && items.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {items.map((item, idx) => (
             <span
               key={idx}
-              className={`text-xs px-2 py-1 rounded ${
+              className={`chip border ${
                 muted
-                  ? "bg-red-50 text-red-700"
-                  : "bg-emerald-50 text-emerald-700"
+                  ? "border-red-100 bg-red-50 text-red-700"
+                  : "border-emerald-100 bg-emerald-50 text-emerald-700"
               }`}
             >
               {item}
@@ -298,7 +299,7 @@ function InfoSection({
           ))}
         </div>
       ) : (
-        <p className="text-xs text-slate-400">None identified.</p>
+        <p className="text-xs italic text-slate-400">None identified.</p>
       )}
     </div>
   );
@@ -306,9 +307,9 @@ function InfoSection({
 
 function Field({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="p-3 bg-slate-50 rounded-lg">
-      <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
-      <p className="text-sm text-slate-700">
+    <div className="card p-3.5">
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="text-sm font-medium text-slate-700">
         {value || "Not assessed."}
       </p>
     </div>

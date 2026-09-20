@@ -71,14 +71,18 @@ function KpiCard({
 }) {
   return (
     <div
-      className={`bg-white border border-slate-200 rounded-xl p-4 text-center ${
-        onClick ? "cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all" : ""
+      className={`stat-card text-center ${
+        onClick ? "cursor-pointer card-hover" : ""
       }`}
       onClick={onClick}
     >
-      <p className="text-3xl font-bold text-slate-900">{value}</p>
+      <p className="text-3xl font-bold tracking-tight text-gradient">{value}</p>
       <p className="text-sm text-slate-500 mt-1">{label}</p>
-      {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      {sub && (
+        <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mt-0.5">
+          {sub}
+        </p>
+      )}
     </div>
   );
 }
@@ -88,22 +92,22 @@ function TrendChart({ metric, label }: { metric: TrendMetric; label: string }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-slate-700">{label}</p>
-        <span className="text-xs text-slate-400">
+        <p className="text-sm font-semibold text-slate-700">{label}</p>
+        <span className="badge bg-slate-100 text-slate-500">
           {metric.totalInRange} total
         </span>
       </div>
       {metric.points.length === 0 ? (
         <p className="text-xs text-slate-400">No data in this range.</p>
       ) : (
-        <div className="flex items-end gap-1 h-24">
+        <div className="flex items-end gap-1 h-28 rounded-xl border border-slate-100 bg-gradient-to-b from-slate-50/80 to-white p-2">
           {metric.points.map((point, idx) => (
             <div key={idx} className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-[10px] text-slate-500">
+              <span className="text-[10px] tabular-nums text-slate-500">
                 {point.value > 0 ? point.value : ""}
               </span>
               <div
-                className="w-full bg-blue-200 rounded-t"
+                className="w-full bg-gradient-to-t from-brand-600 to-violet-400 rounded-t"
                 style={{ height: `${Math.max(2, (point.value / max) * 100)}%` }}
                 title={`${point.label}: ${point.value}`}
               />
@@ -111,7 +115,7 @@ function TrendChart({ metric, label }: { metric: TrendMetric; label: string }) {
           ))}
         </div>
       )}
-      <div className="flex justify-between mt-1 text-[10px] text-slate-400">
+      <div className="flex justify-between mt-1.5 text-[10px] text-slate-400">
         <span>{metric.points[0]?.label ?? ""}</span>
         <span>{metric.points[metric.points.length - 1]?.label ?? ""}</span>
       </div>
@@ -159,9 +163,9 @@ function Analytics() {
     return (
       <DashboardLayout active="Analytics">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center py-16">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-            <p className="text-slate-500 text-sm">Crunching your career stats...</p>
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="spinner h-9 w-9 mb-4"></div>
+            <p className="text-sm font-medium text-slate-500">Crunching your career stats...</p>
           </div>
         </div>
       </DashboardLayout>
@@ -174,40 +178,49 @@ function Analytics() {
   return (
     <DashboardLayout active="Analytics">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8 flex items-start justify-between">
+        <div className="page-header">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Career Analytics</h1>
-            <p className="text-slate-500 mt-1">
+            <h1 className="page-title">
+              <span className="bg-gradient-to-r from-brand-600 to-violet-600 bg-clip-text text-transparent">
+                Career Analytics
+              </span>
+            </h1>
+            <p className="page-subtitle">
               A deterministic, read-only view of your job search performance.
             </p>
           </div>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center justify-between">
+          <div className="alert-error mb-6">
             <span>{error}</span>
             <button
               onClick={() => setError(null)}
-              className="text-red-500 hover:text-red-700 ml-4"
+              className="shrink-0 text-red-500 hover:text-red-700 ml-4 font-medium"
             >
               Dismiss
             </button>
           </div>
         )}
 
-        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-8">
-          <label className="block text-xs font-medium text-slate-500 mb-2">
-            Time range
-          </label>
+        <div className="card mb-8 p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Time range
+            </label>
+            <span className="text-xs text-slate-400">
+              {RANGES.find((r) => r.value === range)?.label}
+            </span>
+          </div>
           <div className="flex flex-wrap gap-2">
             {RANGES.map((r) => (
               <button
                 key={r.value}
                 onClick={() => changeRange(r.value)}
-                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                className={`px-3.5 py-1.5 text-sm rounded-full border transition-all ${
                   range === r.value
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "text-slate-600 border-slate-200 hover:bg-slate-50"
+                    ? "bg-gradient-to-r from-brand-600 to-violet-600 text-white border-transparent font-medium shadow-glow-primary"
+                    : "text-slate-600 border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300"
                 }`}
               >
                 {r.label}
@@ -217,17 +230,31 @@ function Analytics() {
         </div>
 
         {!hasData ? (
-          <div className="text-center py-16 bg-white border border-slate-200 rounded-xl">
-            <p className="text-slate-600 font-medium mb-1">
+          <div className="empty-state">
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-violet-50">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-7 w-7 text-brand-600"
+              >
+                <path d="M3 3v18h18" />
+                <path d="M18 17V9M13 17V5M8 17v-3" />
+              </svg>
+            </div>
+            <p className="mb-1 font-medium text-slate-700">
               No applications tracked yet.
             </p>
-            <p className="text-slate-400 text-sm mb-4">
+            <p className="mx-auto mb-6 max-w-md text-sm text-slate-400">
               Career analytics will appear here once you start tracking
               applications.
             </p>
             <button
               onClick={() => navigate("/dashboard/applications")}
-              className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              className="btn-primary"
             >
               View My Applications
             </button>
@@ -235,9 +262,12 @@ function Analytics() {
         ) : (
           <>
             <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Overview
-              </h2>
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="h-5 w-1.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-600"></span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Overview
+                </h2>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 <KpiCard label="Total Applications" value={s?.totalApplications ?? 0} />
                 <KpiCard label="Active" value={s?.activeApplications ?? 0} />
@@ -253,15 +283,22 @@ function Analytics() {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Application Funnel
-              </h2>
-              <div className="bg-white border border-slate-200 rounded-xl p-6">
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="h-5 w-1.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-600"></span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Application Funnel
+                </h2>
+              </div>
+              <div className="card p-5 sm:p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {data?.funnel.stages.map((stage) => (
-                    <div key={stage.key} className="border border-slate-200 rounded-xl p-4">
-                      <p className="text-sm text-slate-500">{stage.label}</p>
-                      <p className="text-2xl font-bold text-slate-900 mt-1">
+                    <div
+                      key={stage.key}
+                      className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50/60 to-white p-4"
+                    >
+                      <div className="mb-3 h-1.5 w-8 rounded-full bg-gradient-to-r from-brand-400 to-violet-500"></div>
+                      <p className="text-sm font-medium text-slate-500">{stage.label}</p>
+                      <p className="text-2xl font-bold tracking-tight text-slate-900 mt-1">
                         {stage.count}
                       </p>
                       <p className="text-xs text-slate-400">
@@ -275,26 +312,25 @@ function Analytics() {
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-slate-400 mt-4">
+                <p className="mt-4 text-xs text-slate-400">
                   Funnel counts reflect current application status; rejected /
                   withdrawn applications are reported separately below and lower
                   the funnel conservatively.
                 </p>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  <span className="px-2 py-1 text-xs bg-red-50 text-red-700 rounded-full">
-                    Rejected: {data?.funnel.rejections}
-                  </span>
-                  <span className="px-2 py-1 text-xs bg-amber-50 text-amber-700 rounded-full">
-                    Withdrawn: {data?.funnel.withdrawals}
-                  </span>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="chip bg-red-50 text-red-700">Rejected: {data?.funnel.rejections}</span>
+                  <span className="chip bg-amber-50 text-amber-700">Withdrawn: {data?.funnel.withdrawals}</span>
                 </div>
               </div>
             </section>
 
             <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Conversion Metrics
-              </h2>
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="h-5 w-1.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-600"></span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Conversion Metrics
+                </h2>
+              </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
                   { label: "Application → Interview", rate: data?.conversionMetrics.applicationToInterviewRate },
@@ -302,15 +338,18 @@ function Analytics() {
                   { label: "Application → Offer", rate: data?.conversionMetrics.applicationToOfferRate },
                   { label: "Rejection Rate", rate: data?.conversionMetrics.rejectionRate },
                 ].map((m) => (
-                  <div key={m.label} className="bg-white border border-slate-200 rounded-xl p-4">
-                    <p className="text-3xl font-bold text-slate-900">
+                  <div
+                    key={m.label}
+                    className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50/60 to-white p-5 text-center"
+                  >
+                    <p className="text-3xl font-bold tracking-tight text-gradient">
                       {formatPercent(m.rate ?? 0)}
                     </p>
                     <p className="text-sm text-slate-500 mt-1">{m.label}</p>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-slate-400 mt-3">
+              <p className="mt-3 text-xs text-slate-400">
                 Rates are computed from current application status and never
                 divide by zero. Rejected/withdrawn applications lower rates
                 conservatively.
@@ -318,8 +357,13 @@ function Analytics() {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Trends</h2>
-              <div className="bg-white border border-slate-200 rounded-xl p-6">
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="h-5 w-1.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-600"></span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Trends
+                </h2>
+              </div>
+              <div className="card p-5 sm:p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <TrendChart metric={data?.trends.applicationsApplied ?? emptyMetric()} label="Applications Applied" />
                   <TrendChart metric={data?.trends.interviews ?? emptyMetric()} label="Interviews" />
@@ -330,14 +374,20 @@ function Analytics() {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Pipeline by Status
-              </h2>
-              <div className="bg-white border border-slate-200 rounded-xl p-6">
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="h-5 w-1.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-600"></span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Pipeline by Status
+                </h2>
+              </div>
+              <div className="card p-5 sm:p-6">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
                   {Object.entries(data?.applicationsByStatus ?? {}).map(
                     ([status, count]) => (
-                      <div key={status} className="text-center">
+                      <div
+                        key={status}
+                        className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-center"
+                      >
                         <span
                           className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
                             STATUS_BADGES[status] || "bg-slate-100 text-slate-600"
@@ -345,7 +395,7 @@ function Analytics() {
                         >
                           {STATUS_LABELS[status]}
                         </span>
-                        <p className="text-xl font-bold text-slate-900 mt-2">
+                        <p className="text-xl font-bold tabular-nums text-slate-900 mt-2">
                           {count}
                         </p>
                       </div>
@@ -356,10 +406,13 @@ function Analytics() {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Follow-up Performance
-              </h2>
-              <div className="bg-white border border-slate-200 rounded-xl p-6">
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="h-5 w-1.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-600"></span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Follow-up Performance
+                </h2>
+              </div>
+              <div className="card p-5 sm:p-6">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                   <KpiCard label="Open" value={data?.followUps.open ?? 0} />
                   <KpiCard label="Completed" value={data?.followUps.completed ?? 0} />
@@ -368,7 +421,7 @@ function Analytics() {
                   <KpiCard label="High Priority Open" value={data?.followUps.highPriorityOpen ?? 0} />
                   <KpiCard label="Completion Rate" value={formatPercent(data?.followUps.completionRate ?? 0)} />
                 </div>
-                <p className="text-xs text-slate-400 mt-4">
+                <p className="mt-4 text-xs text-slate-400">
                   Descriptive only — no causal claims are made between follow-ups
                   and outcomes. {data?.followUps.appsWithFollowUps ?? 0} application(s) have
                   follow-ups; {data?.followUps.appsWithOverdueFollowUps ?? 0} have overdue ones.
@@ -377,10 +430,13 @@ function Analytics() {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Interview Preparation
-              </h2>
-              <div className="bg-white border border-slate-200 rounded-xl p-6">
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="h-5 w-1.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-600"></span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Interview Preparation
+                </h2>
+              </div>
+              <div className="card p-5 sm:p-6">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                   <KpiCard label="With Prep" value={data?.preparation.appsWithPreparation ?? 0} />
                   <KpiCard label="Without Prep" value={data?.preparation.appsWithoutPreparation ?? 0} />
@@ -392,7 +448,7 @@ function Analytics() {
                   />
                 </div>
                 {data && data.preparation.upcomingInterviewsWithIncompletePreparation > 0 && (
-                  <p className="text-xs text-amber-600 mt-4">
+                  <p className="mt-4 text-xs font-medium text-amber-600">
                     {data.preparation.upcomingInterviewsWithIncompletePreparation}{" "}
                     upcoming interview(s) have incomplete preparation.
                   </p>
@@ -401,43 +457,51 @@ function Analytics() {
             </section>
 
             <section className="mb-8">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Company Insights
-              </h2>
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="h-5 w-1.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-600"></span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Company Insights
+                </h2>
+              </div>
+              <div className="card overflow-hidden">
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-500 text-left text-xs">
+                  <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-4 py-3">Company</th>
-                      <th className="px-4 py-3">Apps</th>
-                      <th className="px-4 py-3">Interviews</th>
-                      <th className="px-4 py-3">Offers</th>
-                      <th className="px-4 py-3">Rejections</th>
-                      <th className="px-4 py-3">Active</th>
+                      <th className="th">Company</th>
+                      <th className="th">Apps</th>
+                      <th className="th">Interviews</th>
+                      <th className="th">Offers</th>
+                      <th className="th">Rejections</th>
+                      <th className="th">Active</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {data?.companies.map((c) => (
-                      <tr key={c.company} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 font-medium text-slate-900">{c.company}</td>
-                        <td className="px-4 py-3 text-slate-600">{c.applications}</td>
-                        <td className="px-4 py-3 text-slate-600">{c.interviews}</td>
-                        <td className="px-4 py-3 text-emerald-600">{c.offers}</td>
-                        <td className="px-4 py-3 text-red-600">{c.rejections}</td>
-                        <td className="px-4 py-3 text-slate-600">{c.active}</td>
+                      <tr key={c.company} className="transition-colors hover:bg-brand-50/40">
+                        <td className="td font-medium text-slate-900">{c.company}</td>
+                        <td className="td">{c.applications}</td>
+                        <td className="td">{c.interviews}</td>
+                        <td className="px-4 py-3.5 text-emerald-600">{c.offers}</td>
+                        <td className="px-4 py-3.5 text-red-600">{c.rejections}</td>
+                        <td className="td">{c.active}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             </section>
 
             <section>
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                Attention Items
-              </h2>
+              <div className="mb-4 flex items-center gap-2.5">
+                <span className="h-5 w-1.5 rounded-full bg-gradient-to-b from-brand-500 to-violet-600"></span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Attention Items
+                </h2>
+              </div>
               {!data || data.attentionItems.length === 0 ? (
-                <p className="text-sm text-slate-400">
+                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center text-sm text-slate-400">
                   No analytics-based action items right now.
                 </p>
               ) : (
@@ -445,12 +509,12 @@ function Analytics() {
                   {data.attentionItems.map((item, idx) => (
                     <li
                       key={`${item.type}-${idx}`}
-                      className="bg-white border border-slate-200 rounded-xl p-4 flex items-start justify-between gap-4"
+                      className="card flex items-start justify-between gap-4 p-4"
                     >
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                            className={`badge ${
                               PRIORITY_STYLES[item.priority] || PRIORITY_STYLES.low
                             }`}
                           >
@@ -470,7 +534,7 @@ function Analytics() {
                       <button
                         onClick={() => goApplication(item.application)}
                         disabled={!item.application}
-                        className="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-40 whitespace-nowrap"
+                        className="btn-outline btn-sm shrink-0 whitespace-nowrap"
                       >
                         View Application
                       </button>

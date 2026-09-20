@@ -218,31 +218,33 @@ function CareerEmails() {
 
   return (
     <DashboardLayout active="Career Emails">
-      <div className="max-w-5xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Career Emails</h1>
-          <p className="text-slate-500 mt-1">
-            AI-classified emails from your Gmail, with suggested application
-            status updates you can review and approve
-          </p>
-        </div>
+          <div className="max-w-5xl mx-auto">
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Career Emails</h1>
+              <p className="page-subtitle">
+                AI-classified emails from your Gmail, with suggested application
+                status updates you can review and approve
+              </p>
+            </div>
+          </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center justify-between">
+          <div className="alert-error mb-6 items-center">
             <span>{error}</span>
             <button
               onClick={() => setError(null)}
-              className="text-red-500 hover:text-red-700 ml-4"
+              className="btn-ghost btn-sm text-red-600 -my-1 -mr-1 shrink-0 hover:bg-red-100 hover:text-red-700"
             >
               Dismiss
             </button>
           </div>
         )}
 
-        <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
+        <div className="card p-6 mb-6">
           <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">
+            <div className="w-full sm:w-auto">
+              <label className="field-label">
                 Category
               </label>
               <select
@@ -250,7 +252,7 @@ function CareerEmails() {
                 onChange={(e) =>
                   handleCategorySelect(e.target.value as CareerEmailCategory | "")
                 }
-                className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="select"
               >
                 {CATEGORY_OPTIONS.map((opt) => (
                   <option key={opt.label} value={opt.value}>
@@ -259,8 +261,8 @@ function CareerEmails() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">
+            <div className="w-full sm:w-auto">
+              <label className="field-label">
                 Suggested Status
               </label>
               <select
@@ -268,7 +270,7 @@ function CareerEmails() {
                 onChange={(e) =>
                   handleStatusSelect(e.target.value as ApplicationStatus | "")
                 }
-                className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="select"
               >
                 {STATUS_OPTIONS.map((opt) => (
                   <option key={opt.label} value={opt.value}>
@@ -277,14 +279,14 @@ function CareerEmails() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">
+            <div className="w-full sm:w-auto">
+              <label className="field-label">
                 Sort
               </label>
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as "newest" | "oldest")}
-                className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="select"
               >
                 <option value="newest">Newest first</option>
                 <option value="oldest">Oldest first</option>
@@ -292,7 +294,7 @@ function CareerEmails() {
             </div>
             <button
               onClick={handleFilter}
-              className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              className="btn-primary btn-sm w-full sm:w-auto"
             >
               Apply Filter
             </button>
@@ -307,141 +309,146 @@ function CareerEmails() {
 
         {loading ? (
           <div className="text-center py-16">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+            <div className="spinner h-8 w-8 mb-4"></div>
             <p className="text-slate-500 text-sm">Loading career emails...</p>
           </div>
         ) : emails.length === 0 ? (
-          <div className="text-center py-16 bg-white border border-slate-200 rounded-xl">
-            <p className="text-slate-500 text-sm mb-1">No career emails yet.</p>
+          <div className="empty-state">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-2xl">
+              ✉️
+            </div>
+            <p className="text-slate-600 text-sm font-medium mb-1">No career emails yet.</p>
             <p className="text-slate-400 text-xs mb-4">
               Connect your Gmail account and run a sync to classify incoming
               career emails.
             </p>
           </div>
         ) : (
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500 text-left text-xs">
-                <tr>
-                  <th className="px-4 py-3">Subject</th>
-                  <th className="px-4 py-3">Company</th>
-                  <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Suggested Status</th>
-                  <th className="px-4 py-3">Detected</th>
-                  <th className="px-4 py-3">Application</th>
-                  <th className="px-4 py-3">Received</th>
-                  <th className="px-4 py-3 text-right">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {emails.map((email) => (
-                  <tr key={email.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-900 truncate max-w-xs">
-                        {email.subject || "(no subject)"}
-                      </p>
-                      <p className="text-xs text-slate-500 truncate max-w-xs">
-                        {email.from || ""}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {email.companyName || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {email.jobTitle || "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
-                          email.category
-                            ? CATEGORY_STYLES[email.category]
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {formatCategory(email.category)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {email.suggestedApplicationStatus ? (
-                        <span className="inline-block px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700">
-                          {email.suggestedApplicationStatus}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {email.careerStatus ? (
-                        <div>
-                          <span
-                            className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${
-                              DETECTED_STATUS_STYLES[email.careerStatus]
-                            }`}
-                          >
-                            {email.careerStatus}
-                            {email.careerStatusConfidence != null
-                              ? ` ${Math.round(email.careerStatusConfidence * 100)}%`
-                              : ""}
-                            {email.autoStatusApplied ? " • auto" : ""}
-                            {email.manualStatusApplied ? " • manual" : ""}
-                          </span>
-                          {email.careerStatusDetectedAt && (
-                            <p className="text-[10px] text-slate-400 mt-0.5">
-                              detected {formatDateTime(email.careerStatusDetectedAt)}
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 text-xs">—</span>
-                      )}
-                      {email.careerEvent?.type && (
-                        <div className="mt-1 inline-flex flex-wrap items-center gap-1">
-                          <span className="px-1.5 py-0.5 text-[9px] font-medium rounded-full border border-slate-200 bg-white text-emerald-700">
-                            {email.careerEvent.type.replace(/_/g, " ")}
-                          </span>
-                          {email.careerEvent.detectedAt && (
-                            <span className="text-[9px] text-slate-400">
-                              {formatDateTime(email.careerEvent.detectedAt)}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {email.application ? (
-                        <span className="inline-flex flex-wrap items-center gap-2">
-                          <span className="text-xs text-slate-600">
-                            {email.application.status || "—"}
-                          </span>
-                          <a
-                            href={`/dashboard/applications?id=${email.application._id}`}
-                            className="text-xs text-blue-600 hover:underline"
-                          >
-                            View
-                          </a>
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 text-xs">
-                          Not matched
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">
-                      {formatDate(email.receivedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => setViewing(email)}
-                        className="px-3 py-1.5 text-xs text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
-                      >
-                        View
-                      </button>
-                    </td>
+          <div className="overflow-x-auto">
+            <div className="table-wrap min-w-[900px]">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="th">Subject</th>
+                    <th className="th">Company</th>
+                    <th className="th">Role</th>
+                    <th className="th">Category</th>
+                    <th className="th">Suggested Status</th>
+                    <th className="th">Detected</th>
+                    <th className="th">Application</th>
+                    <th className="th">Received</th>
+                    <th className="th text-right">Details</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {emails.map((email) => (
+                    <tr key={email.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="td">
+                        <p className="font-medium text-slate-900 truncate max-w-xs">
+                          {email.subject || "(no subject)"}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate max-w-xs">
+                          {email.from || ""}
+                        </p>
+                      </td>
+                      <td className="td">
+                        {email.companyName || "—"}
+                      </td>
+                      <td className="td">
+                        {email.jobTitle || "—"}
+                      </td>
+                      <td className="td">
+                        <span
+                          className={`badge ${
+                            email.category
+                              ? CATEGORY_STYLES[email.category]
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {formatCategory(email.category)}
+                        </span>
+                      </td>
+                      <td className="td">
+                        {email.suggestedApplicationStatus ? (
+                          <span className="badge bg-blue-50 text-blue-700">
+                            {email.suggestedApplicationStatus}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="td">
+                        {email.careerStatus ? (
+                          <div>
+                            <span
+                              className={`badge ${
+                                DETECTED_STATUS_STYLES[email.careerStatus]
+                              }`}
+                            >
+                              {email.careerStatus}
+                              {email.careerStatusConfidence != null
+                                ? ` ${Math.round(email.careerStatusConfidence * 100)}%`
+                                : ""}
+                              {email.autoStatusApplied ? " • auto" : ""}
+                              {email.manualStatusApplied ? " • manual" : ""}
+                            </span>
+                            {email.careerStatusDetectedAt && (
+                              <p className="text-[10px] text-slate-400 mt-1">
+                                detected {formatDateTime(email.careerStatusDetectedAt)}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
+                        {email.careerEvent?.type && (
+                          <div className="mt-1.5 inline-flex flex-wrap items-center gap-1">
+                            <span className="badge border border-emerald-200 bg-emerald-50 text-emerald-700">
+                              {email.careerEvent.type.replace(/_/g, " ")}
+                            </span>
+                            {email.careerEvent.detectedAt && (
+                              <span className="text-[10px] text-slate-400">
+                                {formatDateTime(email.careerEvent.detectedAt)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="td">
+                        {email.application ? (
+                          <span className="inline-flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-slate-600">
+                              {email.application.status || "—"}
+                            </span>
+                            <a
+                              href={`/dashboard/applications?id=${email.application._id}`}
+                              className="text-xs font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                            >
+                              View
+                            </a>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            Not matched
+                          </span>
+                        )}
+                      </td>
+                      <td className="td text-xs text-slate-500 whitespace-nowrap">
+                        {formatDate(email.receivedAt)}
+                      </td>
+                      <td className="td text-right">
+                        <button
+                          onClick={() => setViewing(email)}
+                          className="btn-sm text-brand-700 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 hover:border-brand-300 transition-colors whitespace-nowrap"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -450,7 +457,7 @@ function CareerEmails() {
             <button
               onClick={() => handlePageChange(pagination.page - 1)}
               disabled={pagination.page <= 1 || loading}
-              className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+              className="btn-outline btn-sm"
             >
               Previous
             </button>
@@ -460,7 +467,7 @@ function CareerEmails() {
             <button
               onClick={() => handlePageChange(pagination.page + 1)}
               disabled={pagination.page >= pagination.totalPages || loading}
-              className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+              className="btn-outline btn-sm"
             >
               Next
             </button>
@@ -535,24 +542,24 @@ function EmailDetailModal({
 
   const info = (label: string, value?: string | null) => (
     <div>
-      <dt className="text-xs font-medium text-slate-500 mb-0.5">{label}</dt>
+      <dt className="text-xs font-semibold text-slate-500 mb-1">{label}</dt>
       <dd className="text-sm text-slate-900">{value || "—"}</dd>
     </div>
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
-        <div className="flex items-start justify-between p-6 border-b border-slate-200 sticky top-0 bg-white">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-3xl overflow-y-auto">
+        <div className="flex items-start justify-between gap-4 p-6 border-b border-slate-100 bg-gradient-to-r from-brand-50/60 to-transparent">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">
+            <h2 className="page-title text-xl">
               {email.subject || "(no subject)"}
             </h2>
             <p className="text-sm text-slate-600 mt-1">{email.from || ""}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-xl"
+            className="btn-ghost h-9 w-9 shrink-0 rounded-full text-2xl leading-none"
             aria-label="Close"
           >
             ×
@@ -561,20 +568,20 @@ function EmailDetailModal({
 
         <div className="p-6">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-              {error}
+            <div className="alert-error mb-4 items-center">
+              <span>{error}</span>
             </div>
           )}
 
           {email.category && (
             <span
-              className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full mb-4 ${CATEGORY_STYLES[email.category]}`}
+              className={`badge mb-4 ${CATEGORY_STYLES[email.category]}`}
             >
               {formatCategory(email.category)}
             </span>
           )}
 
-          <dl className="grid grid-cols-2 gap-4 mb-6">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             {info("Company", email.companyName)}
             {info("Role", email.jobTitle)}
             {info("Received", email.receivedAt ? formatDate(email.receivedAt) : null)}
@@ -592,7 +599,7 @@ function EmailDetailModal({
           </dl>
 
           {email.careerEvent?.type && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-6">
+            <div className="bg-emerald-50 border border-emerald-200/70 rounded-2xl p-5 mb-6">
               <h3 className="text-sm font-semibold text-emerald-900 mb-1">
                 Detected Career Event
               </h3>
@@ -607,7 +614,7 @@ function EmailDetailModal({
                   {email.careerEvent.title}
                 </p>
               )}
-              <dl className="grid grid-cols-2 gap-3 mt-3">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                 {info("Company", email.careerEvent.company ?? null)}
                 {info("Role", email.careerEvent.role ?? null)}
                 {email.careerEvent.scheduledAt
@@ -674,8 +681,8 @@ function EmailDetailModal({
 
           {email.summary && (
             <div className="mb-6">
-              <p className="text-xs font-medium text-slate-500 mb-1">AI Summary</p>
-              <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3">
+              <p className="field-label">AI Summary</p>
+              <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-4 leading-relaxed">
                 {email.summary}
               </p>
             </div>
@@ -683,20 +690,22 @@ function EmailDetailModal({
 
           {email.snippet && (
             <div className="mb-6">
-              <p className="text-xs font-medium text-slate-500 mb-1">Excerpt</p>
-              <p className="text-sm text-slate-600">{email.snippet}</p>
+              <p className="field-label">Excerpt</p>
+              <p className="text-sm text-slate-600 leading-relaxed">{email.snippet}</p>
             </div>
           )}
 
           {email.confidence != null && (
-            <p className="text-xs text-slate-400 mb-6">
-              Classification confidence: {Math.round(email.confidence * 100)}%
-            </p>
+            <div className="mb-6">
+              <span className="chip bg-slate-100 text-slate-600">
+                Classification confidence: {Math.round(email.confidence * 100)}%
+              </span>
+            </div>
           )}
 
           <div className="border-t border-slate-200 pt-6">
             {email.careerStatus && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4">
+              <div className="bg-indigo-50 border border-indigo-200/70 rounded-2xl p-5 mb-4">
                 <h3 className="text-sm font-semibold text-indigo-900 mb-1">
                   Detected Hiring Stage
                 </h3>
@@ -729,21 +738,21 @@ function EmailDetailModal({
               </div>
             )}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-              <h3 className="text-sm font-semibold text-blue-900 mb-1">
+            <div className="bg-brand-50 border border-brand-200/70 rounded-2xl p-5 mb-4">
+              <h3 className="text-sm font-semibold text-brand-900 mb-1">
                 AI Suggested Status
               </h3>
-              <p className="text-xs text-blue-700 mb-3">
+              <p className="text-xs text-brand-700 mb-3">
                 This is a suggestion only and never changes your application on
                 its own.
               </p>
-              <p className="text-sm text-blue-900 font-medium">
+              <p className="text-sm text-brand-900 font-medium">
                 {email.suggestedApplicationStatus || "No suggestion"}
               </p>
             </div>
 
             <div className="mb-4">
-              <p className="text-xs font-medium text-slate-500 mb-1">
+              <p className="field-label">
                 Linked Application
               </p>
               <p className="text-sm text-slate-700">
@@ -759,11 +768,11 @@ function EmailDetailModal({
             </div>
 
             {!confirming ? (
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value as DetectedCareerStatus)}
-                  className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="select w-auto"
                 >
                   {DETECTED_STATUS_OPTIONS.map((opt) => (
                     <option key={opt.label} value={opt.value}>
@@ -774,30 +783,30 @@ function EmailDetailModal({
                 <button
                   onClick={() => setConfirming(true)}
                   disabled={!email.application || saving}
-                  className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  className="btn-primary"
                 >
                   Update Application Status
                 </button>
               </div>
             ) : (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="bg-amber-50 border border-amber-200/70 rounded-2xl p-5">
                 <p className="text-sm text-amber-800 mb-3">
                   Confirm updating the linked application status to{" "}
                   <span className="font-semibold">{status}</span>. This change
                   will be applied to your application tracking.
                 </p>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   <button
                     onClick={() => setConfirming(false)}
                     disabled={saving}
-                    className="px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                    className="btn-outline"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleUpdateStatus}
                     disabled={saving}
-                    className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    className="btn-primary"
                   >
                     {saving ? "Updating..." : "Confirm Update"}
                   </button>
@@ -841,11 +850,11 @@ function CareerEventActions({ event }: { event: CareerEvent }) {
   }
 
   return (
-    <div className="flex flex-wrap gap-2 mt-3">
+    <div className="flex flex-wrap gap-2 mt-4">
       {event.scheduledAt && (
         <button
           onClick={handleAddToCalendar}
-          className="px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-100 transition-colors"
+          className="btn-sm text-emerald-700 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors"
         >
           {icsAdded ? "Added ✓" : "Add to calendar"}
         </button>
@@ -853,7 +862,7 @@ function CareerEventActions({ event }: { event: CareerEvent }) {
       {buildReplyDraft(event) && (
         <button
           onClick={handleCopyDraft}
-          className="px-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+          className="btn-secondary btn-sm"
         >
           {copied ? "Copied ✓" : "Copy draft"}
         </button>

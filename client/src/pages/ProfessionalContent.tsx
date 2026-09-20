@@ -337,54 +337,63 @@ function ProfessionalContent() {
   return (
     <DashboardLayout active="Professional Content">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">
-            Professional Content & Career Opportunities
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Turn an approved GitHub project into professional evidence and a
-            LinkedIn draft. Claude suggests — you decide. Nothing is ever
-            published automatically.
-          </p>
-        </div>
+        <header className="page-header">
+          <div>
+            <h1 className="page-title">
+              Professional Content & Career Opportunities
+            </h1>
+            <p className="page-subtitle">
+              Turn an approved GitHub project into professional evidence and a
+              LinkedIn draft. Claude suggests — you decide. Nothing is ever
+              published automatically.
+            </p>
+          </div>
+        </header>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center justify-between">
+          <div className="alert-error mb-6">
             <span>{error}</span>
-            <button onClick={clearError} className="text-red-500 hover:text-red-700 ml-4">
+            <button
+              onClick={clearError}
+              className="shrink-0 font-semibold text-red-600 hover:text-red-800"
+            >
               Dismiss
             </button>
           </div>
         )}
         {draftNotice && (
-          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
-            {draftNotice}
-          </div>
+          <div className="alert-warning mb-6">{draftNotice}</div>
         )}
 
         {loading ? (
-          <div className="text-center py-16 text-slate-400">Loading repositories...</div>
+          <div className="flex items-center justify-center gap-3 py-16 text-slate-500">
+            <span className="spinner h-5 w-5" />
+            Loading repositories...
+          </div>
         ) : repos.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
-            <p className="text-slate-600 font-medium mb-1">No imported repositories.</p>
-            <p className="text-slate-400 text-sm">
+          <div className="empty-state p-10">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50">
+              <span className="h-5 w-5 rounded-full border-2 border-dashed border-brand-400" />
+            </div>
+            <p className="font-semibold text-slate-700 mb-1.5">No imported repositories</p>
+            <p className="text-slate-400 text-sm max-w-sm mx-auto">
               Import a GitHub repository first (GitHub Projects), then approve it
               here for professional use.
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 bg-white border border-slate-200 rounded-xl p-4 max-h-[75vh] overflow-y-auto">
-              <h2 className="text-sm font-semibold text-slate-900 mb-3">Repositories</h2>
+            <div className="lg:col-span-1 card p-4 max-h-[75vh] overflow-y-auto">
+              <h2 className="section-title mb-3">Repositories</h2>
               <div className="space-y-2">
                 {repos.map((repo) => (
                   <button
                     key={repo._id}
                     onClick={() => selectRepo(repo)}
-                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    className={`w-full text-left p-3 rounded-xl transition-all duration-150 ${
                       selected?.githubRepositoryId === repo.githubRepositoryId
-                        ? "border-blue-300 bg-blue-50"
-                        : "border-slate-100 hover:bg-slate-50"
+                        ? "border border-brand-300 bg-brand-50 ring-1 ring-brand-200 shadow-sm"
+                        : "border border-slate-200 hover:border-brand-200 hover:bg-slate-50 hover:shadow-sm"
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -392,9 +401,9 @@ function ProfessionalContent() {
                         {repo.name}
                       </span>
                       <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                        className={`badge ${
                           repo.approvedForProfessionalUse
-                            ? "bg-emerald-50 text-emerald-700"
+                            ? "bg-emerald-100 text-emerald-700"
                             : "bg-slate-100 text-slate-500"
                         }`}
                       >
@@ -411,22 +420,30 @@ function ProfessionalContent() {
 
             {selected ? (
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white border border-slate-200 rounded-xl p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-slate-900">
-                        {selected.fullName}
-                      </h2>
+                <div className="card relative overflow-hidden p-6">
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-violet-500 to-brand-600" />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-semibold text-slate-900 truncate">
+                          {selected.fullName}
+                        </h2>
+                        {selected.approvedForProfessionalUse && (
+                          <span className="badge bg-emerald-100 text-emerald-700 shrink-0">
+                            Approved
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-slate-500 mt-1">
                         {selected.description || "No description"}
                       </p>
                     </div>
                     <button
                       onClick={() => toggleApprove(selected)}
-                      className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                      className={`btn shrink-0 ${
                         selected.approvedForProfessionalUse
-                          ? "text-red-600 border-red-200 hover:bg-red-50"
-                          : "text-white bg-emerald-600 hover:bg-emerald-700"
+                          ? "btn-danger-outline"
+                          : "bg-gradient-to-br from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 shadow-[0_10px_24px_-10px_rgb(5_150_105/0.55)]"
                       }`}
                     >
                       {selected.approvedForProfessionalUse
@@ -435,20 +452,20 @@ function ProfessionalContent() {
                     </button>
                   </div>
                   {!selected.approvedForProfessionalUse && (
-                    <p className="text-xs text-slate-400 mt-3">
+                    <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
                       This repository must be explicitly approved before it can be
                       analyzed or published about.
-                    </p>
+                    </div>
                   )}
                 </div>
 
-                <section className="bg-white border border-slate-200 rounded-xl p-6">
-                  <div className="flex items-center justify-between">
+                <section className="card p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <h2 className="text-lg font-semibold text-slate-900">
                         LinkedIn Publishing
                       </h2>
-                      <p className="text-sm text-slate-500 mt-1">
+                      <p className="text-sm text-slate-500 mt-1 max-w-2xl">
                         Publishing only ever happens when you explicitly approve a
                         draft and click "Publish". Nothing is posted automatically,
                         and no token is ever exposed to this page.
@@ -456,7 +473,7 @@ function ProfessionalContent() {
                     </div>
                     <Link
                       to="/dashboard/connections"
-                      className="px-4 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                      className="btn btn-sm btn-secondary shrink-0"
                     >
                       Manage in Connections
                     </Link>
@@ -465,15 +482,15 @@ function ProfessionalContent() {
 
                 {selected.approvedForProfessionalUse && (
                   <>
-                    <section className="bg-white border border-slate-200 rounded-xl p-6">
-                      <div className="flex items-center justify-between mb-4">
+                    <section className="card p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                         <h2 className="text-lg font-semibold text-slate-900">
                           Professional Evidence
                         </h2>
                         <button
                           onClick={generateEvidence}
                           disabled={evidenceUpdating}
-                          className="px-4 py-2 text-sm text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                          className="btn btn-primary btn-sm shrink-0"
                         >
                           {evidenceUpdating
                             ? "Analyzing..."
@@ -484,28 +501,31 @@ function ProfessionalContent() {
                       </div>
 
                       {evidenceLoading && (
-                        <p className="text-sm text-slate-400">Loading evidence...</p>
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <span className="spinner h-4 w-4" />
+                          Loading evidence...
+                        </div>
                       )}
                       {!evidenceLoading && !evidence && (
-                        <p className="text-sm text-slate-400">
+                        <div className="rounded-xl bg-slate-50 border border-dashed border-slate-300 p-5 text-sm text-slate-500 text-center">
                           No professional evidence yet. Generate it to see the
                           evidence-backed professional summary.
-                        </p>
+                        </div>
                       )}
 
                       {evidence && (
                         <div className="space-y-4">
-                          <p className="text-xs text-slate-400">
+                          <div className="rounded-lg bg-brand-50 border border-brand-100 px-3 py-2 text-xs text-brand-700">
                             Evidence is derived from verified repository facts and
                             the existing AI project analysis. Metrics without a
                             source are left unknown, never fabricated.
-                          </p>
+                          </div>
                           <div>
-                            <label className="text-xs font-semibold text-slate-500">
+                            <label className="field-label">
                               Professional Summary
                             </label>
                             <textarea
-                              className="mt-1 w-full border border-slate-200 rounded-lg p-2 text-sm"
+                              className="textarea"
                               rows={2}
                               value={evidence.professionalSummary}
                               onChange={(e) =>
@@ -514,11 +534,11 @@ function ProfessionalContent() {
                             />
                           </div>
                           <div>
-                            <label className="text-xs font-semibold text-slate-500">
+                            <label className="field-label">
                               Problem Solved
                             </label>
                             <textarea
-                              className="mt-1 w-full border border-slate-200 rounded-lg p-2 text-sm"
+                              className="textarea"
                               rows={2}
                               value={evidence.problemSolved}
                               onChange={(e) =>
@@ -528,11 +548,11 @@ function ProfessionalContent() {
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="text-xs font-semibold text-slate-500">
+                              <label className="field-label">
                                 Contribution Evidence
                               </label>
                               <textarea
-                                className="mt-1 w-full border border-slate-200 rounded-lg p-2 text-sm"
+                                className="textarea"
                                 rows={2}
                                 placeholder="Only what you can verify (e.g., 'Designed the auth flow')."
                                 value={evidence.contributionEvidence}
@@ -542,11 +562,11 @@ function ProfessionalContent() {
                               />
                             </div>
                             <div>
-                              <label className="text-xs font-semibold text-slate-500">
+                              <label className="field-label">
                                 Measurable Impact
                               </label>
                               <textarea
-                                className="mt-1 w-full border border-slate-200 rounded-lg p-2 text-sm"
+                                className="textarea"
                                 rows={2}
                                 placeholder="Only if you have real numbers; otherwise left blank."
                                 value={evidence.measurableImpact}
@@ -577,15 +597,15 @@ function ProfessionalContent() {
                       )}
                     </section>
 
-                    <section className="bg-white border border-slate-200 rounded-xl p-6">
-                      <div className="flex items-center justify-between mb-4">
+                    <section className="card p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                         <h2 className="text-lg font-semibold text-slate-900">
                           LinkedIn Post Draft
                         </h2>
                         <button
                           onClick={runAssist}
                           disabled={assistLoading}
-                          className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                          className="btn btn-primary btn-sm shrink-0"
                         >
                           {assistLoading ? "Generating..." : "Generate LinkedIn Post"}
                         </button>
@@ -593,7 +613,7 @@ function ProfessionalContent() {
 
                       {suggestions.length > 0 && (
                         <div className="space-y-3 mb-5">
-                          <p className="text-xs text-slate-400">
+                          <p className="text-xs text-slate-500">
                             Claude suggestions for review only. Use one to load it
                             into the editor below — nothing is saved or published
                             automatically.
@@ -601,18 +621,22 @@ function ProfessionalContent() {
                           {suggestions.map((s, idx) => (
                             <div
                               key={idx}
-                              className="border border-blue-200 rounded-lg p-4"
+                              className="card-hover border-brand-100 p-4"
                             >
-                              <p className="text-sm font-medium text-slate-900">{s.hook}</p>
-                              <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">{s.body}</p>
+                              <p className="text-sm font-semibold text-slate-900">{s.hook}</p>
+                              <p className="text-sm text-slate-600 mt-1.5 whitespace-pre-wrap">{s.body}</p>
                               {s.hashtags.length > 0 && (
-                                <p className="text-xs text-blue-600 mt-2">
-                                  {s.hashtags.map((h) => `#${h}`).join(" ")}
-                                </p>
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                  {s.hashtags.map((h, i) => (
+                                    <span key={i} className="badge bg-brand-100 text-brand-700">
+                                      #{h}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
                               <button
                                 onClick={() => useSuggestion(s)}
-                                className="mt-3 px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                                className="btn btn-sm btn-primary mt-3"
                               >
                                 Use this suggestion
                               </button>
@@ -621,20 +645,20 @@ function ProfessionalContent() {
                         </div>
                       )}
 
-                      <div className="space-y-3">
+                      <div className="space-y-4">
                         <div>
-                          <label className="text-xs font-semibold text-slate-500">Hook</label>
+                          <label className="field-label">Hook</label>
                           <input
-                            className="mt-1 w-full border border-slate-200 rounded-lg p-2 text-sm"
+                            className="input"
                             value={hook}
                             onChange={(e) => setHook(e.target.value)}
                             placeholder="Opening line"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-500">Body</label>
+                          <label className="field-label">Body</label>
                           <textarea
-                            className="mt-1 w-full border border-slate-200 rounded-lg p-2 text-sm"
+                            className="textarea"
                             rows={6}
                             value={body}
                             onChange={(e) => setBody(e.target.value)}
@@ -642,28 +666,28 @@ function ProfessionalContent() {
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-500">
+                          <label className="field-label">
                             Hashtags (comma separated)
                           </label>
                           <input
-                            className="mt-1 w-full border border-slate-200 rounded-lg p-2 text-sm"
+                            className="input"
                             value={hashtags}
                             onChange={(e) => setHashtags(e.target.value)}
                             placeholder="typescript, openSource"
                           />
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
                           <button
                             onClick={saveDraft}
                             disabled={saving || !evidence}
-                            className="px-4 py-2 text-sm text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
+                            className="btn btn-primary"
                           >
                             {saving ? "Saving..." : editing ? "Update Draft" : "Save Draft"}
                           </button>
                           {editing && editing.status === "draft" && (
                             <button
                               onClick={() => reviewDraft(editing)}
-                              className="px-4 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                              className="btn btn-secondary"
                             >
                               Mark Reviewed & Approve
                             </button>
@@ -672,27 +696,27 @@ function ProfessionalContent() {
                       </div>
                     </section>
 
-                    <section className="bg-white border border-slate-200 rounded-xl p-6">
+                    <section className="card p-6">
                       <h2 className="text-lg font-semibold text-slate-900 mb-4">
                         Drafts for this project
                       </h2>
                       {currentDrafts.length === 0 ? (
-                        <p className="text-sm text-slate-400">
+                        <div className="rounded-xl bg-slate-50 border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
                           No drafts saved yet.
-                        </p>
+                        </div>
                       ) : (
                         <div className="space-y-3">
                           {currentDrafts.map((d) => (
                             <div
                               key={d._id}
-                              className="border border-slate-100 rounded-lg p-4"
+                              className="border border-slate-200 rounded-xl p-4 hover:border-brand-200 transition-colors"
                             >
-                              <div className="flex items-center justify-between">
-                                <p className="text-sm font-medium text-slate-900">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-slate-900 truncate">
                                   {d.hook || "(no hook)"}
                                 </p>
                                 <span
-                                  className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                  className={`badge shrink-0 ${
                                     STATUS_STYLES[d.status] || STATUS_STYLES.draft
                                   }`}
                                 >
@@ -703,36 +727,36 @@ function ProfessionalContent() {
                                 {d.body}
                               </p>
                               {d.status === "draft" && (
-                                <div className="mt-2 flex items-center gap-2">
+                                <div className="mt-3 flex items-center gap-2">
                                   <button
                                     onClick={() => editDraft(d)}
-                                    className="px-3 py-1.5 text-xs text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                                    className="btn btn-sm btn-outline"
                                   >
                                     Edit
                                   </button>
                                   <button
                                     onClick={() => reviewDraft(d)}
-                                    className="px-3 py-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+                                    className="btn btn-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300"
                                   >
                                     Approve — Ready to Publish
                                   </button>
                                 </div>
                               )}
                               {d.status === "approved" && (
-                                <div className="mt-2">
+                                <div className="mt-3">
                                   <p className="text-xs text-emerald-600">
                                     Approved and ready to publish.
                                   </p>
                                   <button
                                     onClick={() => confirmPublish(d)}
-                                    className="mt-2 px-3 py-1.5 text-xs text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors"
+                                    className="btn btn-sm btn-primary mt-2"
                                   >
                                     Publish to LinkedIn
                                   </button>
                                 </div>
                               )}
                               {d.status === "published" && (
-                                <div className="mt-2 space-y-0.5">
+                                <div className="mt-3 space-y-0.5">
                                   <p className="text-xs text-violet-700">
                                     Published to LinkedIn.
                                   </p>
@@ -744,7 +768,7 @@ function ProfessionalContent() {
                                 </div>
                               )}
                               {d.status === "publish_failed" && (
-                                <div className="mt-2">
+                                <div className="mt-3">
                                   <p className="text-xs text-red-600">
                                     Publish failed
                                     {d.publishErrorCode ? ` (${d.publishErrorCode})` : ""}:
@@ -753,7 +777,7 @@ function ProfessionalContent() {
                                   </p>
                                   <button
                                     onClick={() => confirmPublish(d)}
-                                    className="mt-2 px-3 py-1.5 text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-lg hover:bg-violet-100 transition-colors"
+                                    className="btn btn-sm border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 hover:border-violet-300 mt-2"
                                   >
                                     Retry publish
                                   </button>
@@ -768,16 +792,19 @@ function ProfessionalContent() {
                 )}
               </div>
             ) : (
-              <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400">
-                Select a repository to begin.
+              <div className="lg:col-span-2 card p-10 flex flex-col items-center justify-center text-center text-slate-400 min-h-[280px]">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50">
+                  <span className="h-6 w-6 rounded-full border-2 border-dashed border-brand-400" />
+                </div>
+                <p className="text-slate-500 font-medium">Select a repository to begin</p>
               </div>
             )}
           </div>
         )}
 
         {publishTarget && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-xl">
+          <div className="modal-backdrop">
+            <div className="modal-panel max-w-md p-6">
               <h3 className="text-lg font-semibold text-slate-900">
                 Publish this post to LinkedIn?
               </h3>
@@ -786,15 +813,15 @@ function ProfessionalContent() {
                 official LinkedIn API. This action takes effect immediately and
                 cannot be undone.
               </p>
-              <div className="mt-4 rounded-lg bg-slate-50 border border-slate-200 p-3 max-h-40 overflow-y-auto">
-                <p className="text-sm font-medium text-slate-900">
+              <div className="mt-4 rounded-xl bg-slate-50 border border-slate-100 p-4 max-h-40 overflow-y-auto">
+                <p className="text-sm font-semibold text-slate-900">
                   {publishTarget.hook || "(no hook)"}
                 </p>
                 <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">
                   {publishTarget.body}
                 </p>
                 {publishTarget.hashtags.length > 0 && (
-                  <p className="text-xs text-blue-600 mt-2">
+                  <p className="text-xs text-brand-700 mt-2">
                     {publishTarget.hashtags.map((h) => `#${h}`).join(" ")}
                   </p>
                 )}
@@ -803,14 +830,14 @@ function ProfessionalContent() {
                 <button
                   onClick={cancelPublish}
                   disabled={publishing}
-                  className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  className="btn btn-outline"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={publishDraft}
                   disabled={publishing}
-                  className="px-4 py-2 text-sm text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50"
+                  className="btn btn-primary"
                 >
                   {publishing ? "Publishing…" : "Publish Now"}
                 </button>
@@ -827,13 +854,10 @@ function Chips({ label, values }: { label: string; values: string[] }) {
   if (!values || values.length === 0) return null;
   return (
     <div>
-      <label className="text-xs font-semibold text-slate-500">{label}</label>
-      <div className="flex flex-wrap gap-2 mt-1">
+      <label className="field-label">{label}</label>
+      <div className="flex flex-wrap gap-1.5">
         {values.map((v, i) => (
-          <span
-            key={i}
-            className="text-xs px-2 py-1 bg-slate-100 text-slate-700 rounded-md"
-          >
+          <span key={i} className="chip bg-slate-100 text-slate-700">
             {v}
           </span>
         ))}
@@ -846,13 +870,10 @@ function Tags({ label, values }: { label: string; values: string[] }) {
   if (!values || values.length === 0) return null;
   return (
     <div>
-      <label className="text-xs font-semibold text-slate-500">{label}</label>
-      <div className="flex flex-wrap gap-2 mt-1">
+      <label className="field-label">{label}</label>
+      <div className="flex flex-wrap gap-1.5">
         {values.map((v, i) => (
-          <span
-            key={i}
-            className="text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md"
-          >
+          <span key={i} className="chip bg-brand-50 text-brand-700">
             {v}
           </span>
         ))}

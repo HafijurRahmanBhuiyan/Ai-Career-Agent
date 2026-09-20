@@ -224,140 +224,143 @@ function Jobs() {
   return (
     <DashboardLayout active="Jobs">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Job Discovery</h1>
-            <p className="text-slate-500 mt-1">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Job Discovery</h1>
+            <p className="page-subtitle">
               Discover and browse jobs from connected job sources
             </p>
           </div>
+        </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center justify-between">
-              <span>{error}</span>
-              <button onClick={() => setError(null)} className="text-red-500 hover:text-red-700 ml-4">
-                Dismiss
-              </button>
-            </div>
+            <div className="alert-error mb-6">
+            <span className="flex-1">{error}</span>
+            <button onClick={() => setError(null)} className="shrink-0 font-semibold text-red-700 hover:text-red-900">
+              Dismiss
+            </button>
+          </div>
           )}
 
           {discoveryMsg && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm flex items-center justify-between">
-              <span>{discoveryMsg}</span>
-              <button onClick={() => setDiscoveryMsg(null)} className="text-green-500 hover:text-green-700 ml-4">
-                Dismiss
-              </button>
-            </div>
+            <div className="alert-success mb-6">
+            <span className="flex-1">{discoveryMsg}</span>
+            <button onClick={() => setDiscoveryMsg(null)} className="shrink-0 font-semibold text-emerald-700 hover:text-emerald-900">
+              Dismiss
+            </button>
+          </div>
           )}
 
-          <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6">
-            <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Keywords
-                </label>
-                <input
-                  type="text"
-                  value={keywords}
-                  onChange={(e) => setKeywords(e.target.value)}
-                  placeholder="e.g. React Developer"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Location
-                </label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="e.g. Remote"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Remote
-                </label>
-                <select
-                  value={remote}
-                  onChange={(e) => setRemote(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Any</option>
-                  <option value="remote">Remote</option>
-                  <option value="hybrid">Hybrid</option>
-                  <option value="onsite">Onsite</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Employment Type
-                </label>
-                <select
-                  value={employmentType}
-                  onChange={(e) => setEmploymentType(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Any</option>
-                  <option value="full-time">Full-time</option>
-                  <option value="part-time">Part-time</option>
-                  <option value="contract">Contract</option>
-                  <option value="internship">Internship</option>
-                  <option value="temporary">Temporary</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">
-                  Experience Level
-                </label>
-                <select
-                  value={experienceLevel}
-                  onChange={(e) => setExperienceLevel(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Any</option>
-                  <option value="entry">Entry</option>
-                  <option value="junior">Junior</option>
-                  <option value="mid">Mid</option>
-                  <option value="senior">Senior</option>
-                  <option value="lead">Lead</option>
-                  <option value="manager">Manager</option>
-                </select>
-              </div>
-            </form>
-            <div className="flex items-center gap-3 mt-4">
-              <button
-                onClick={handleSearch}
-                disabled={loading}
-                className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {loading ? "Searching..." : "Search Jobs"}
-              </button>
-              <button
-                onClick={handleDiscover}
-                disabled={discovering}
-                className="px-4 py-2 text-sm text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-              >
-                {discovering ? "Discovering..." : "Discover Jobs"}
-              </button>
+          <div className="card p-6 mb-6">
+          <h2 className="section-title mb-5">Search &amp; Discover Jobs</h2>
+          <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div>
+              <label className="field-label">
+                Keywords
+              </label>
+              <input
+                type="text"
+                value={keywords}
+                onChange={(e) => setKeywords(e.target.value)}
+                placeholder="e.g. React Developer"
+                className="input"
+              />
             </div>
+            <div>
+              <label className="field-label">
+                Location
+              </label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Remote"
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="field-label">
+                Remote
+              </label>
+              <select
+                value={remote}
+                onChange={(e) => setRemote(e.target.value)}
+                className="select"
+              >
+                <option value="">Any</option>
+                <option value="remote">Remote</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="onsite">Onsite</option>
+              </select>
+            </div>
+            <div>
+              <label className="field-label">
+                Employment Type
+              </label>
+              <select
+                value={employmentType}
+                onChange={(e) => setEmploymentType(e.target.value)}
+                className="select"
+              >
+                <option value="">Any</option>
+                <option value="full-time">Full-time</option>
+                <option value="part-time">Part-time</option>
+                <option value="contract">Contract</option>
+                <option value="internship">Internship</option>
+                <option value="temporary">Temporary</option>
+              </select>
+            </div>
+            <div>
+              <label className="field-label">
+                Experience Level
+              </label>
+              <select
+                value={experienceLevel}
+                onChange={(e) => setExperienceLevel(e.target.value)}
+                className="select"
+              >
+                <option value="">Any</option>
+                <option value="entry">Entry</option>
+                <option value="junior">Junior</option>
+                <option value="mid">Mid</option>
+                <option value="senior">Senior</option>
+                <option value="lead">Lead</option>
+                <option value="manager">Manager</option>
+              </select>
+            </div>
+          </form>
+          <div className="flex flex-wrap items-center gap-3 mt-5">
+            <button
+              onClick={handleSearch}
+              disabled={loading}
+              className="btn-primary"
+            >
+              {loading ? "Searching..." : "Search Jobs"}
+            </button>
+            <button
+              onClick={handleDiscover}
+              disabled={discovering}
+              className="btn bg-violet-600 text-white hover:bg-violet-700"
+            >
+              {discovering ? "Discovering..." : "Discover Jobs"}
+            </button>
           </div>
+        </div>
 
           {loading ? (
             <div className="text-center py-16">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-              <p className="text-slate-500 text-sm">Loading jobs...</p>
-            </div>
-          ) : jobs.length === 0 ? (
-            <div className="text-center py-16 bg-white border border-slate-200 rounded-xl">
-              <p className="text-slate-400 text-sm mb-2">No jobs found.</p>
-              <p className="text-slate-400 text-xs">
-                Try adjusting your filters or click "Discover Jobs" to fetch new listings.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="spinner h-8 w-8 mb-4"></div>
+            <p className="text-slate-500 text-sm">Loading jobs...</p>
+          </div>
+        ) : jobs.length === 0 ? (
+          <div className="empty-state">
+            <p className="text-slate-500 text-sm mb-1">No jobs found.</p>
+            <p className="text-slate-400 text-xs">
+              Try adjusting your filters or click "Discover Jobs" to fetch new listings.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {jobs.map((job) => (
                 <JobCard
                   key={job._id}
@@ -374,17 +377,17 @@ function Jobs() {
               <button
                 onClick={() => handlePageChange(pagination.page - 1)}
                 disabled={pagination.page <= 1 || loading}
-                className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                className="btn btn-outline btn-sm"
               >
                 Previous
               </button>
-              <span className="text-sm text-slate-500">
+              <span className="badge bg-slate-100 text-slate-600">
                 Page {pagination.page} of {pagination.totalPages} ({pagination.total} jobs)
               </span>
               <button
                 onClick={() => handlePageChange(pagination.page + 1)}
                 disabled={pagination.page >= pagination.totalPages || loading}
-                className="px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                className="btn btn-outline btn-sm"
               >
                 Next
               </button>
@@ -430,7 +433,7 @@ function JobCard({
   onMatch: () => void;
 }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col">
+    <div className="card card-hover p-5 flex flex-col">
       <div className="flex-1">
         <h3 className="text-base font-semibold text-slate-900 mb-1">{job.title}</h3>
         <p className="text-sm text-slate-600 mb-2">{job.companyName}</p>
@@ -438,10 +441,10 @@ function JobCard({
           {job.location && (
             <span className="text-slate-500">📍 {job.location}</span>
           )}
-          <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">
+          <span className="chip bg-slate-100 text-slate-600">
             {job.remoteType}
           </span>
-          <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">
+          <span className="chip bg-slate-100 text-slate-600">
             {job.employmentType}
           </span>
         </div>
@@ -457,13 +460,13 @@ function JobCard({
       <div className="space-y-2">
         <button
           onClick={onView}
-          className="w-full px-3 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          className="btn btn-primary btn-block"
         >
           View Job
         </button>
         <button
           onClick={onMatch}
-          className="w-full px-3 py-2 text-sm text-purple-700 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
+          className="btn btn-block text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100"
         >
           Analyze Match
         </button>
@@ -486,40 +489,40 @@ function JobDetail({
   trackMsg: string | null;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-start justify-between p-6 border-b border-slate-200 sticky top-0 bg-white">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-2xl">
+        <div className="flex items-start justify-between p-6 border-b border-slate-200 bg-white shrink-0">
           <div>
             <h2 className="text-xl font-bold text-slate-900">{job.title}</h2>
             <p className="text-sm text-slate-600 mt-1">{job.companyName}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-xl leading-none"
+            className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-2xl leading-none transition-colors"
             aria-label="Close"
           >
             ×
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="flex-1 overflow-y-auto p-6">
           <div className="flex flex-wrap gap-2 mb-4 text-xs">
             {job.location && (
-              <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded">
+              <span className="chip bg-slate-100 text-slate-700">
                 📍 {job.location}
               </span>
             )}
-            <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded">
+            <span className="chip bg-brand-50 text-brand-700">
               {job.remoteType}
             </span>
-            <span className="px-2 py-1 bg-green-50 text-green-700 rounded">
+            <span className="chip bg-emerald-50 text-emerald-700">
               {job.employmentType}
             </span>
-            <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
+            <span className="chip bg-violet-50 text-violet-700">
               {job.experienceLevel}
             </span>
             {job.salaryMin != null && (
-              <span className="px-2 py-1 bg-amber-50 text-amber-700 rounded">
+              <span className="chip bg-amber-50 text-amber-700">
                 {formatSalary(job)}
               </span>
             )}
@@ -547,7 +550,7 @@ function JobDetail({
                 {job.technologies.map((tech, idx) => (
                   <span
                     key={idx}
-                    className="text-xs px-2 py-1 bg-slate-100 text-slate-700 rounded"
+                    className="chip bg-slate-100 text-slate-700"
                   >
                     {tech}
                   </span>
@@ -556,17 +559,17 @@ function JobDetail({
             </div>
           )}
 
-          <div className="flex gap-3 mt-6">
+          <div className="flex flex-wrap gap-3 mt-6">
             <button
               onClick={onTrack}
-              className="flex-1 px-4 py-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+              className="btn btn-secondary flex-1"
             >
               Track this job
             </button>
             {job.applyUrl && (
               <button
                 onClick={onApply}
-                className="flex-1 px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                className="btn btn-primary flex-1"
               >
                 Apply
               </button>
@@ -576,14 +579,14 @@ function JobDetail({
                 href={job.jobUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 px-4 py-2 text-sm text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-center"
+                className="btn btn-outline flex-1"
               >
                 View Source Listing
               </a>
             )}
           </div>
           {trackMsg && (
-            <p className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+            <p className="alert-success mt-4">
               {trackMsg}
             </p>
           )}

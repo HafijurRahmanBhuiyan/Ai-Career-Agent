@@ -460,8 +460,7 @@ function Profile() {
     }
   };
 
-  const inputClass =
-    "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed";
+  const inputClass = "input";
 
   const renderHighlightInput = (
     key: string,
@@ -485,13 +484,13 @@ function Profile() {
           }}
           disabled={!editing.work}
           placeholder="Add a bullet point"
-          className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:cursor-not-allowed"
+          className="input flex-1"
         />
         <button
           type="button"
           onClick={onAdd}
           disabled={!editing.work}
-          className="px-3 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-secondary btn-sm"
         >
           Add
         </button>
@@ -501,14 +500,14 @@ function Profile() {
           {items.map((item, i) => (
             <li
               key={i}
-              className="flex items-center justify-between text-sm text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg"
+              className="flex items-center justify-between gap-3 text-sm text-slate-700 bg-slate-50/70 border border-slate-200/60 px-3 py-2 rounded-lg"
             >
               <span className="mr-2">{item}</span>
               <button
                 type="button"
                 onClick={() => onRemove(i)}
                 disabled={!editing.work}
-                className="text-red-400 hover:text-red-600 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-danger-outline btn-sm"
               >
                 Remove
               </button>
@@ -528,7 +527,7 @@ function Profile() {
       <button
         type="button"
         onClick={() => toggleEdit(section)}
-        className="px-4 py-1.5 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+        className="btn-outline btn-sm"
       >
         {editing[section] ? "Cancel" : "Edit"}
       </button>
@@ -544,7 +543,7 @@ function Profile() {
         type="button"
         onClick={onClick}
         disabled={savingSection === section}
-        className="px-5 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+        className="btn-primary"
       >
         {savingSection === section ? "Saving..." : "Save"}
       </button>
@@ -554,27 +553,32 @@ function Profile() {
   return (
     <DashboardLayout active="Profile">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Profile</h1>
-          <p className="text-slate-500 mt-1">
-            Your complete personal and professional information
-          </p>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Profile</h1>
+            <p className="page-subtitle">
+              Your complete personal and professional information
+            </p>
+          </div>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center justify-between">
+          <div className="alert-error mb-6">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="text-red-500 ml-4">
+            <button
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-800 font-medium"
+            >
               Dismiss
             </button>
           </div>
         )}
         {success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm flex items-center justify-between">
+          <div className="alert-success mb-6">
             <span>{success}</span>
             <button
               onClick={() => setSuccess(null)}
-              className="text-green-500 ml-4"
+              className="text-emerald-600 hover:text-emerald-800 font-medium"
             >
               Dismiss
             </button>
@@ -583,16 +587,16 @@ function Profile() {
 
         {loading ? (
           <div className="text-center py-16">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+            <div className="spinner h-8 w-8 mb-4"></div>
             <p className="text-slate-500 text-sm">Loading profile...</p>
           </div>
         ) : (
           <div className="space-y-6">
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
+            <section className="card p-6">
               {sectionHeader("Basic Information", "basic")}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                  <label className="field-label">
                     Name
                   </label>
                   <input
@@ -605,7 +609,7 @@ function Profile() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                  <label className="field-label">
                     Gmail
                   </label>
                   <input
@@ -618,7 +622,7 @@ function Profile() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                  <label className="field-label">
                     Contact Number
                   </label>
                   <input
@@ -631,7 +635,7 @@ function Profile() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                  <label className="field-label">
                     Location
                   </label>
                   <input
@@ -647,7 +651,7 @@ function Profile() {
               {sectionSave("basic", saveBasic)}
             </section>
 
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
+            <section className="card p-6">
               {sectionHeader("Skills", "skills")}
               <div className="flex gap-2 mb-2">
                 <input
@@ -662,13 +666,13 @@ function Profile() {
                   }}
                   disabled={!editing.skills}
                   placeholder="Add a skill"
-                  className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+                  className="input flex-1"
                 />
                 <button
                   type="button"
                   onClick={addSkill}
                   disabled={!editing.skills}
-                  className="px-3 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-secondary btn-sm"
                 >
                   Add
                 </button>
@@ -678,14 +682,14 @@ function Profile() {
                   {skills.map((skill, i) => (
                     <li
                       key={i}
-                      className="flex items-center justify-between text-sm text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg"
+                      className="flex items-center justify-between gap-3 text-sm text-slate-700 bg-slate-50/70 border border-slate-200/60 px-3 py-2 rounded-lg"
                     >
                       <span className="mr-2">{skill}</span>
                       <button
                         type="button"
                         onClick={() => removeSkill(i)}
                         disabled={!editing.skills}
-                        className="text-red-400 hover:text-red-600 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="btn-danger-outline btn-sm"
                       >
                         Remove
                       </button>
@@ -696,15 +700,15 @@ function Profile() {
               {sectionSave("skills", saveSkills)}
             </section>
 
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
+            <section className="card p-6">
               {sectionHeader("CV", "cv")}
               <div className="flex items-start gap-6">
                 <div className="flex-1">
                   <div className="flex items-center gap-4">
-                    <label className={`inline-flex px-4 py-2 text-sm text-white bg-blue-600 rounded-lg transition-colors ${
+                    <label className={`btn-primary ${
                       editing.cv
-                        ? "hover:bg-blue-700 cursor-pointer"
-                        : "opacity-50 cursor-not-allowed pointer-events-none"
+                        ? "cursor-pointer"
+                        : "opacity-50 pointer-events-none"
                     }`}>
                       {uploading === "cv" ? "Uploading..." : "Upload CV"}
                       <input
@@ -722,7 +726,7 @@ function Profile() {
                           type="button"
                           onClick={handleCvDelete}
                           disabled={!editing.cv}
-                          className="text-xs text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Remove
                         </button>
@@ -737,7 +741,7 @@ function Profile() {
                   <button
                     type="button"
                     onClick={() => setCvModalOpen(true)}
-                    className="flex-shrink-0 w-24 h-32 border border-slate-200 rounded-lg overflow-hidden hover:ring-2 hover:ring-blue-400 transition-shadow cursor-pointer bg-slate-50 flex items-center justify-center"
+                    className="flex-shrink-0 w-24 h-32 rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:ring-2 hover:ring-brand-400 transition-shadow cursor-pointer bg-slate-50 flex items-center justify-center"
                   >
                     <iframe
                       src={cvPreviewUrl}
@@ -751,7 +755,7 @@ function Profile() {
                 <button
                   type="button"
                   onClick={() => toggleEdit("cv")}
-                  className="px-5 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                  className="btn-primary"
                 >
                   Save
                 </button>
@@ -760,11 +764,11 @@ function Profile() {
 
             {cvModalOpen && cvPreviewUrl && (
               <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+                className="modal-backdrop"
                 onClick={() => setCvModalOpen(false)}
               >
                 <div
-                  className="relative bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col"
+                  className="modal-panel max-w-4xl h-[90vh]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
@@ -790,13 +794,13 @@ function Profile() {
               </div>
             )}
 
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
+            <section className="card p-6">
               {sectionHeader("Work Experience", "work")}
               <div className="space-y-6">
                 {workExperience.map((work, idx) => (
                   <div
                     key={idx}
-                    className="border border-slate-100 rounded-lg p-4 relative"
+                    className="rounded-xl border border-slate-200/70 bg-slate-50/40 p-4 relative"
                   >
                     {workExperience.length > 1 && (
                       <button
@@ -806,14 +810,14 @@ function Profile() {
                             prev.filter((_, i) => i !== idx)
                           )
                         }
-                        className="absolute top-3 right-3 text-xs text-red-400 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="absolute top-3 right-3 btn-danger-outline btn-sm"
                       >
                         Remove
                       </button>
                     )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">
+                        <label className="field-label">
                           Company *
                         </label>
                         <input
@@ -827,7 +831,7 @@ function Profile() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">
+                        <label className="field-label">
                           Designation *
                         </label>
                         <input
@@ -841,7 +845,7 @@ function Profile() {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">
+                        <label className="field-label">
                           Location
                         </label>
                         <input
@@ -856,7 +860,7 @@ function Profile() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-1">
+                          <label className="field-label">
                             Start Date
                           </label>
                           <input
@@ -871,7 +875,7 @@ function Profile() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-1">
+                          <label className="field-label">
                             End Date
                           </label>
                           <input
@@ -895,14 +899,14 @@ function Profile() {
                               handleWorkChange(idx, "current", e.target.checked)
                             }
                             disabled={!editing.work}
-                            className="h-4 w-4 text-blue-600 border-slate-300 rounded"
+                            className="h-4 w-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
                           />
                           Currently working here
                         </label>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="field-label">
                         Highlights
                       </label>
                       {renderHighlightInput(
@@ -912,7 +916,7 @@ function Profile() {
                         (hlIdx) => removeWorkHighlight(idx, hlIdx)
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 my-1">
                       <div className="flex-1 border-t border-slate-200"></div>
                       <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
                         OR
@@ -920,7 +924,7 @@ function Profile() {
                       <div className="flex-1 border-t border-slate-200"></div>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1">
+                      <label className="field-label">
                         Description
                       </label>
                       <textarea
@@ -931,7 +935,7 @@ function Profile() {
                         }
                         placeholder="Describe your responsibilities and achievements as a paragraph..."
                         disabled={!editing.work}
-                        className={`${inputClass} resize-none`}
+                        className="textarea"
                       />
                     </div>
                   </div>
@@ -943,14 +947,14 @@ function Profile() {
                   setWorkExperience((prev) => [...prev, { ...emptyWork }])
                 }
                 disabled={!editing.work}
-                className="mt-4 text-sm text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-4 btn-outline btn-sm"
               >
                 + Add another work experience
               </button>
               {sectionSave("work", saveWork)}
             </section>
 
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
+            <section className="card p-6">
               {sectionHeader("Education", "education")}
               <div className="space-y-6">
                 {education.map((edu, i) => {
@@ -959,14 +963,14 @@ function Profile() {
                     <>
                       <div
                         key={edu.level}
-                        className="border border-slate-200 rounded-lg p-4 space-y-3"
+                        className="rounded-xl border border-slate-200/70 bg-slate-50/40 p-4 space-y-3"
                       >
-                      <h3 className="text-sm font-medium text-slate-800">
+                      <h3 className="text-sm font-semibold text-slate-900">
                         {EDUCATION_LABELS[edu.level]}
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-1">
+                          <label className="field-label">
                             Institution
                           </label>
                           <input
@@ -980,7 +984,7 @@ function Profile() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-500 mb-1">
+                          <label className="field-label">
                             Degree / Certificate
                           </label>
                           <input
@@ -996,7 +1000,7 @@ function Profile() {
                         {isSecondary ? (
                           <>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Group
                               </label>
                               <input
@@ -1010,7 +1014,7 @@ function Profile() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Session
                               </label>
                               <input
@@ -1025,7 +1029,7 @@ function Profile() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Passing Year
                               </label>
                               <input
@@ -1040,7 +1044,7 @@ function Profile() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 GPA
                               </label>
                               <input
@@ -1058,7 +1062,7 @@ function Profile() {
                         ) : edu.level === "master" ? (
                           <>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Major
                               </label>
                               <input
@@ -1072,7 +1076,7 @@ function Profile() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 CGPA
                               </label>
                               <input
@@ -1087,7 +1091,7 @@ function Profile() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Start
                               </label>
                               <input
@@ -1102,7 +1106,7 @@ function Profile() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 End
                               </label>
                               <input
@@ -1120,7 +1124,7 @@ function Profile() {
                         ) : (
                           <>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Major
                               </label>
                               <input
@@ -1134,7 +1138,7 @@ function Profile() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 CGPA
                               </label>
                               <input
@@ -1149,7 +1153,7 @@ function Profile() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 Start
                               </label>
                               <input
@@ -1164,7 +1168,7 @@ function Profile() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                              <label className="field-label">
                                 End
                               </label>
                               <input
@@ -1182,16 +1186,16 @@ function Profile() {
                         )}
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">
+                        <label className="field-label">
                           Certificate
                         </label>
                         <div className="flex items-start gap-6">
                           <div className="flex-1">
                             <div className="flex items-center gap-4">
-                              <label className={`inline-flex px-4 py-2 text-sm text-white bg-blue-600 rounded-lg transition-colors ${
+                              <label className={`btn-primary ${
                                 editing.education
-                                  ? "hover:bg-blue-700 cursor-pointer"
-                                  : "opacity-50 cursor-not-allowed pointer-events-none"
+                                  ? "cursor-pointer"
+                                  : "opacity-50 pointer-events-none"
                               }`}>
                                 {uploading === `cert-${i}`
                                   ? "Uploading..."
@@ -1211,7 +1215,7 @@ function Profile() {
                                     type="button"
                                     onClick={() => handleCertificateDelete(i)}
                                     disabled={!editing.education}
-                                    className="text-xs text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Remove
                                   </button>
@@ -1226,7 +1230,7 @@ function Profile() {
                             <button
                               type="button"
                               onClick={() => setCertModalIndex(i)}
-                              className="flex-shrink-0 w-20 h-28 border border-slate-200 rounded-lg overflow-hidden hover:ring-2 hover:ring-blue-400 transition-shadow cursor-pointer bg-slate-50 flex items-center justify-center"
+                              className="flex-shrink-0 w-20 h-28 rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:ring-2 hover:ring-brand-400 transition-shadow cursor-pointer bg-slate-50 flex items-center justify-center"
                             >
                               {isImageFile(edu.certificateFileName) ? (
                                 <img
@@ -1248,11 +1252,11 @@ function Profile() {
                     </div>
                     {certModalIndex === i && certPreviewUrls[i] && (
                       <div
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                        className="modal-backdrop"
                         onClick={() => setCertModalIndex(null)}
                       >
                         <div
-                          className="relative bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col"
+                          className="modal-panel max-w-4xl h-[90vh]"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
@@ -1267,7 +1271,7 @@ function Profile() {
                               &#10005;
                             </button>
                           </div>
-<div className="flex-1 overflow-hidden">
+                          <div className="flex-1 overflow-hidden">
                               {isImageFile(edu.certificateFileName) ? (
                                 <img
                                   src={certPreviewUrls[i]}
@@ -1292,11 +1296,11 @@ function Profile() {
               {sectionSave("education", saveEducation)}
             </section>
 
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
+            <section className="card p-6">
               {sectionHeader("Salary Range", "salary")}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                  <label className="field-label">
                     Minimum
                   </label>
                   <input
@@ -1310,7 +1314,7 @@ function Profile() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                  <label className="field-label">
                     Maximum
                   </label>
                   <input
@@ -1324,7 +1328,7 @@ function Profile() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                  <label className="field-label">
                     Currency
                   </label>
                   <input

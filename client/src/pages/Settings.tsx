@@ -123,57 +123,86 @@ function Settings() {
   return (
     <DashboardLayout active="Settings">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-          <p className="text-slate-500 mt-1">
-            Job source status, search preferences and notifications
-          </p>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Settings</h1>
+            <p className="page-subtitle">
+              Job source status, search preferences and notifications
+            </p>
+          </div>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center justify-between">
+          <div className="alert-error mb-6">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="text-red-500 ml-4">
+            <button
+              onClick={() => setError(null)}
+              className="btn-ghost btn-sm shrink-0 text-red-500 hover:text-red-700 hover:bg-red-100"
+            >
               Dismiss
             </button>
           </div>
         )}
         {success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm flex items-center justify-between">
+          <div className="alert-success mb-6">
             <span>{success}</span>
-            <button onClick={() => setSuccess(null)} className="text-green-500 ml-4">
+            <button
+              onClick={() => setSuccess(null)}
+              className="btn-ghost btn-sm shrink-0 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100"
+            >
               Dismiss
             </button>
           </div>
         )}
 
         {loading ? (
-          <div className="text-center py-16">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+          <div className="card text-center py-16">
+            <span className="spinner h-8 w-8 mb-4"></span>
             <p className="text-slate-500 text-sm">Loading settings...</p>
           </div>
         ) : (
           <form onSubmit={handleSave} className="space-y-6">
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">
-                Job Sources
-              </h2>
-              <p className="text-xs text-slate-500 mb-4">
-                Sources with a key are configured. Missing keys disable the
-                source (its jobs are skipped silently).
-              </p>
-              <ul className="divide-y divide-slate-100">
+            <section className="card p-6 sm:p-7">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l8 5 8-5M4 7V5a1 1 0 011-1h14a1 1 0 011 1v2"
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">
+                    Job Sources
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    Sources with a key are configured. Missing keys disable the
+                    source (its jobs are skipped silently).
+                  </p>
+                </div>
+              </div>
+              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100 bg-slate-50/50 px-1">
                 {sources.map((s) => (
                   <li
                     key={s.id}
-                    className="flex items-center justify-between py-3"
+                    className="flex items-center justify-between px-4 py-3"
                   >
-                    <span className="text-sm text-slate-800">{s.name}</span>
+                    <span className="text-sm font-medium text-slate-800">
+                      {s.name}
+                    </span>
                     <span
-                      className={`text-xs font-medium px-2 py-1 rounded-full ${
+                      className={`badge ${
                         s.configured
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-slate-100 text-slate-500"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-slate-200 text-slate-500"
                       }`}
                     >
                       {s.configured ? "Configured" : "Not configured"}
@@ -183,49 +212,60 @@ function Settings() {
               </ul>
             </section>
 
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">
-                Job Search Preferences
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section className="card p-6 sm:p-7">
+              <div className="flex items-center gap-3 mb-6">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                </span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Job Search Preferences
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
-                    Roles
-                  </label>
+                  <label className="field-label">Roles</label>
                   <input
                     type="text"
                     value={roles}
                     onChange={(e) => setRoles(e.target.value)}
                     placeholder="e.g. Full Stack Developer, Frontend Engineer"
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1.5">
                     Comma-separated
                   </p>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
-                    Locations
-                  </label>
+                  <label className="field-label">Locations</label>
                   <input
                     type="text"
                     value={locations}
                     onChange={(e) => setLocations(e.target.value)}
                     placeholder="e.g. London, Berlin, Remote"
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1.5">
                     Comma-separated
                   </p>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
-                    Work Preference
-                  </label>
+                  <label className="field-label">Work Preference</label>
                   <select
                     value={remote}
                     onChange={(e) => setRemote(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="select"
                   >
                     {REMOTE_OPTIONS.map((o) => (
                       <option key={o} value={o}>
@@ -235,13 +275,11 @@ function Settings() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
-                    Experience Level
-                  </label>
+                  <label className="field-label">Experience Level</label>
                   <select
                     value={experienceLevel}
                     onChange={(e) => setExperienceLevel(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="select"
                   >
                     {EXPERIENCE_OPTIONS.map((o) => (
                       <option key={o} value={o}>
@@ -251,76 +289,89 @@ function Settings() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
-                    Minimum Salary
-                  </label>
+                  <label className="field-label">Minimum Salary</label>
                   <input
                     type="number"
                     min="0"
                     value={salaryMinimum}
                     onChange={(e) => setSalaryMinimum(e.target.value)}
                     placeholder="e.g. 60000"
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
                 </div>
               </div>
             </section>
 
-            <section className="bg-white border border-slate-200 rounded-xl p-6">
-              <h2 className="text-base font-semibold text-slate-900 mb-4">
-                Notifications
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">
-                    Notification Email
-                  </label>
+            <section className="card p-6 sm:p-7">
+              <div className="flex items-center gap-3 mb-6">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M15 17h5l-1.4-1.4a2 2 0 00-1.4-.6h-4.2M9 17H4l1.4-1.4A2 2 0 016.8 15h4.2M12 3v3m-5-.5a7 7 0 1110 0M5 13a7 7 0 013-5.9"
+                    />
+                  </svg>
+                </span>
+                <h2 className="text-base font-semibold text-slate-900">
+                  Notifications
+                </h2>
+              </div>
+              <div className="space-y-5">
+                <div>
+                  <label className="field-label">Notification Email</label>
                   <input
                     type="email"
                     value={notificationEmail}
                     onChange={(e) => setNotificationEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="input"
                   />
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1.5">
                     Used as the self-notification "To" address. Leave blank to
                     use the signed-in account.
                   </p>
                 </div>
-                <div className="md:col-span-2 flex items-center gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 flex items-start gap-3">
                   <input
                     id="gmailNotifyEnabled"
                     type="checkbox"
                     checked={gmailNotifyEnabled}
                     onChange={(e) => setGmailNotifyEnabled(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 accent-brand-600 focus:ring-brand-500"
                   />
                   <label
                     htmlFor="gmailNotifyEnabled"
-                    className="text-sm text-slate-700"
+                    className="text-sm font-medium text-slate-700"
                   >
                     Send me an email when a shortlisted interview or upswing is
                     detected
                   </label>
                 </div>
-                <div className="md:col-span-2 flex items-center gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 flex items-start gap-3">
                   <input
                     id="gmailAutoStatusEnabled"
                     type="checkbox"
                     checked={gmailAutoStatusEnabled}
                     onChange={(e) => setGmailAutoStatusEnabled(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-600 accent-brand-600 focus:ring-brand-500"
                   />
                   <label
                     htmlFor="gmailAutoStatusEnabled"
-                    className="text-sm text-slate-700"
+                    className="text-sm font-medium text-slate-700"
                   >
                     Automatically update my application status when a
                     high-confidence hiring stage (shortlist, interview, offer,
                     rejection) is detected in Gmail
                   </label>
                 </div>
-                <p className="md:col-span-2 text-xs text-slate-400">
+                <p className="rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-3 text-xs text-slate-500">
                   Automatic updates apply only to high-confidence detections on
                   the correct application and never set "applied" or revert a
                   withdrawn application.
@@ -332,7 +383,7 @@ function Settings() {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-5 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="btn-primary px-6 py-2.5"
               >
                 {saving ? "Saving..." : "Save Settings"}
               </button>
