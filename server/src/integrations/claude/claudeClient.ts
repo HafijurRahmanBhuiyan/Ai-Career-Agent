@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { AppError } from "../../middleware/errorHandler";
 import { ProjectAnalysisResult } from "./claude.types";
 
 const MAX_README_CHARS = 15000;
@@ -11,7 +12,10 @@ function getClient(): Anthropic {
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY is not defined in environment variables");
+    throw new AppError(
+      "Claude AI is not configured on the server (ANTHROPIC_API_KEY missing)",
+      503
+    );
   }
 
   clientInstance = new Anthropic({
@@ -40,7 +44,9 @@ export function truncateReadme(readme: string): { content: string; truncated: bo
     return { content: readme, truncated: false };
   }
   return {
-    content: readme.slice(0, MAX_README_CHARS) + "\n\n[README truncated at 15000 characters]",
+    content:
+      readme.slice(0, MAX_README_CHARS) +
+      `\n\n[README truncated at ${MAX_README_CHARS} characters]`,
     truncated: true,
   };
 }
@@ -73,23 +79,40 @@ export async function analyzeProject(
       const errMsg = error.message || "";
 
       if (errName === "AuthenticationError" || errMsg.includes("401")) {
-        throw new Error("Claude authentication failed: invalid API key");
+        throw new AppError("Claude authentication failed: invalid API key", 500);
       }
 
       if (errName === "RateLimitError" || errMsg.includes("429")) {
-        throw new Error("Claude rate limit exceeded. Please try again later.");
+        throw new AppError(
+          "Claude rate limit exceeded. Please try again later.",
+          429
+        );
       }
 
       if (errName === "APITimeoutError" || errMsg.includes("timeout")) {
-        throw new Error("Claude request timed out. Please try again.");
+        throw new AppError("Claude request timed out. Please try the analysis again.", 504);
       }
 
       if (errName === "APIConnectionError") {
-        throw new Error("Failed to connect to Claude API. Please try again.");
+        throw new AppError("Failed to connect to Claude API. Please try again.", 502);
+      }
+
+      if (errMsg.toLowerCase().includes("prompt too long") || errMsg.toLowerCase().includes("context")) {
+        throw new AppError(
+          "The repository content is too large for Claude on this plan. A smaller README or another AI provider may work.",
+          422
+        );
+      }
+
+      if (errName === "APIError" || errMsg) {
+        throw new AppError(
+          `Claude API request failed: ${errMsg}`.slice(0, 500),
+          502
+        );
       }
     }
 
-    throw error;
+    throw new AppError("Claude API request failed. Please try again.", 502);
   }
 }
 

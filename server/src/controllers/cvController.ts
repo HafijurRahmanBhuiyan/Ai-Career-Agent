@@ -113,8 +113,21 @@ export const generateCVPdf = async (
       return next(new AppError("CV profile not found", 404));
     }
 
-    const pdfBuffer = await generateCvPdf(profile);
-    const filename = `${profile.title.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`;
+    let pdfBuffer: Buffer;
+    try {
+      pdfBuffer = await generateCvPdf(profile);
+    } catch (error) {
+      console.error("CV PDF generation failed:", (error as Error)?.message);
+      return next(
+        new AppError(
+          "Could not generate the CV PDF. Please review your CV details and try again.",
+          500
+        )
+      );
+    }
+
+    const safeTitle = (profile.title || "").replace(/[^a-zA-Z0-9_-]/g, "_") || "CV";
+    const filename = `${safeTitle}.pdf`;
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(

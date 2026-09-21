@@ -128,6 +128,7 @@ function GitHubIntegrations() {
   const [syncLoading, setSyncLoading] = useState<number | null>(null);
   const [analyzeLoading, setAnalyzeLoading] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [analysisNotice, setAnalysisNotice] = useState<string | null>(null);
 
   const [selectedRepo, setSelectedRepo] = useState<ImportedRepo | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
@@ -302,8 +303,8 @@ function GitHubIntegrations() {
         `${API_BASE}/github/repositories`
       );
       setRepos(res.data.repositories);
-    } catch {
-      setError("Failed to fetch repositories");
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to fetch repositories"));
     } finally {
       setReposLoading(false);
     }
@@ -315,8 +316,8 @@ function GitHubIntegrations() {
         `${API_BASE}/github/repositories/imported`
       );
       setImportedRepos(res.data.repositories);
-    } catch {
-      setError("Failed to fetch imported repositories");
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to fetch imported repositories"));
     }
   };
 
@@ -352,6 +353,7 @@ function GitHubIntegrations() {
         setSelectedRepo(null);
         setAnalysis(null);
         setAnalysisHistory([]);
+        setAnalysisNotice(null);
         setLinkedInContent("");
         setPublishResult(null);
         setLinkedInError(null);
@@ -364,6 +366,7 @@ function GitHubIntegrations() {
   const handleAnalyze = async (repoId: number) => {
     setAnalyzeLoading(repoId);
     setError(null);
+    setAnalysisNotice(null);
     try {
       const res = await api.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
         `${API_BASE}/github/repositories/${repoId}/analyze`,
@@ -381,7 +384,9 @@ function GitHubIntegrations() {
       }
 
       if (res.data.readmeTruncated) {
-        setError("README was truncated due to size limits");
+        setAnalysisNotice(
+          "This repository's README is large, so the analysis used its first part. The analysis is based on the available repository metadata and may be less detailed."
+        );
       }
     } catch (err: unknown) {
       const msg =
@@ -397,6 +402,7 @@ function GitHubIntegrations() {
   const handleReanalyze = async (repoId: number) => {
     setAnalyzeLoading(repoId);
     setError(null);
+    setAnalysisNotice(null);
     try {
       const res = await api.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
         `${API_BASE}/github/repositories/${repoId}/reanalyze`,
@@ -407,7 +413,9 @@ function GitHubIntegrations() {
         fetchAnalysisHistory(selectedRepo.githubRepositoryId);
       }
       if (res.data.readmeTruncated) {
-        setError("README was truncated due to size limits");
+        setAnalysisNotice(
+          "This repository's README is large, so the analysis used its first part. The analysis is based on the available repository metadata and may be less detailed."
+        );
       }
     } catch (err: unknown) {
       const msg =
@@ -435,6 +443,7 @@ function GitHubIntegrations() {
     setSelectedRepo(repo);
     setAnalysis(null);
     setAnalysisHistory([]);
+    setAnalysisNotice(null);
     setLinkedInContent("");
     setPublishResult(null);
     setLinkedInError(null);
@@ -507,6 +516,18 @@ function GitHubIntegrations() {
             <button
               onClick={() => setError(null)}
               className="text-red-500 hover:text-red-700 ml-4 shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {analysisNotice && !error && (
+          <div className="alert-warning mb-6">
+            <span>{analysisNotice}</span>
+            <button
+              onClick={() => setAnalysisNotice(null)}
+              className="text-amber-700 hover:text-amber-900 ml-4 shrink-0"
             >
               Dismiss
             </button>

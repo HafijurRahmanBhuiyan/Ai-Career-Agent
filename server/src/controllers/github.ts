@@ -3,12 +3,33 @@ import { GitHubClient } from "../integrations/github/githubClient";
 import { GitHubService } from "../integrations/github/github.service";
 import GitHubConnection from "../models/GitHubConnection";
 import GitHubRepositoryModel from "../models/GitHubRepository";
-import { encryptToken, decryptToken } from "../utils/encryption";
+import { encryptToken } from "../utils/encryption";
+import { getGitHubServiceForUser } from "../services/githubConnection";
 import {
   generateOAuthState,
   validateOAuthState,
 } from "../utils/oauthState";
 import { AppError } from "../middleware/errorHandler";
+
+/*
+ * Converts any unknown error (e.g. an unhandled runtime error) into a readable
+ * AppError so the GitHub endpoints never respond with the opaque
+ * "Internal server error". AppError instances pass through unchanged.
+ */
+function toAppError(error: unknown): AppError {
+  if (error instanceof AppError) {
+    return error;
+  }
+  console.error(
+    "GitHub endpoint error:",
+    error instanceof Error ? error.stack : error
+  );
+  const message =
+    error instanceof Error && error.message && error.message.trim()
+      ? error.message.trim()
+      : "GitHub request failed. Please try again.";
+  return new AppError(message, 502);
+}
 
 export const connect = async (
   req: Request,
@@ -25,7 +46,7 @@ export const connect = async (
 
     res.status(200).json({ authorizeUrl, state });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -105,6 +126,15 @@ export const callback = async (
       tokenResponse.access_token
     );
 
+    const accessTokenExpiresAt =
+      tokenResponse.expires_in
+        ? new Date(Date.now() + tokenResponse.expires_in * 1000)
+        : null;
+    const refreshTokenExpiresAt =
+      tokenResponse.refresh_token_expires_in
+        ? new Date(Date.now() + tokenResponse.refresh_token_expires_in * 1000)
+        : null;
+
     // Save or update GitHub connection
     await GitHubConnection.findOneAndUpdate(
       { user: userId },
@@ -115,6 +145,11 @@ export const callback = async (
         profileUrl: githubUser.html_url,
         avatarUrl: githubUser.avatar_url,
         accessToken: encryptedToken,
+        refreshToken: tokenResponse.refresh_token
+          ? encryptToken(tokenResponse.refresh_token)
+          : undefined,
+        accessTokenExpiresAt,
+        refreshTokenExpiresAt,
         scope: tokenResponse.scope,
         connectedAt: new Date(),
       },
@@ -134,7 +169,7 @@ export const callback = async (
       `${clientUrl}/dashboard/connections?github=connected`
     );
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -170,7 +205,7 @@ export const disconnect = async (
       message: "GitHub account disconnected",
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -205,31 +240,9 @@ export const getStatus = async (
       },
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
-
-async function getDecryptedConnection(
-  userId: string
-): Promise<{ accessToken: string }> {
-  const connection =
-    await GitHubConnection.findOne({
-      user: userId,
-    }).select("+accessToken");
-
-  if (!connection) {
-    throw new AppError(
-      "GitHub account not connected. Please connect GitHub first.",
-      400
-    );
-  }
-
-  const accessToken = decryptToken(
-    connection.accessToken
-  );
-
-  return { accessToken };
-}
 
 function parseRepoId(
   raw: string | string[] | undefined
@@ -249,8 +262,7 @@ export const getRepositories = async (
       return next(new AppError("User authentication required", 401));
     }
 
-    const { accessToken } =
-      await getDecryptedConnection(req.user.id);
+    const githubService = await getGitHubServiceForUser(req.user.id);
 
     const page =
       parseInt(req.query.page as string) || 1;
@@ -259,9 +271,6 @@ export const getRepositories = async (
       parseInt(req.query.per_page as string) || 30,
       100
     );
-
-    const githubService =
-      new GitHubService(accessToken);
 
     const repositories =
       await githubService.getUserRepositories(
@@ -295,7 +304,7 @@ export const getRepositories = async (
       perPage,
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -319,11 +328,8 @@ export const importRepository = async (
       );
     }
 
-    const { accessToken } =
-      await getDecryptedConnection(req.user.id);
-
     const githubService =
-      new GitHubService(accessToken);
+      await getGitHubServiceForUser(req.user.id);
 
     const repositories =
       await githubService.getUserRepositories(
@@ -391,7 +397,7 @@ export const importRepository = async (
       repository: imported,
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -430,11 +436,8 @@ export const syncRepository = async (
       );
     }
 
-    const { accessToken } =
-      await getDecryptedConnection(req.user.id);
-
     const githubService =
-      new GitHubService(accessToken);
+      await getGitHubServiceForUser(req.user.id);
 
     const [owner, repo] =
       imported.fullName.split("/");
@@ -468,7 +471,7 @@ export const syncRepository = async (
       repository: imported,
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -511,7 +514,7 @@ export const deleteRepository = async (
       message: "Repository import removed",
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -550,11 +553,8 @@ export const getLanguages = async (
       );
     }
 
-    const { accessToken } =
-      await getDecryptedConnection(req.user.id);
-
     const githubService =
-      new GitHubService(accessToken);
+      await getGitHubServiceForUser(req.user.id);
 
     const languages =
       await githubService.getRepositoryLanguages(
@@ -565,7 +565,7 @@ export const getLanguages = async (
       languages,
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -604,11 +604,8 @@ export const getReadme = async (
       );
     }
 
-    const { accessToken } =
-      await getDecryptedConnection(req.user.id);
-
     const githubService =
-      new GitHubService(accessToken);
+      await getGitHubServiceForUser(req.user.id);
 
     try {
       const readme =
@@ -627,17 +624,7 @@ export const getReadme = async (
         size: content.length,
       });
     } catch (error: unknown) {
-      if (
-        error instanceof Error &&
-        "response" in error &&
-        (
-          error as {
-            response?: {
-              status?: number;
-            };
-          }
-        ).response?.status === 404
-      ) {
+      if (error instanceof AppError && error.statusCode === 404) {
         return res.status(200).json({
           name: null,
           content: null,
@@ -648,7 +635,7 @@ export const getReadme = async (
       throw error;
     }
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -673,7 +660,7 @@ export const getImportedRepositories = async (
       repositories,
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -740,6 +727,6 @@ export const setRepositoryApproved = async (
       },
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };

@@ -36,14 +36,46 @@ function renderSectionHeading(doc: PDFKit.PDFDocument, title: string) {
   doc.fillColor(COLORS.black).moveDown(0.2);
 }
 
+function safeArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function safeText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    // Defensive normalization: CV profiles can be missing optional sections or
+    // personalInfo entirely (older records, partial imports). Never crash the
+    // PDF renderer because of that.
+    const personalInfo = (cv.personalInfo || {}) as Record<string, unknown>;
+    const education = safeArray<Record<string, unknown>>(cv.education);
+    const workExperience = safeArray<Record<string, unknown>>(
+      cv.workExperience
+    );
+    const skills = safeArray<string>(cv.skills);
+    const projects = safeArray<Record<string, unknown>>(cv.projects);
+    const achievements = safeArray<string>(cv.achievements);
+    const additionalInfo = (cv.additionalInfo || {}) as {
+      bullets?: unknown;
+      description?: unknown;
+    };
+
+    const fullName = safeText(personalInfo.fullName);
+    const email = safeText(personalInfo.email);
+    const phone = safeText(personalInfo.phone);
+    const location = safeText(personalInfo.location);
+    const linkedIn = safeText(personalInfo.linkedIn);
+    const website = safeText(personalInfo.website);
+    const professionalSummary = safeText(cv.professionalSummary);
+
     const doc = new PDFDocument({
       size: "A4",
       margins: { top: 40, bottom: 40, left: 50, right: 50 },
       info: {
-        Title: cv.title,
-        Author: cv.personalInfo.fullName,
+        Title: safeText(cv.title),
+        Author: fullName,
       },
     });
 
@@ -57,12 +89,12 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
       .font(FONT_SANS_BOLD)
       .fontSize(20)
       .fillColor(COLORS.black)
-      .text(cv.personalInfo.fullName, { align: "center" });
+      .text(fullName, { align: "center" });
 
     const contactParts: string[] = [];
-    if (cv.personalInfo.email) contactParts.push(cv.personalInfo.email);
-    if (cv.personalInfo.phone) contactParts.push(cv.personalInfo.phone);
-    if (cv.personalInfo.location) contactParts.push(cv.personalInfo.location);
+    if (email) contactParts.push(email);
+    if (phone) contactParts.push(phone);
+    if (location) contactParts.push(location);
     if (contactParts.length) {
       doc
         .font(FONT_SANS)
@@ -72,8 +104,8 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
     }
 
     const linkParts: string[] = [];
-    if (cv.personalInfo.linkedIn) linkParts.push(cv.personalInfo.linkedIn);
-    if (cv.personalInfo.website) linkParts.push(cv.personalInfo.website);
+    if (linkedIn) linkParts.push(linkedIn);
+    if (website) linkParts.push(website);
     if (linkParts.length) {
       doc
         .font(FONT_SANS)
@@ -90,23 +122,26 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
     doc.moveDown(0.3);
 
     // --- Professional Summary ---
-    if (cv.professionalSummary?.trim()) {
+    if (professionalSummary.trim()) {
       renderSectionHeading(doc, "Professional Summary");
       doc
         .font(FONT_SANS)
         .fontSize(9.5)
         .fillColor(COLORS.darkGray)
-        .text(cv.professionalSummary, { lineGap: 2 });
+        .text(professionalSummary, { lineGap: 2 });
       doc.moveDown(0.4);
     }
 
     // --- Education ---
-    if (cv.education?.length) {
+    if (education.length) {
       renderSectionHeading(doc, "Education");
-      for (const edu of cv.education) {
+      for (const edu of education) {
+        const degreeType = safeText(edu.degreeType);
+        const degree = safeText(edu.degree);
+        const field = safeText(edu.field);
         const degreeLine = [
-          edu.degreeType,
-          [edu.degree, edu.field].filter(Boolean).join(" in "),
+          degreeType,
+          [degree, field].filter(Boolean).join(" in "),
         ]
           .filter(Boolean)
           .join(" — ");
@@ -119,9 +154,10 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
           .font(FONT_SANS)
           .fontSize(9)
           .fillColor(COLORS.mediumGray)
-          .text(edu.institution, { continued: true });
-        if (edu.gradeValue) {
-          const gradeLabel = ["SSC", "HSC"].includes(edu.degreeType || "")
+          .text(safeText(edu.institution), { continued: true });
+        const gradeValue = safeText(edu.gradeValue);
+        if (gradeValue) {
+          const gradeLabel = ["SSC", "HSC"].includes(degreeType)
             ? "GPA"
             : "CGPA";
           doc
@@ -129,7 +165,7 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
             .fontSize(8)
             .fillColor(COLORS.lightGray)
             .text(
-              `  |  ${gradeLabel}: ${edu.gradeValue}`,
+              `  |  ${gradeLabel}: ${gradeValue}`,
               { continued: false }
             );
         }
@@ -138,13 +174,14 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
           .fontSize(8)
           .fillColor(COLORS.lightGray)
           .text(
-            `${edu.startDate} – ${edu.endDate || "Present"}`,
+            `${safeText(edu.startDate)} – ${safeText(edu.endDate) || "Present"}`,
             { continued: false }
           );
 
-        if (edu.highlights?.length) {
+        const highlights = safeArray<string>(edu.highlights);
+        if (highlights.length) {
           doc.moveDown(0.15);
-          for (const h of edu.highlights) {
+          for (const h of highlights) {
             doc
               .font(FONT_SANS)
               .fontSize(9)
@@ -158,19 +195,21 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
     }
 
     // --- Work Experience ---
-    if (cv.workExperience?.length) {
+    if (workExperience.length) {
       renderSectionHeading(doc, "Work Experience");
-      for (const exp of cv.workExperience) {
+      for (const exp of workExperience) {
         doc
           .font(FONT_SANS_BOLD)
           .fontSize(10)
           .fillColor(COLORS.black)
-          .text(exp.designation, { continued: true })
+          .text(safeText(exp.designation), { continued: true })
           .font(FONT_SANS)
           .fontSize(9)
           .fillColor(COLORS.mediumGray)
           .text(
-            `  |  ${exp.company}${exp.location ? ", " + exp.location : ""}`,
+            `  |  ${safeText(exp.company)}${
+              safeText(exp.location) ? ", " + safeText(exp.location) : ""
+            }`,
             { align: "left" }
           );
         doc
@@ -178,21 +217,25 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
           .fontSize(8)
           .fillColor(COLORS.lightGray)
           .text(
-            `${exp.startDate} – ${exp.current ? "Present" : exp.endDate || ""}`
+            `${safeText(exp.startDate)} – ${
+              exp.current ? "Present" : safeText(exp.endDate) || ""
+            }`
           );
 
-        if (exp.description?.trim()) {
+        const description = safeText(exp.description);
+        if (description.trim()) {
           doc.moveDown(0.15);
           doc
             .font(FONT_SANS)
             .fontSize(9)
             .fillColor(COLORS.darkGray)
-            .text(exp.description, { lineGap: 2 });
+            .text(description, { lineGap: 2 });
         }
 
-        if (exp.highlights?.length) {
+        const highlights = safeArray<string>(exp.highlights);
+        if (highlights.length) {
           doc.moveDown(0.15);
-          for (const h of exp.highlights) {
+          for (const h of highlights) {
             doc
               .font(FONT_SANS)
               .fontSize(9)
@@ -206,49 +249,55 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
     }
 
     // --- Skills ---
-    if (cv.skills?.length) {
+    if (skills.length) {
       renderSectionHeading(doc, "Skills");
       doc
         .font(FONT_SANS)
         .fontSize(9)
         .fillColor(COLORS.darkGray)
-        .text(cv.skills.join(" • "), { lineGap: 2 });
+        .text(skills.join(" • "), { lineGap: 2 });
       doc.moveDown(0.4);
     }
 
     // --- Projects ---
-    if (cv.projects?.length) {
+    if (projects.length) {
       renderSectionHeading(doc, "Projects");
-      for (const proj of cv.projects) {
+      for (const proj of projects) {
         doc
           .font(FONT_SANS_BOLD)
           .fontSize(10)
           .fillColor(COLORS.black)
-          .text(proj.name, { continued: false });
-        if (proj.githubLink) {
+          .text(safeText(proj.name), { continued: false });
+        if (safeText(proj.githubLink)) {
           doc
             .font(FONT_SANS)
             .fontSize(8)
             .fillColor(COLORS.accent)
-            .text(`GitHub: ${proj.githubLink}`, { link: proj.githubLink });
+            .text(`GitHub: ${safeText(proj.githubLink)}`, {
+              link: safeText(proj.githubLink),
+            });
         }
-        if (proj.liveLink) {
+        if (safeText(proj.liveLink)) {
           doc
             .font(FONT_SANS)
             .fontSize(8)
             .fillColor(COLORS.accent)
-            .text(`Live: ${proj.liveLink}`, { link: proj.liveLink });
+            .text(`Live: ${safeText(proj.liveLink)}`, {
+              link: safeText(proj.liveLink),
+            });
         }
-        if (proj.description) {
+        const description = safeText(proj.description);
+        if (description) {
           doc
             .font(FONT_SANS)
             .fontSize(9)
             .fillColor(COLORS.darkGray)
-            .text(proj.description, { lineGap: 1 });
+            .text(description, { lineGap: 1 });
         }
-        if (proj.highlights?.length) {
+        const highlights = safeArray<string>(proj.highlights);
+        if (highlights.length) {
           doc.moveDown(0.15);
-          for (const h of proj.highlights) {
+          for (const h of highlights) {
             doc
               .font(FONT_SANS)
               .fontSize(9)
@@ -262,9 +311,9 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
     }
 
     // --- Achievements ---
-    if (cv.achievements?.length) {
+    if (achievements.length) {
       renderSectionHeading(doc, "Achievements");
-      for (const a of cv.achievements) {
+      for (const a of achievements) {
         doc
           .font(FONT_SANS)
           .fontSize(9)
@@ -275,13 +324,12 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
     }
 
     // --- Additional Information ---
-    if (
-      cv.additionalInfo?.bullets?.length ||
-      cv.additionalInfo?.description?.trim()
-    ) {
+    const bullets = safeArray<string>(additionalInfo.bullets);
+    const additionalDescription = safeText(additionalInfo.description);
+    if (bullets.length || additionalDescription.trim()) {
       renderSectionHeading(doc, "Additional Information");
-      if (cv.additionalInfo.bullets?.length) {
-        for (const b of cv.additionalInfo.bullets) {
+      if (bullets.length) {
+        for (const b of bullets) {
           doc
             .font(FONT_SANS)
             .fontSize(9)
@@ -290,12 +338,12 @@ export function generateCvPdf(cv: ICVProfile): Promise<Buffer> {
         }
         doc.moveDown(0.3);
       }
-      if (cv.additionalInfo.description?.trim()) {
+      if (additionalDescription.trim()) {
         doc
           .font(FONT_SANS)
           .fontSize(9)
           .fillColor(COLORS.darkGray)
-          .text(cv.additionalInfo.description, { lineGap: 2 });
+          .text(additionalDescription, { lineGap: 2 });
         doc.moveDown(0.3);
       }
     }

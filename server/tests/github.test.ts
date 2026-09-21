@@ -9,6 +9,7 @@ import { registerUser, registerSecondUser } from "./helpers";
 import GitHubConnection from "../src/models/GitHubConnection";
 import GitHubRepositoryModel from "../src/models/GitHubRepository";
 import { encryptToken } from "../src/utils/encryption";
+import { GitHubService } from "../src/integrations/github/github.service";
 
 jest.mock("../src/integrations/github/githubClient", () => {
   return {
@@ -287,6 +288,44 @@ describe("GitHub Repositories", () => {
       .expect(400);
 
     expect(res.body.error).toContain("not connected");
+  });
+
+  it("should return a friendly error, not an internal server error, when the GitHub API returns 401", async () => {
+    const { token, user } = await registerUser();
+    await createConnection((user as { id: string }).id);
+
+    (GitHubService as unknown as jest.Mock).mockImplementationOnce(() => ({
+      getUserRepositories: jest.fn(() =>
+        Promise.reject(new Error("Request failed with status code 401"))
+      ),
+    }));
+
+    const res = await request(app)
+      .get("/api/github/repositories")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(502);
+
+    expect(res.body.error).toContain("Request failed with status code 401");
+    expect(res.body.error).not.toBe("Internal server error");
+  });
+
+  it("should return a friendly error, not an internal server error, when the GitHub service throws an unexpected runtime error", async () => {
+    const { token, user } = await registerUser();
+    await createConnection((user as { id: string }).id);
+
+    (GitHubService as unknown as jest.Mock).mockImplementationOnce(() => ({
+      getUserRepositories: jest.fn(() =>
+        Promise.reject(new Error("connection.accessTokenExpiresAt.getTime is not a function"))
+      ),
+    }));
+
+    const res = await request(app)
+      .get("/api/github/repositories")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(502);
+
+    expect(res.body.error).not.toBe("Internal server error");
+    expect(res.body.statusCode).toBe(502);
   });
 
   it("should import a repository", async () => {

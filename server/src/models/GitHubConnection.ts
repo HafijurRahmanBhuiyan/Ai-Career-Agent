@@ -7,6 +7,9 @@ export interface IGitHubConnection extends Document {
   profileUrl: string;
   avatarUrl: string;
   accessToken: string;
+  refreshToken?: string;
+  accessTokenExpiresAt?: Date | null;
+  refreshTokenExpiresAt?: Date | null;
   scope: string;
   connectedAt: Date;
   updatedAt: Date;
@@ -42,6 +45,18 @@ const gitHubConnectionSchema = new Schema<IGitHubConnection>(
       type: String,
       required: true,
       select: false,
+    },
+    refreshToken: {
+      type: String,
+      select: false,
+    },
+    accessTokenExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    refreshTokenExpiresAt: {
+      type: Date,
+      default: null,
     },
     scope: {
       type: String,

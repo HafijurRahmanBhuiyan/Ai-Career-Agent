@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { AppError } from "../../middleware/errorHandler";
 import { AIRequest, AIResponse } from "./ai.types";
 
 const OPENAI_TIMEOUT_MS = 60000;
@@ -11,7 +12,10 @@ function getClient(): OpenAI {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not defined in environment variables");
+    throw new AppError(
+      "OpenAI is not configured on the server (OPENAI_API_KEY missing)",
+      503
+    );
   }
 
   clientInstance = new OpenAI({
@@ -71,7 +75,7 @@ export async function analyzeWithOpenAI(
         message.toLowerCase().includes("incorrect api key") ||
         message.toLowerCase().includes("authentication")
       ) {
-        throw new Error("OpenAI authentication failed: invalid API key");
+        throw new AppError("OpenAI authentication failed: invalid API key", 500);
       }
 
       if (
@@ -79,17 +83,34 @@ export async function analyzeWithOpenAI(
         message.toLowerCase().includes("quota") ||
         message.toLowerCase().includes("rate limit")
       ) {
-        throw new Error(
-          "OpenAI rate limit or quota exceeded. Please try another AI provider."
+        throw new AppError(
+          "OpenAI rate limit or quota exceeded. Please try another AI provider.",
+          429
         );
       }
 
       if (message.toLowerCase().includes("timeout")) {
-        throw new Error("OpenAI request timed out. Please try again.");
+        throw new AppError("OpenAI request timed out. Please try the analysis again.", 504);
       }
+
+      if (
+        message.toLowerCase().includes("maximum context length") ||
+        message.toLowerCase().includes("token limit") ||
+        message.toLowerCase().includes("too many tokens")
+      ) {
+        throw new AppError(
+          "The repository content is too large for OpenAI. A smaller README or another AI provider may work.",
+          422
+        );
+      }
+
+      throw new AppError(
+        `OpenAI API request failed: ${message}`.slice(0, 500),
+        502
+      );
     }
 
-    throw error;
+    throw new AppError("OpenAI API request failed. Please try again.", 502);
   }
 }
 

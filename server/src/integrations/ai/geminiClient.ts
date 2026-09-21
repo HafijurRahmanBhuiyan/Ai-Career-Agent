@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { AppError } from "../../middleware/errorHandler";
 import { AIRequest, AIResponse } from "./ai.types";
 
 const GEMINI_TIMEOUT_MS = 60000;
@@ -11,7 +12,10 @@ function getClient(): GoogleGenerativeAI {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not defined in environment variables");
+    throw new AppError(
+      "Gemini AI is not configured on the server (GEMINI_API_KEY missing)",
+      503
+    );
   }
 
   clientInstance = new GoogleGenerativeAI(apiKey);
@@ -66,7 +70,7 @@ export async function analyzeWithGemini(
         message.toLowerCase().includes("api key") ||
         message.toLowerCase().includes("authentication")
       ) {
-        throw new Error("Gemini authentication failed: invalid API key");
+        throw new AppError("Gemini authentication failed: invalid API key", 500);
       }
 
       if (
@@ -74,17 +78,33 @@ export async function analyzeWithGemini(
         message.toLowerCase().includes("quota") ||
         message.toLowerCase().includes("resource exhausted")
       ) {
-        throw new Error(
-          "Gemini rate limit or quota exceeded. Please try another AI provider."
+        throw new AppError(
+          "Gemini rate limit or quota exceeded. Please try another AI provider.",
+          429
         );
       }
 
       if (message.toLowerCase().includes("timed out")) {
-        throw new Error("Gemini request timed out. Please try again.");
+        throw new AppError("Gemini request timed out. Please try the analysis again.", 504);
       }
+
+      if (
+        message.toLowerCase().includes("prompt too long") ||
+        message.toLowerCase().includes("maximum input token")
+      ) {
+        throw new AppError(
+          "The repository content is too large for Gemini. A smaller README or another AI provider may work.",
+          422
+        );
+      }
+
+      throw new AppError(
+        `Gemini API request failed: ${message}`.slice(0, 500),
+        502
+      );
     }
 
-    throw error;
+    throw new AppError("Gemini API request failed. Please try again.", 502);
   }
 }
 

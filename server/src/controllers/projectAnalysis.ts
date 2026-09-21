@@ -8,6 +8,21 @@ import {
 import { AppError } from "../middleware/errorHandler";
 import { AIProvider } from "../integrations/ai/ai.types";
 
+function toAppError(error: unknown): AppError {
+  if (error instanceof AppError) {
+    return error;
+  }
+  console.error(
+    "Project analysis endpoint error:",
+    error instanceof Error ? error.stack : error
+  );
+  const message =
+    error instanceof Error && error.message && error.message.trim()
+      ? error.message.trim()
+      : "Project analysis request failed. Please try again.";
+  return new AppError(message, 502);
+}
+
 function parseRepoId(raw: string | string[] | undefined): number {
   const val = Array.isArray(raw) ? raw[0] : raw;
   return parseInt(val || "", 10);
@@ -53,7 +68,7 @@ export const analyze = async (
       readmeTruncated,
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -76,7 +91,7 @@ export const getAnalysis = async (
 
     res.status(200).json({ analysis });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -99,7 +114,7 @@ export const history = async (
 
     res.status(200).json({ analyses });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };
 
@@ -128,6 +143,6 @@ export const reanalyze = async (
       readmeTruncated,
     });
   } catch (error) {
-    next(error);
+    next(toAppError(error));
   }
 };

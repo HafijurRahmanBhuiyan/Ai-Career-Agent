@@ -1,6 +1,7 @@
 import { analyzeProject as analyzeWithClaude } from "../claude/claudeClient";
 import { analyzeWithGemini } from "./geminiClient";
 import { analyzeWithOpenAI } from "./openaiClient";
+import { AppError } from "../../middleware/errorHandler";
 import {
   AIProvider,
   AIRequest,
@@ -51,7 +52,7 @@ export function getDefaultAIProvider(): AIProvider {
     return "openai";
   }
 
-  throw new Error("No AI provider API key is configured");
+  throw new AppError("No AI provider API key is configured", 503);
 }
 
 async function callClaude(request: AIRequest): Promise<AIResponse> {
@@ -125,8 +126,11 @@ export async function analyzeWithAIFallback(
   }
 
   if (lastError instanceof Error) {
-    throw new Error(`All configured AI providers failed: ${lastError.message}`);
+    throw new AppError(
+      `All configured AI providers failed: ${lastError.message}`.slice(0, 500),
+      503
+    );
   }
 
-  throw new Error("No AI provider is available");
+  throw new AppError("No AI provider is available", 503);
 }

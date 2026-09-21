@@ -1,9 +1,9 @@
 import GitHubConnection from "../models/GitHubConnection";
 import GitHubRepositoryModel from "../models/GitHubRepository";
 import ProjectAnalysis from "../models/ProjectAnalysis";
-import { decryptToken } from "../utils/encryption";
-import { GitHubService } from "../integrations/github/github.service";
+import { getGitHubServiceForUser } from "./githubConnection";
 import { ClaudeService } from "../integrations/claude/claude.service";
+import { truncateReadme } from "../integrations/claude/claudeClient";
 import { PROJECT_ANALYSIS_PROMPT_VERSION } from "../integrations/claude/prompts";
 import { validateAnalysisResult } from "../validators/projectAnalysis";
 import { AppError } from "../middleware/errorHandler";
@@ -35,8 +35,7 @@ async function verifyOwnership(userId: string, githubRepositoryId: number) {
     throw new AppError("Repository not imported", 404);
   }
 
-  const accessToken = decryptToken(connection.accessToken);
-  const githubService = new GitHubService(accessToken);
+  const githubService = await getGitHubServiceForUser(userId);
 
   return { connection, repository, githubService };
 }
@@ -52,7 +51,9 @@ export async function analyzeGitHubRepository({
   );
 
   const [languages, readmeRaw] = await Promise.all([
-    githubService.getRepositoryLanguages(repository.fullName),
+    githubService
+      .getRepositoryLanguages(repository.fullName)
+      .catch(() => ({})),
     githubService
       .getRepositoryReadme(repository.fullName)
       .then((r) =>
@@ -61,16 +62,10 @@ export async function analyzeGitHubRepository({
       .catch(() => null),
   ]);
 
-  const MAX_README_CHARS = 15000;
+  const { content: truncatedReadme, truncated: readmeTruncated } =
+    truncateReadme(readmeRaw || "");
 
-  const readme =
-    readmeRaw && readmeRaw.length > MAX_README_CHARS
-      ? readmeRaw.slice(0, MAX_README_CHARS) +
-        "\n\n[README truncated at 15000 characters]"
-      : readmeRaw || null;
-
-  const readmeTruncated =
-    !!readmeRaw && readmeRaw.length > MAX_README_CHARS;
+  const readme = truncatedReadme.trim() ? truncatedReadme : null;
 
   const {
     result: analysisResult,

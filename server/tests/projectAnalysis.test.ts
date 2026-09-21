@@ -280,6 +280,100 @@ describe("Project Analysis API", () => {
       expect(responseStr).not.toContain("test-api-key");
       expect(responseStr).not.toContain("accessToken");
     });
+
+    it("should handle a very large README without failing", async () => {
+      const { token, user } = await registerUser();
+      const userId = (user as { id: string }).id;
+      await createConnection(userId);
+      await importRepo(userId);
+
+      const largeReadme = Buffer.from(
+        Array.from({ length: 10000 }, () => "# Section\n\n").join("")
+      ).toString("base64");
+
+      const mockService = jest.requireMock(
+        "../src/integrations/github/github.service"
+      ).GitHubService as jest.Mock;
+      const originalImplementation = mockService.getMockImplementation();
+      mockService.mockImplementation(() => ({
+        getRepositoryLanguages: jest.fn(() =>
+          Promise.resolve({ TypeScript: 50000 })
+        ),
+        getRepositoryReadme: jest.fn(() =>
+          Promise.resolve({
+            name: "README.md",
+            path: "README.md",
+            content: largeReadme,
+            encoding: "base64",
+          })
+        ),
+      }));
+
+      const res = await request(app)
+        .post("/api/github/repositories/100/analyze")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(201);
+
+      expect(res.body.readmeTruncated).toBe(true);
+      expect(res.body.analysis.projectSummary).toBeDefined();
+
+      mockService.mockImplementation(originalImplementation as () => unknown);
+    });
+
+    it("should still analyze when the languages endpoint fails", async () => {
+      const { token, user } = await registerUser();
+      const userId = (user as { id: string }).id;
+      await createConnection(userId);
+      await importRepo(userId);
+
+      const mockService = jest.requireMock(
+        "../src/integrations/github/github.service"
+      ).GitHubService as jest.Mock;
+      const originalImplementation = mockService.getMockImplementation();
+      mockService.mockImplementation(() => ({
+        getRepositoryLanguages: jest.fn(() =>
+          Promise.reject(new Error("GitHub API rate limit"))
+        ),
+        getRepositoryReadme: jest.fn(() =>
+          Promise.resolve({
+            name: "README.md",
+            path: "README.md",
+            content: Buffer.from("# Test Repo").toString("base64"),
+            encoding: "base64",
+          })
+        ),
+      }));
+
+      const res = await request(app)
+        .post("/api/github/repositories/100/analyze")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(201);
+
+      expect(res.body.analysis.projectSummary).toBeDefined();
+
+      mockService.mockImplementation(originalImplementation as () => unknown);
+    });
+
+    it("should return a friendly error when the AI provider returns invalid JSON", async () => {
+      const { token, user } = await registerUser();
+      const userId = (user as { id: string }).id;
+      await createConnection(userId);
+      await importRepo(userId);
+
+      const claudeMock = jest.requireMock(
+        "../src/integrations/claude/claudeClient"
+      ).analyzeProject as jest.Mock;
+      claudeMock.mockResolvedValueOnce("this is not json");
+
+      const res = await request(app)
+        .post("/api/github/repositories/100/analyze")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(502);
+
+      expect(res.body.error).toContain("invalid");
+
+      claudeMock.mockClear();
+    });
   });
 
   describe("GET /api/github/repositories/:id/analysis", () => {

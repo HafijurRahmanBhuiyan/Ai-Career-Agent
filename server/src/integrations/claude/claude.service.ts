@@ -1,5 +1,6 @@
 import { analyzeWithAI, analyzeWithAIFallback } from "../ai/aiRouter";
 import { AIProvider } from "../ai/ai.types";
+import { AppError } from "../../middleware/errorHandler";
 import {
   PROJECT_ANALYSIS_SYSTEM_PROMPT,
   buildProjectAnalysisUserMessage,
@@ -73,7 +74,7 @@ export class ClaudeService {
       input.repository.size
     );
 
-    const rawResponse = await analyzeWithAI(
+    const rawResponse = await analyzeWithAIFallback(
       {
         systemPrompt: PROJECT_ANALYSIS_SYSTEM_PROMPT,
         userMessage,
@@ -329,7 +330,24 @@ export class ClaudeService {
     try {
       return JSON.parse(cleaned);
     } catch {
-      throw new Error("Failed to parse AI response as valid JSON");
+      // Salvage attempt: models sometimes wrap the JSON in prose or append
+      // stray text (common with large/verbose repository data). Extract the
+      // span between the first "{" and the last "}" and try again.
+      const firstBrace = cleaned.indexOf("{");
+      const lastBrace = cleaned.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const candidate = cleaned.slice(firstBrace, lastBrace + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {
+          // fall through to the friendly error below
+        }
+      }
+
+      throw new AppError(
+        "The AI provider returned an invalid response. Please try the analysis again.",
+        502
+      );
     }
   }
 }
