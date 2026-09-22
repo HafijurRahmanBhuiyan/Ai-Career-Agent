@@ -69,10 +69,27 @@ interface AnalysisData {
 const API_BASE = "";
 
 interface AIProviderOption {
-  provider: "claude" | "gemini" | "openai";
+  provider:
+    | "claude"
+    | "gemini"
+    | "openai"
+    | "groq"
+    | "openrouter"
+    | "cerebras"
+    | "mistral";
   model: string;
   available: boolean;
 }
+
+const AI_PROVIDER_LABELS: Record<string, string> = {
+  claude: "Claude",
+  gemini: "Gemini",
+  openai: "OpenAI",
+  groq: "Groq",
+  openrouter: "OpenRouter",
+  cerebras: "Cerebras",
+  mistral: "Mistral",
+};
 
 interface LinkedInStatus {
   connected: boolean;
@@ -594,8 +611,8 @@ function GitHubIntegrations() {
                         className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 border border-slate-100 rounded-xl hover:bg-slate-50 hover:border-slate-200 transition-colors"
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-slate-900 truncate">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-slate-900 truncate min-w-0">
                               {repo.name}
                             </p>
                             {repo.private && (
@@ -691,7 +708,7 @@ function GitHubIntegrations() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2.5 min-w-0">
                       <label
                         htmlFor="ai-provider"
                         className="text-xs font-semibold text-slate-500 uppercase tracking-wide"
@@ -711,11 +728,7 @@ function GitHubIntegrations() {
                             value={p.provider}
                             disabled={!p.available}
                           >
-                            {p.provider === "claude"
-                              ? "Claude"
-                              : p.provider === "gemini"
-                                ? "Gemini"
-                                : "OpenAI"}
+                            {AI_PROVIDER_LABELS[p.provider] || p.provider}
                             {p.available ? "" : " (not configured)"}
                           </option>
                         ))}
@@ -954,16 +967,18 @@ function GitHubIntegrations() {
                           content={analysis.developerRole}
                         />
                       </div>
-                      <AnalysisCard
-                        title="Resume Description"
-                        content={analysis.resumeDescription}
-                        border="green"
-                      />
-                      <AnalysisCard
-                        title="LinkedIn Description"
-                        content={analysis.linkedinDescription}
-                        border="blue"
-                      />
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <AnalysisCard
+                          title="Resume Description"
+                          content={analysis.resumeDescription}
+                          border="green"
+                        />
+                        <AnalysisCard
+                          title="LinkedIn Description"
+                          content={analysis.linkedinDescription}
+                          border="blue"
+                        />
+                      </div>
                       <AnalysisSection
                         title="Suggested Tags"
                         items={analysis.suggestedTags}
@@ -1267,7 +1282,7 @@ function AnalysisCard({
   return (
     <div className={`rounded-xl border ${borderClass} bg-white px-4 py-4 shadow-sm`}>
       <h4 className="section-title mb-2">{title}</h4>
-      <p className="text-sm text-slate-700 leading-relaxed">{content}</p>
+      <p className="text-sm text-slate-700 leading-relaxed break-words">{content}</p>
     </div>
   );
 }

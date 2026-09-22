@@ -1,6 +1,6 @@
 # AI Career Agent
 
-A personal, AI-powered **career automation platform** built on the MERN stack. It connects a user's GitHub, Gmail, and LinkedIn accounts, analyzes real repositories, discovers and scores job opportunities, tracks applications end-to-end, and generates professional content and CV documents — all with **Claude AI** (with Gemini and OpenAI fallbacks) and **strict human-in-the-loop approval** at every external side effect.
+A personal, AI-powered **career automation platform** built on the MERN stack. It connects a user's GitHub, Gmail, and LinkedIn accounts, analyzes real repositories, discovers and scores job opportunities, tracks applications end-to-end, and generates professional content and CV documents — all with a **multi-provider AI fallback chain** (Claude → Gemini → OpenAI → Groq → OpenRouter → Cerebras → Mistral, each backed by a pool of free models) and **strict human-in-the-loop approval** at every external side effect.
 
 > **Live demo:** <https://ai-career-agent-1bn8.onrender.com>
 
@@ -22,6 +22,7 @@ A personal, AI-powered **career automation platform** built on the MERN stack. I
 - [API Overview](#api-overview)
 - [GitHub Integration](#github-integration)
 - [AI Project Analysis](#ai-project-analysis)
+- [AI Provider Fallback & Free Model Pools](#ai-provider-fallback--free-model-pools)
 - [AI Job Matching](#ai-job-matching)
 - [Career Opportunity Feed](#career-opportunity-feed)
 - [Job Discovery & Ingestion](#job-discovery--ingestion)
@@ -59,14 +60,14 @@ Searching for a job and preparing professional content is repetitive, manual wor
 - **Profile management** — user profile, education, experience, skills, projects, and resume documents (including PDF/DOCX upload with GridFS storage).
 - **CV Builder ("Make CV")** — structured profile-driven CV with one-click **PDF download** (generated server-side with PDFKit; safe for any profile shape, including legacy/partial records).
 - **GitHub integration** — OAuth connect, repository browsing/import/sync, languages, READMEs, **AI project analysis**, re-analysis with version history, and "approve for professional use" gating.
-- **Professional content workflow** — deterministic professional evidence derived from validated analyses, Claude-suggested LinkedIn post ideas, and a full **LinkedIn draft lifecycle** (draft → reviewed → approved → published).
+- **Professional content workflow** — deterministic professional evidence derived from validated analyses, AI-suggested LinkedIn post ideas, and a full **LinkedIn draft lifecycle** (draft → reviewed → approved → published).
 - **LinkedIn publishing** — publish approved drafts to a real LinkedIn member timeline through the official Posts API (`w_member_social`).
 - **Job discovery & ingestion** — real connectors for **Adzuna**, **Arbeitnow**, and **RemoteOK** (plus a deterministic mock source for development), normalized, de-duplicated, and persisted through one pipeline.
 - **Career opportunity feed** — user-scoped, score-ranked feed with plain-language match explanations, apply capability (`external_url` / `supported_api` / `manual_required`), real handoff URLs, and save-to-application tracking. **No AI is called on feed load.**
-- **AI job matching** — per-request Claude match analysis (cached) with a strictly validated 0–100 score and backend-owned match levels.
+- **AI job matching** — per-request AI match analysis on the fallback chain (cached) with a strictly validated 0–100 score and backend-owned match levels.
 - **Application tracking** — saved/applied/screening/interview/offer/rejected/withdrawn statuses, per-application timeline, interview intelligence, AI summaries (cached), interview preparation, follow-ups (with assist), and a review → handoff → explicit-confirmation execution flow.
 - **Career application analytics** — deterministic KPIs, funnel, conversion rates, time-to-stage metrics, stale-application detection, follow-up/preparation performance, company insights, and attention items. **No AI is called to compute analytics.**
-- **Gmail / career email intelligence** — read-only Gmail sync, **conservative** Claude classification of career emails, interview detail extraction, and human-approved application-status updates. A best-effort **self-notification email** is sent only to the user's own address when an interview/upswing is detected (toggleable). The platform never sends or replies on the user's behalf.
+- **Gmail / career email intelligence** — read-only Gmail sync, **conservative** AI classification (fallback chain) of career emails, interview detail extraction, and human-approved application-status updates. A best-effort **self-notification email** is sent only to the user's own address when an interview/upswing is detected (toggleable). The platform never sends or replies on the user's behalf.
 - **Career intelligence dashboard** — a deterministic, no-AI aggregation of pipeline overview, attention items, upcoming interviews, recent status changes, career emails, activity, and next actions.
 - **Notification center** — read-only aggregation of high-match opportunities, drafts needing review, handoffs to confirm, and notify-worthy career emails.
 - **Settings** — per-source job-source status, job search preferences, and notification preferences.
@@ -81,7 +82,7 @@ Searching for a job and preparing professional content is repetitive, manual wor
 | **Frontend** | React 18, Vite 6, TypeScript, Tailwind CSS, React Router 7, Axios |
 | **Backend** | Node.js, Express 4, TypeScript, Zod (validation) |
 | **Database** | MongoDB + Mongoose 8 (local or Atlas) |
-| **AI** | Anthropic Claude (primary), Google Gemini + OpenAI (optional fallbacks), all server-side only |
+| **AI** | Anthropic Claude (primary) + Gemini, OpenAI, Groq, OpenRouter, Cerebras, Mistral (fallbacks), each with a pool of free models; all server-side only |
 | **Integrations** | GitHub OAuth, Google Gmail OAuth, LinkedIn OAuth (`w_member_social`), Adzuna / Arbeitnow / RemoteOK APIs |
 | **Documents** | PDFKit (CV PDF), mammoth (DOCX text), pdf-parse (PDF text), multer + GridFS (upload storage) |
 | **Automation** | n8n (scheduled job ingestion workflow) |
@@ -110,11 +111,11 @@ Searching for a job and preparing professional content is repetitive, manual wor
               +-------------+    |    |    +--------------+
               v                  v    v                   v
         +-----------+     +-----------+  +-----------+   +-----------+
-        | GitHub    |     |  Claude/  |  |  Gmail    |   | LinkedIn  |
-        | (OAuth,   |     |  Gemini/  |  | (read +   |   | (OAuth,   |
-        |  repos,   |     |  OpenAI   |  |  self-    |   |  posts)   |
-        |  analyses)|     | (server-  |  |  notify)  |   |           |
-        +-----------+     |  side)    |  +-----------+   +-----------+
+        | GitHub    |     | AI router |  |  Gmail    |   | LinkedIn  |
+        | (OAuth,   |     | Claude ·  |  | (read +   |   | (OAuth,   |
+        |  repos,   |     | Gemini ·  |  |  self-    |   |  posts)   |
+        |  analyses)|     | OpenAI ·  |  |  notify)  |   |           |
+        +-----------+     | Groq · …  |  +-----------+   +-----------+
                           +-----------+        |
                                       +--------+-----------+
                                       | Job sources:       |
@@ -123,11 +124,13 @@ Searching for a job and preparing professional content is repetitive, manual wor
                                       +--------------------+
 ```
 
+> The "AI router" is a server-side fallback chain: **claude → gemini → openai → groq → openrouter → cerebras → mistral**, where each provider tries its **pool of free models** in priority order before the next provider. See [AI Provider Fallback & Free Model Pools](#ai-provider-fallback--free-model-pools).
+
 ### Core request flow
 
 1. **Auth & token management.** The user registers/logs in with email + password. The server returns a signed JWT; the client stores it in `sessionStorage` and attaches it via an Axios interceptor to every request. On any `401`, the token is cleared and the user is redirected to `/login`.
 2. **OAuth connections.** GitHub, Gmail, and LinkedIn follow the same pattern: the server returns a signed authorize URL (`/connect`), the provider redirects back to `/callback`, the server validates a single-use signed state, exchanges the code for tokens, and stores them **encrypted at rest** (`select: false` in MongoDB). GitHub access tokens are automatically refreshed when near expiry; Gmail access tokens auto-refresh with an offline refresh token and degrade to `isActive=false` if revoked.
-3. **AI analysis (all server-side).** The backend builds a bounded input payload (repository metadata + README, or profile + job, or email body, or application data), calls the AI provider (`analyzeWithAI`, primary Claude with automatic Gemini/OpenAI fallback), strictly validates the JSON output with Zod, and persists only validated results. No secrets, passwords, or `.env` content ever reach the AI.
+3. **AI analysis (all server-side).** The backend builds a bounded input payload (repository metadata + README, or profile + job, or email body, or application data), calls the AI router (`analyzeWithAIFallback`, primary Claude with automatic fallback to Gemini, OpenAI, Groq, OpenRouter, Cerebras, and Mistral — each provider tries every enabled free model before the next provider), strictly validates the JSON output with Zod, and persists only validated results. No secrets, passwords, or `.env` content ever reach the AI.
 4. **Human-in-the-loop execution.** AI output is always treated as a **suggestion** (e.g. `suggestedApplicationStatus`, draft ideas, fit assessment). External side effects happen only after explicit user action: approving a repository, approving a draft, confirming `{ submitted: true }` for an application, or choosing a status in the Gmail detail modal. Backend-owned statuses and levels are never supplied by the AI.
 
 ### Data pipeline (jobs)
@@ -187,7 +190,9 @@ ai-career-agent/
 │   │   ├── config/              # index.ts (PORT/NODE_ENV/secret), database.ts
 │   │   ├── controllers/         # Request/response handlers (per feature)
 │   │   ├── integrations/        # External service clients
-│   │   │   ├── ai/              # aiRouter (provider fallback), Gemini, OpenAI
+│   │   │   ├── ai/              # aiRouter (provider + free-model fallback),
+│   │   │   │                    #   aiModelRegistry (verified free-model pools),
+│   │   │   │                    #   aiErrorClassifier, Gemini, OpenAI, OpenAI-compatible clients
 │   │   │   ├── claude/          # Claude client + parse/validation helpers
 │   │   │   ├── github/          # GitHub OAuth client + service
 │   │   │   ├── gmail/           # Gmail OAuth + read-only client
@@ -224,7 +229,7 @@ ai-career-agent/
 - **npm** >= 9
 - **MongoDB** >= 6.0 (local or MongoDB Atlas) — tests use an in-memory server, no DB needed
 - API keys/credentials for the integrations you want to enable (all optional except `JWT_SECRET`):
-  - Anthropic Claude (`ANTHROPIC_API_KEY`) — required for any AI feature
+  - At least one AI provider key (all optional except `JWT_SECRET`): Claude (`ANTHROPIC_API_KEY`) recommended, or any of Gemini/OpenAI/Groq/OpenRouter/Cerebras/Mistral — required for any AI feature
   - GitHub OAuth app — required for GitHub integration
   - Google Cloud OAuth (Gmail) — required for Gmail integration
   - LinkedIn OAuth app — required for LinkedIn publishing
@@ -273,10 +278,17 @@ All values are read from `server/.env`. A full template lives in `server/.env.ex
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub only | GitHub OAuth App credentials |
 | `GITHUB_CALLBACK_URL` | GitHub only | e.g. `http://localhost:5001/api/github/callback` |
 | `GITHUB_TOKEN_ENCRYPTION_KEY` | GitHub only | 64-character hex AES-256 key used to encrypt stored OAuth tokens |
-| `ANTHROPIC_API_KEY` | AI features | Anthropic Claude API key (server-side only, never exposed) |
-| `CLAUDE_MODEL` | no | Claude model identifier (e.g. `claude-sonnet-4-20250514`) |
+| `ANTHROPIC_API_KEY` | AI features | Anthropic Claude API key (server-side only, never exposed). Any configured provider key enables AI features |
+| `CLAUDE_MODEL` | no | Claude model identifier (default `claude-sonnet-4-6`) |
 | `CLAUDE_MAX_TOKENS` | no | Max output tokens for analysis (default `4096`) |
-| `GEMINI_API_KEY` / `OPENAI_API_KEY` | no | Optional fallback providers (auto-used when Claude fails) |
+| `GEMINI_API_KEY` | no | Gemini API key (free Flash/Flash-Lite model pool) |
+| `GEMINI_MODEL` / `GEMINI_FREE_MODELS` | no | Optional single-model override / comma-separated free-model pool override (replaces registry defaults) |
+| `OPENAI_API_KEY` | no | OpenAI API key (fallback; single model `gpt-4o-mini`) |
+| `GROQ_API_KEY` / `GROQ_MODEL` / `GROQ_FREE_MODELS` | no | Groq key + optional model/free-pool overrides (free developer plan) |
+| `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` / `OPENROUTER_FREE_MODELS` | no | OpenRouter key + optional model/free-pool overrides (free collection) |
+| `CEREBRAS_API_KEY` / `CEREBRAS_MODEL` / `CEREBRAS_FREE_MODELS` | no | Cerebras key + optional model/free-pool overrides (free = time-bounded trial) |
+| `MISTRAL_API_KEY` / `MISTRAL_MODEL` / `MISTRAL_FREE_MODELS` | no | Mistral key + optional model/free-pool overrides (free Experiment tier) |
+| `DEFAULT_AI_PROVIDER` | no | Starting provider for the fallback chain (default: first configured provider) |
 | `JOB_MATCH_CACHE_HOURS` | no | Job-match cache window (default `168`) |
 | `JOB_MATCH_MAX_DESCRIPTION_CHARS` | no | Matching description cap (default `10000`) |
 | `APPLICATION_SUMMARY_CACHE_HOURS` | no | AI summary cache window (default `168`) |
@@ -403,7 +415,7 @@ All authenticated endpoints require `Authorization: Bearer <JWT>`. User-scoped r
 | POST | `/api/github/repositories/:id/professional-evidence` | Derive professional evidence (requires approval; deterministic) | Yes |
 | GET | `/api/github/repositories/:id/professional-evidence` | Get evidence for a repository | Yes |
 | PATCH | `/api/github/repositories/:id/professional-evidence` | Update (clarify) evidence fields | Yes |
-| POST | `/api/github/repositories/:id/linkedin-draft/assist` | Claude suggests 1–3 post ideas (review only, not persisted) | Yes |
+| POST | `/api/github/repositories/:id/linkedin-draft/assist` | AI suggests 1–3 post ideas (review only, not persisted) | Yes |
 
 ### LinkedIn Content & Publishing
 
@@ -426,7 +438,7 @@ All authenticated endpoints require `Authorization: Bearer <JWT>`. User-scoped r
 | GET | `/api/jobs` | Search/filter jobs (pagination) | Yes |
 | POST | `/api/jobs/discover` | Fetch new jobs from configured sources (rate-limited 20/15min) | Yes |
 | POST | `/api/jobs/ingest` | Ingest validated listings (strict schema, URL-safe, key-stripping, dedupe) | Yes |
-| GET | `/api/jobs/opportunities` | User-scoped, score-ranked feed with explanations (no Claude on load) | Yes |
+| GET | `/api/jobs/opportunities` | User-scoped, score-ranked feed with explanations (no AI on load) | Yes |
 | GET | `/api/jobs/opportunities/:id` | Opportunity detail (explanation, apply capability, `alreadyApplied`) | Yes |
 | GET | `/api/jobs/:id` | Single job | Yes |
 | POST | `/api/jobs/:id/match` | AI match analysis (cached or fresh) | Yes |
@@ -447,14 +459,14 @@ All authenticated endpoints require `Authorization: Bearer <JWT>`. User-scoped r
 | PATCH/DELETE | `/api/applications/:id/timeline/:eventId` | Update/delete user-sourced events | Yes |
 | GET/POST/PUT | `/api/applications/:id/summary` | Get/generate/regenerate the cached AI summary | Yes |
 | GET/PUT | `/api/applications/:id/preparation` | Read/upsert interview preparation | Yes |
-| POST | `/api/applications/:id/preparation/assist` | Claude prep suggestions (never auto-saves) | Yes |
+| POST | `/api/applications/:id/preparation/assist` | AI prep suggestions (never auto-saves) | Yes |
 | GET/POST | `/api/applications/:id/follow-ups` | List/create follow-ups | Yes |
-| POST | `/api/applications/:id/follow-ups/assist` | Claude follow-up suggestions (never auto-saves) | Yes |
+| POST | `/api/applications/:id/follow-ups/assist` | AI follow-up suggestions (never auto-saves) | Yes |
 | PATCH/DELETE | `/api/applications/:id/follow-ups/:followUpId` | Update/complete/delete a follow-up | Yes |
 | GET | `/api/applications/:id/execution` | Read-only execution view (capability + handoff URL) | Yes |
 | POST | `/api/applications/:id/execution/prepare` | Review phase; **never changes status** | Yes |
 | POST | `/api/applications/:id/execution` | Handoff; **`applied` only when `{ submitted: true }`** | Yes |
-| POST | `/api/applications/:id/fit-assist` | Claude job-fit assessment (advisory only) | Yes |
+| POST | `/api/applications/:id/fit-assist` | AI job-fit assessment (advisory only) | Yes |
 
 ### Gmail / Career Email Intelligence
 
@@ -509,11 +521,39 @@ Re-analysis creates a **new version** without destroying history; it only runs w
 
 ---
 
+## AI Provider Fallback & Free Model Pools
+
+Every AI feature calls the **AI router** (`analyzeWithAIFallback` → `analyzeWithProviderFallback`), which resolves the actual model server-side and falls back in a fixed order:
+
+> **claude → gemini → openai → groq → openrouter → cerebras → mistral**
+
+Each provider exposes a **pool of free models** (tried in priority order, `server-side only`). Models within one provider share the same API key and quota — exhausting one model's rate limit never inflates capacity; only the next model or provider is attempted. The chain is bounded (no infinite retries) and never fabricates a result when everything fails.
+
+| Provider | Free model pool (priority order) |
+|----------|----------------------------------|
+| **Claude** | `claude-sonnet-4-6` (single model) |
+| **Gemini** | `gemini-3.8-flash` → `gemini-3.7-flash` → `gemini-3.6-flash` → `gemini-3.5-flash` → `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemini-3-flash-preview` (free tier = Flash/Flash-Lite family only) |
+| **OpenAI** | `gpt-4o-mini` (single model) |
+| **Groq** | `openai/gpt-oss-120b` → `openai/gpt-oss-20b` → `qwen/qwen3.8-27b` → `qwen/qwen3.6-27b` (free developer plan) |
+| **OpenRouter** | `openrouter/free` (dynamic router) → `nvidia/nemotron-3-ultra-550b-a55b:free` → `thinkingmachines/inkling:free` → `nvidia/nemotron-3-super-120b-a12b:free` → `nvidia/nemotron-3.5-lightning:free` → `thinkingmachines/inkling-small:free` → `dots-studio/dots-3-note-preview:free` → `cohere/north-mini-code:free` → `poolside/laguna-s-2.1:free` (free collection) |
+| **Cerebras** | `gpt-oss-120b` → `gemma-4-31b` (free = time-bounded trial, not a permanent tier) |
+| **Mistral** | `mistral-small-latest` → `mistral-medium-latest` (free Experiment tier, rate-limited, ~1B tokens/month cap) |
+
+**Model selection** is config-driven and resolved server-side; the frontend only exposes provider-level choice:
+
+1. Per-request `model` (set by the router internally) — highest priority.
+2. Legacy single-model override `<PROVIDER>_MODEL` (e.g. `GEMINI_MODEL`).
+3. `<PROVIDER>_FREE_MODELS` — a comma-separated list that **replaces** the built-in defaults for that provider; leave empty to use the verified defaults above.
+
+**When does the chain advance?** Only capacity/provider-side errors move on — model not found/unavailable, 429 / rate limit, quota / free-tier / daily limits, overload, 5xx, and timeouts. Application/config errors (invalid API key, invalid input/schema/request) stop the chain immediately and are surfaced to the user — never papered over by cycling models.
+
+---
+
 ## AI Job Matching
 
 1. `prepareMatchProfile(userId)` loads profile, skills (≤50), experience (≤15), education (≤10), projects (≤10), and GitHub analyses (≤8) in parallel, with completeness flags.
 2. `prepareMatchJob` prepares the job and truncates the description (`JOB_MATCH_MAX_DESCRIPTION_CHARS`, default 10,000).
-3. `analyzeJobMatch` returns a cached valid `JobMatch` for `user + job` if one exists within `JOB_MATCH_CACHE_HOURS` (default 168); otherwise it calls Claude, strictly validates the output (Zod), derives the match level **on the backend**, and stores the result.
+3. `analyzeJobMatch` returns a cached valid `JobMatch` for `user + job` if one exists within `JOB_MATCH_CACHE_HOURS` (default 168); otherwise it calls the AI router (full fallback chain), strictly validates the output (Zod), derives the match level **on the backend**, and stores the result.
 4. The job description is treated as **untrusted** — the system prompt instructs the model to never follow instructions inside it.
 
 **Score → match level** (backend-owned, AI never supplies the level):
@@ -534,7 +574,7 @@ Re-analysis creates a **new version** without destroying history; it only runs w
 - Ranked by match score (desc) → freshness (desc) → `_id` tie-breaker, with pagination (default 20, max 100).
 - Each item carries a `score`, `matchLevel`, a plain-language `explanation[]`, matching/missing skills and technologies, an `applyCapability`, and a real `handoffUrl`.
 - `alreadyApplied` is derived per authenticated user.
-- **No Claude call on load** — the feed never creates `JobMatch` records, never auto-applies, and never changes status. Browsing the feed is cheap and reproducible.
+- **No AI call on load** — the feed never creates `JobMatch` records, never auto-applies, and never changes status. Browsing the feed is cheap and reproducible.
 
 ---
 
@@ -560,7 +600,7 @@ Re-analysis creates a **new version** without destroying history; it only runs w
 ## Gmail / Career Email Intelligence
 
 - **OAuth** with `access_type=offline` + `prompt=consent` so a refresh token is obtained; tokens encrypted at rest.
-- **Sync pipeline:** keyword pre-filter → bounded fetch → dedupe → body extraction (capped) → relevance check → Claude classification → persist `CareerEmail`.
+- **Sync pipeline:** keyword pre-filter → bounded fetch → dedupe → body extraction (capped) → relevance check → AI classification (fallback chain) → persist `CareerEmail`.
 - **Classification categories:** `recruiter_outreach`, `application_received`, `application_update`, `interview_invitation`, `interview_reschedule`, `assessment`, `rejection`, `offer`, `follow_up`, `networking`, `unrelated`.
 - **Conservative matching:** an email links to an application only when normalized company + title match exactly one of the user's applications (no match or ambiguous → `application: null`).
 - **Human-in-the-loop:** syncing never changes an application status; the UI shows the AI suggestion separately and the user must explicitly confirm before `POST .../apply-status` applies it.
@@ -572,7 +612,7 @@ Re-analysis creates a **new version** without destroying history; it only runs w
 
 1. **Approve a project** (`Approve for professional use`).
 2. **Derive professional evidence** deterministically from the validated `ProjectAnalysis` + verified repo facts — no second AI call, no fabrication.
-3. **Generate draft ideas** — Claude proposes hook/body/hashtags (review-only, never persisted automatically).
+3. **Generate draft ideas** — AI proposes hook/body/hashtags (review-only, never persisted automatically).
 4. **Review & approve** the draft (`Reviewed` → `Approved — Ready to Publish`).
 5. **Publish** via the official LinkedIn Posts API (`POST https://api.linkedin.com/rest/posts`) with a real `urn:li:` post id. Publishing is never automatic; failures preserve the draft and are marked `publish_failed`.
 
@@ -651,7 +691,7 @@ The agent is deliberately constrained so AI output is advice, never action:
 - **No auto-apply.** Applications advance to `applied` only after the user confirms submission.
 - **No outbound email.** Gmail is read + self-notify only, and only to the user's own address.
 - **No auto status changes.** AI stores `suggestedApplicationStatus`; only the explicit apply-status endpoint (or user-confirmed execution) changes an application status.
-- **No second matcher / no background AI.** The feed and dashboards are deterministic; Claude is called only on explicit user actions and cached thereafter.
+- **No second matcher / no background AI.** The feed and dashboards are deterministic; AI is called only on explicit user actions (through the fallback chain) and cached thereafter.
 - **No cron/queues on the server.** Scheduled work is delegated to the n8n workflow.
 
 ---
@@ -662,7 +702,7 @@ The agent is deliberately constrained so AI output is advice, never action:
 - Job-match and application-summary results are **cached** against unchanged state.
 - Re-analysis and re-matching are explicit (a fresh run replaces the old record, history preserved).
 - Language stats are read from GitHub (never guessed); analytics are computed locally (no AI).
-- No infinite retries; provider fallback is bounded (Claude → Gemini → OpenAI, one attempt each).
+- No infinite retries; provider fallback is bounded (claude → gemini → openai → groq → openrouter → cerebras → mistral), each provider tries its free-model pool in priority order before the next provider.
 
 ---
 

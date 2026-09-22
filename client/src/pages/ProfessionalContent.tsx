@@ -383,7 +383,7 @@ function ProfessionalContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 card p-4 max-h-[75vh] overflow-y-auto">
+            <div className="lg:col-span-1 card p-4 lg:max-h-[75vh] lg:overflow-y-auto">
               <h2 className="section-title mb-3">Repositories</h2>
               <div className="space-y-2">
                 {repos.map((repo) => (
@@ -396,8 +396,8 @@ function ProfessionalContent() {
                         : "border border-slate-200 hover:border-brand-200 hover:bg-slate-50 hover:shadow-sm"
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-slate-900 truncate">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-slate-900 truncate min-w-0">
                         {repo.name}
                       </span>
                       <span
@@ -440,7 +440,7 @@ function ProfessionalContent() {
                     </div>
                     <button
                       onClick={() => toggleApprove(selected)}
-                      className={`btn shrink-0 ${
+                      className={`btn w-full sm:w-auto justify-center shrink-0 ${
                         selected.approvedForProfessionalUse
                           ? "btn-danger-outline"
                           : "bg-gradient-to-br from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 shadow-[0_10px_24px_-10px_rgb(5_150_105/0.55)]"
@@ -490,7 +490,7 @@ function ProfessionalContent() {
                         <button
                           onClick={generateEvidence}
                           disabled={evidenceUpdating}
-                          className="btn btn-primary btn-sm shrink-0"
+                          className="btn btn-primary btn-sm w-full sm:w-auto justify-center shrink-0"
                         >
                           {evidenceUpdating
                             ? "Analyzing..."
@@ -605,7 +605,7 @@ function ProfessionalContent() {
                         <button
                           onClick={runAssist}
                           disabled={assistLoading}
-                          className="btn btn-primary btn-sm shrink-0"
+                          className="btn btn-primary btn-sm w-full sm:w-auto justify-center shrink-0"
                         >
                           {assistLoading ? "Generating..." : "Generate LinkedIn Post"}
                         </button>
@@ -624,7 +624,7 @@ function ProfessionalContent() {
                               className="card-hover border-brand-100 p-4"
                             >
                               <p className="text-sm font-semibold text-slate-900">{s.hook}</p>
-                              <p className="text-sm text-slate-600 mt-1.5 whitespace-pre-wrap">{s.body}</p>
+                              <p className="text-sm text-slate-600 mt-1.5 whitespace-pre-wrap break-words">{s.body}</p>
                               {s.hashtags.length > 0 && (
                                 <div className="flex flex-wrap gap-1.5 mt-2">
                                   {s.hashtags.map((h, i) => (
@@ -711,8 +711,8 @@ function ProfessionalContent() {
                               key={d._id}
                               className="border border-slate-200 rounded-xl p-4 hover:border-brand-200 transition-colors"
                             >
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-sm font-medium text-slate-900 truncate">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-slate-900 truncate min-w-0">
                                   {d.hook || "(no hook)"}
                                 </p>
                                 <span
@@ -727,7 +727,7 @@ function ProfessionalContent() {
                                 {d.body}
                               </p>
                               {d.status === "draft" && (
-                                <div className="mt-3 flex items-center gap-2">
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
                                   <button
                                     onClick={() => editDraft(d)}
                                     className="btn btn-sm btn-outline"
@@ -814,10 +814,10 @@ function ProfessionalContent() {
                 cannot be undone.
               </p>
               <div className="mt-4 rounded-xl bg-slate-50 border border-slate-100 p-4 max-h-40 overflow-y-auto">
-                <p className="text-sm font-semibold text-slate-900">
+                <p className="text-sm font-semibold text-slate-900 break-words">
                   {publishTarget.hook || "(no hook)"}
                 </p>
-                <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">
+                <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap break-words">
                   {publishTarget.body}
                 </p>
                 {publishTarget.hashtags.length > 0 && (

@@ -1,4 +1,4 @@
-import { analyzeWithAI, analyzeWithAIFallback } from "../ai/aiRouter";
+import { analyzeWithAIFallback } from "../ai/aiRouter";
 import { AIProvider } from "../ai/ai.types";
 import { AppError } from "../../middleware/errorHandler";
 import {
@@ -95,7 +95,7 @@ export class ClaudeService {
   ): Promise<unknown> {
     const userMessage = buildJobMatchUserMessage(profile, job);
 
-    const rawResponse = await analyzeWithAI(
+    const rawResponse = await analyzeWithAIFallback(
       {
         systemPrompt: JOB_MATCH_SYSTEM_PROMPT,
         userMessage,
@@ -108,8 +108,8 @@ export class ClaudeService {
 
   /**
    * (Phase 2, Step 1) Job-match analysis with cross-provider fallback
-   * (Claude -> Gemini -> OpenAI -> throw). Uses the existing AI router
-   * fallback so a single provider outage does not fail job matching.
+   * (all configured providers in order -> throw). Uses the existing AI router
+   * fallback so a single provider outage/limit does not fail job matching.
    */
   async analyzeJobMatchFallback(
     profile: JobMatchProfilePayload,
@@ -173,7 +173,7 @@ export class ClaudeService {
   }): Promise<EmailClassification> {
     const userMessage = buildEmailUserMessage(email);
 
-    const rawResponse = await analyzeWithAI(
+    const rawResponse = await analyzeWithAIFallback(
       {
         systemPrompt: EMAIL_SYSTEM_PROMPT,
         userMessage,
@@ -191,7 +191,7 @@ export class ClaudeService {
   ): Promise<unknown> {
     const userMessage = buildApplicationSummaryUserMessage(input);
 
-    const rawResponse = await analyzeWithAI(
+    const rawResponse = await analyzeWithAIFallback(
       {
         systemPrompt: APPLICATION_SUMMARY_SYSTEM_PROMPT,
         userMessage,
@@ -208,7 +208,7 @@ export class ClaudeService {
   ): Promise<unknown> {
     const userMessage = buildInterviewPrepAssistUserMessage(input);
 
-    const rawResponse = await analyzeWithAI(
+    const rawResponse = await analyzeWithAIFallback(
       {
         systemPrompt: INTERVIEW_PREP_ASSIST_SYSTEM_PROMPT,
         userMessage,
@@ -222,7 +222,7 @@ export class ClaudeService {
   async assistFollowUps(input: FollowUpAssistInput, provider?: AIProvider): Promise<unknown> {
     const userMessage = buildFollowUpAssistUserMessage(input);
 
-    const rawResponse = await analyzeWithAI(
+    const rawResponse = await analyzeWithAIFallback(
       {
         systemPrompt: FOLLOW_UP_ASSIST_SYSTEM_PROMPT,
         userMessage,
@@ -250,7 +250,7 @@ export class ClaudeService {
   async assistJobFit(input: JobFitAssistInput, provider?: AIProvider): Promise<unknown> {
     const userMessage = buildJobFitAssistUserMessage(input);
 
-    const rawResponse = await analyzeWithAI(
+    const rawResponse = await analyzeWithAIFallback(
       {
         systemPrompt: JOB_FIT_ASSIST_SYSTEM_PROMPT,
         userMessage,

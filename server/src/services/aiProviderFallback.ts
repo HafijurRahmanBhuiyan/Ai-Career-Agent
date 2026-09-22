@@ -1,28 +1,22 @@
-import { analyzeWithAI, getAvailableAIProviders } from "../integrations/ai/aiRouter";
+import { analyzeWithProviderFallback, getAvailableAIProviders, ALL_PROVIDER_ORDER } from "../integrations/ai/aiRouter";
 import { AIProvider, AIRequest, AIResponse } from "../integrations/ai/ai.types";
+import { classifyAiError } from "../integrations/ai/aiErrorClassifier";
+import type { AiProviderFailure } from "../integrations/ai/aiErrorClassifier";
 
-export type AiFailureCategory =
-  | "quota_exhausted"
-  | "insufficient_credits"
-  | "rate_limited"
-  | "overloaded"
-  | "temporary"
-  | "timeout"
-  | "unavailable"
-  | "model_unavailable"
-  | "auth_error"
-  | "invalid_input"
-  | "invalid_schema"
-  | "invalid_request"
-  | "unknown";
-
-export interface AiProviderFailure {
-  provider: AIProvider;
-  category: AiFailureCategory;
-  reason: string;
-  retryable: boolean;
-  fallbackEligible: boolean;
-}
+// Re-export the shared AI error classifier (moved to
+// ../integrations/ai/aiErrorClassifier so both aiRouter and this module can
+// use it without a circular import). Existing importers keep working.
+export {
+  classifyAiError,
+  toSafeMessage,
+  FALLBACK_ELIGIBLE_CATEGORIES,
+  NEVER_RETRY_CATEGORIES,
+  NO_SAME_PROVIDER_RETRY,
+} from "../integrations/ai/aiErrorClassifier";
+export type {
+  AiFailureCategory,
+  AiProviderFailure,
+} from "../integrations/ai/aiErrorClassifier";
 
 export interface AiFallbackMetadata {
   providerUsed: AIProvider | null;
@@ -56,180 +50,20 @@ export interface AiFallbackOptions {
   maxRetriesPerProvider?: number;
 }
 
-const PROVIDER_ORDER: AIProvider[] = [
-  "claude",
-  "gemini",
-  "openai",
-
-];
-
-// Categories that indicate a capacity/provider-side problem and therefore
-// justify trying another configured provider.
-const FALLBACK_ELIGIBLE_CATEGORIES: ReadonlySet<AiFailureCategory> = new Set([
-  "quota_exhausted",
-  "insufficient_credits",
-  "rate_limited",
-  "overloaded",
-  "temporary",
-  "timeout",
-  "unavailable",
-  "model_unavailable",
-  "unknown",
-]);
-
-// Categories that indicate a bad request / configuration and must NOT be
-// papered over by retrying another provider.
-const NEVER_RETRY_CATEGORIES: ReadonlySet<AiFailureCategory> = new Set([
-  "auth_error",
-  "invalid_input",
-  "invalid_schema",
-  "invalid_request",
-]);
-
-// Categories that represent known capacity/billing exhaustion. Retrying these
-// on the SAME provider is pointless and wasteful, so they are marked
-// non-retryable (but remain fallback-eligible so another configured provider
-// is attempted).
-const NO_SAME_PROVIDER_RETRY: ReadonlySet<AiFailureCategory> = new Set([
-  "quota_exhausted",
-  "insufficient_credits",
-  "rate_limited",
-]);
-
-function toSafeMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message || String(error);
-  }
-  return String(error);
-}
-
-/**
- * Classify an AI provider error into a category without exposing raw provider
- * internals. The returned reason is a short, safe, human-readable message
- * (never a stack trace, raw response body, or sensitive payload).
- */
-export function classifyAiError(
-  error: unknown,
-  provider: AIProvider
-): AiProviderFailure {
-  const name = error instanceof Error ? error.name : "";
-  const message = toSafeMessage(error);
-  const low = message.toLowerCase();
-  const status =
-    typeof (error as { status?: unknown }).status === "number"
-      ? ((error as { status: number }).status as number)
-      : null;
-
-  let category: AiFailureCategory = "unknown";
-
-  if (status === 429 || status === 403 || low.includes("rate limit") || low.includes("429")) {
-    category = "rate_limited";
-  } else if (
-    low.includes("quota") ||
-    low.includes("resource exhausted") ||
-    low.includes("insufficient_quota")
-  ) {
-    category = "quota_exhausted";
-  } else if (
-    low.includes("credit") ||
-    low.includes("billing") ||
-    low.includes("balance is too low") ||
-    low.includes("payment required") ||
-    low.includes("402")
-  ) {
-    category = "insufficient_credits";
-  } else if (
-    low.includes("overloaded") ||
-    low.includes("overload") ||
-    low.includes("capacity") ||
-    status === 503 ||
-    name.toLowerCase().includes("overloaded")
-  ) {
-    category = "overloaded";
-  } else if (
-    low.includes("timed out") ||
-    low.includes("timeout") ||
-    name === "APITimeoutError" ||
-    low.includes("aborted") ||
-    low.includes("econnreset") ||
-    low.includes("fetch failed")
-  ) {
-    category = "timeout";
-  } else if (
-    low.includes("failed to connect") ||
-    low.includes("connection error") ||
-    name === "APIConnectionError" ||
-    low.includes("network") ||
-    low.includes("unavailable") ||
-    low.includes("service unavailable")
-  ) {
-    category = "unavailable";
-  } else if (
-    (status === 401 || status === 403 && low.includes("api key")) ||
-    low.includes("authentication failed") ||
-    low.includes("invalid api key") ||
-    low.includes("incorrect api key") ||
-    name === "AuthenticationError"
-  ) {
-    category = "auth_error";
-  } else if (
-    (status !== null && status >= 500 && status <= 599) ||
-    low.includes(" internal error") ||
-    name === "InternalServerError"
-  ) {
-    category = "temporary";
-  } else if (
-    low.includes("invalid json") ||
-    low.includes("failed to parse") ||
-    low.includes("failed to validate") ||
-    low.includes("schema")
-  ) {
-    category = "invalid_schema";
-  } else if (
-    low.includes("model not found") ||
-    low.includes("model_not_found") ||
-    low.includes("not found for api version") ||
-    low.includes("is not found") ||
-    low.includes("does not support") ||
-    low.includes("models/") && low.includes("not found") ||
-    low.includes("found in the model list") ||
-    low.includes("model is not available") ||
-    low.includes("not supported for this model")
-  ) {
-    category = "model_unavailable";
-  } else if (
-    (status !== null && status >= 400 && status < 500) ||
-    low.includes("invalid request") ||
-    low.includes("invalid input") ||
-    low.includes("bad request") ||
-    low.includes("invalid_argument")
-  ) {
-    category = "invalid_request";
-  }
-
-  const retryable =
-    !NEVER_RETRY_CATEGORIES.has(category) &&
-    !NO_SAME_PROVIDER_RETRY.has(category);
-  const fallbackEligible = FALLBACK_ELIGIBLE_CATEGORIES.has(category);
-
-  return {
-    provider,
-    category,
-    reason: category === "unknown" ? "unknown_provider_error" : category,
-    retryable,
-    fallbackEligible,
-  };
-}
+const PROVIDER_ORDER: AIProvider[] = [...ALL_PROVIDER_ORDER];
 
 /**
  * Centralized AI provider fallback executor.
  *
  * Tries providers in order: preferred (or config-derived default) -> claude ->
- * gemini -> openai -> gemini-free -> gemini-flash-lite. A provider is skipped
- * entirely if its API key is not configured. On a retryable/capacity error
- * (quota, credits, rate limit, overload, 5xx, timeout, unavailable), the next
- * configured provider is tried. Errors that indicate a bad application request
- * or provider misconfiguration do NOT trigger fallback. If a `validateOutput`
+ * gemini -> openai -> groq -> openrouter -> cerebras -> mistral. A provider is
+ * skipped entirely if its API key is not configured. Inside a provider, every
+ * enabled free model from the model registry is tried in priority order before
+ * moving on; models within one provider share the same quota (no synthetic
+ * quota multiplication). On a retryable/capacity error (quota, credits, rate
+ * limit, overload, 5xx, timeout, unavailable, model not found), the next model
+ * or provider is tried. Errors that indicate a bad application request or
+ * provider misconfiguration do NOT trigger fallback. If a `validateOutput`
  * validator is supplied, a malformed/schema-invalid provider response is
  * treated as a failure and the next eligible provider is attempted. Never
  * fabricates a result when all providers fail.
@@ -273,7 +107,7 @@ export async function executeWithAiFallback(
     for (let attempt = 0; attempt <= maxRetriesPerProvider; attempt++) {
       let response: AIResponse;
       try {
-        response = await analyzeWithAI(request, provider);
+        response = await analyzeWithProviderFallback(request, provider);
       } catch (error: unknown) {
         const failure = classifyAiError(error, provider);
 

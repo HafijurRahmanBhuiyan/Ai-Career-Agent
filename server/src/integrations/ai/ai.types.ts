@@ -1,4 +1,11 @@
-export type AIProvider = "claude" | "gemini" | "openai";
+export type AIProvider =
+  | "claude"
+  | "gemini"
+  | "openai"
+  | "groq"
+  | "openrouter"
+  | "cerebras"
+  | "mistral";
 
 export interface AIRequest {
   systemPrompt: string;

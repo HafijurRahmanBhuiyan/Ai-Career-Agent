@@ -7,6 +7,7 @@ import {
 } from "../services/projectAnalysis";
 import { AppError } from "../middleware/errorHandler";
 import { AIProvider } from "../integrations/ai/ai.types";
+import { ALL_PROVIDER_ORDER } from "../integrations/ai/aiRouter";
 
 function toAppError(error: unknown): AppError {
   if (error instanceof AppError) {
@@ -29,8 +30,11 @@ function parseRepoId(raw: string | string[] | undefined): number {
 }
 
 function parseProvider(raw: unknown): AIProvider | undefined {
-  if (raw === "claude" || raw === "gemini" || raw === "openai") {
-    return raw;
+  if (
+    typeof raw === "string" &&
+    (ALL_PROVIDER_ORDER as readonly string[]).includes(raw)
+  ) {
+    return raw as AIProvider;
   }
 
   if (raw === undefined || raw === null || raw === "") {
@@ -38,7 +42,7 @@ function parseProvider(raw: unknown): AIProvider | undefined {
   }
 
   throw new AppError(
-    "Invalid AI provider. Use claude, gemini, or openai.",
+    "Invalid AI provider. Use claude, gemini, openai, groq, openrouter, cerebras, or mistral.",
     400
   );
 }
