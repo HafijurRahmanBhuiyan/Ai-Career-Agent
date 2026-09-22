@@ -212,6 +212,63 @@ describe("GitHub Connection Status", () => {
     expect(res.body.connected).toBe(true);
     expect(res.body.github.username).toBe("testuser");
   });
+
+  it("should allow two different users to connect the same GitHub account (githubUserId must not be globally unique)", async () => {
+    // Rebuild indexes from the schema so the assertion reflects the current
+    // model definition rather than a possibly-stale index from a prior run.
+    await GitHubConnection.syncIndexes();
+
+    // The githubUserId index must exist but must NOT be unique: the constraint
+    // is "one connection per platform user" (user_1), not "one platform user
+    // per GitHub account". Both are checked explicitly against the DB.
+    const indexes = await GitHubConnection.collection.indexes();
+    const githubUserIdIndex = indexes.find(
+      (index) => index.name === "githubUserId_1"
+    );
+    const userIndex = indexes.find((index) => index.name === "user_1");
+    expect(githubUserIdIndex).toBeDefined();
+    expect(githubUserIdIndex?.unique).toBeFalsy();
+    expect(userIndex?.unique).toBe(true);
+
+    const user1 = await registerUser();
+    const user2 = await registerSecondUser();
+    const encryptedToken = encryptToken("gho_test_token");
+
+    // Same GitHub account (same githubUserId) connected to two different users.
+    // Previously this threw a duplicate-key error (E11000) for the second user.
+    await GitHubConnection.create({
+      user: (user1.user as { id: string }).id,
+      githubUserId: 12345,
+      username: "shareduser",
+      profileUrl: "https://github.com/shareduser",
+      avatarUrl: "https://avatars.githubusercontent.com/u/12345",
+      accessToken: encryptedToken,
+    });
+
+    await GitHubConnection.create({
+      user: (user2.user as { id: string }).id,
+      githubUserId: 12345,
+      username: "shareduser",
+      profileUrl: "https://github.com/shareduser",
+      avatarUrl: "https://avatars.githubusercontent.com/u/12345",
+      accessToken: encryptedToken,
+    });
+
+    // Each user's status must be scoped to their own connection only.
+    const res1 = await request(app)
+      .get("/api/github/status")
+      .set("Authorization", `Bearer ${user1.token}`)
+      .expect(200);
+    expect(res1.body.connected).toBe(true);
+    expect(res1.body.github.username).toBe("shareduser");
+
+    const res2 = await request(app)
+      .get("/api/github/status")
+      .set("Authorization", `Bearer ${user2.token}`)
+      .expect(200);
+    expect(res2.body.connected).toBe(true);
+    expect(res2.body.github.username).toBe("shareduser");
+  });
 });
 
 describe("GitHub Disconnect", () => {
@@ -369,6 +426,137 @@ describe("GitHub Repositories", () => {
       .expect(400);
 
     expect(res.body.error).toBe("Invalid repository ID");
+  });
+});
+
+describe("GitHub Import All Repositories", () => {
+  const baseRepo = {
+    name: "repo",
+    full_name: "testuser/repo",
+    description: "A test repo",
+    html_url: "https://github.com/testuser/repo",
+    homepage: null,
+    private: false,
+    default_branch: "main",
+    language: "TypeScript",
+    topics: ["test"],
+    stargazers_count: 5,
+    forks_count: 2,
+    size: 1024,
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-02T00:00:00Z",
+    pushed_at: "2024-01-03T00:00:00Z",
+  };
+
+  const activeRepo = {
+    ...baseRepo,
+    id: 100,
+    name: "repo1",
+    full_name: "testuser/repo1",
+    fork: false,
+    archived: false,
+  };
+
+  const forkRepo = {
+    ...baseRepo,
+    id: 200,
+    name: "repo2",
+    full_name: "testuser/repo2",
+    private: true,
+    fork: true,
+    archived: false,
+  };
+
+  const archivedRepo = {
+    ...baseRepo,
+    id: 300,
+    name: "repo3",
+    full_name: "testuser/repo3",
+    fork: false,
+    archived: true,
+  };
+
+  const mockServiceWith = (repositories: unknown[]) => {
+    (GitHubService as unknown as jest.Mock).mockImplementationOnce(() => ({
+      getUserRepositories: jest.fn(() => Promise.resolve(repositories)),
+    }));
+  };
+
+  const createConnection = async (userId: string, githubUserId: number) => {
+    return GitHubConnection.create({
+      user: userId,
+      githubUserId,
+      username: "testuser",
+      profileUrl: "https://github.com/testuser",
+      avatarUrl: "https://avatars.githubusercontent.com/u/12345",
+      accessToken: encryptToken("gho_test_token"),
+    });
+  };
+
+  it("imports all non-fork/non-archived repos, is idempotent, and does not touch another user's repositories", async () => {
+    const user1 = await registerUser();
+    const user2 = await registerSecondUser();
+
+    await createConnection((user1.user as { id: string }).id, 12345);
+    await createConnection((user2.user as { id: string }).id, 67890);
+
+    // User 1: 3 repos, but the fork (200) and archived (300) ones are excluded.
+    mockServiceWith([activeRepo, forkRepo, archivedRepo]);
+    const res1 = await request(app)
+      .post("/api/github/repositories/import-all")
+      .set("Authorization", `Bearer ${user1.token}`)
+      .expect(200);
+
+    expect(res1.body.importedCount).toBe(1);
+    expect(res1.body.skippedCount).toBe(0);
+    expect(res1.body.repositories).toHaveLength(1);
+    expect(res1.body.repositories[0].githubRepositoryId).toBe(100);
+    expect(res1.body.repositories[0].user).toBe(
+      (user1.user as { id: string }).id
+    );
+
+    // Idempotent: the already-imported repo (the default mock still lists it,
+    // alongside a fork) is now skipped instead of re-created or erroring.
+    const res2 = await request(app)
+      .post("/api/github/repositories/import-all")
+      .set("Authorization", `Bearer ${user1.token}`)
+      .expect(200);
+
+    expect(res2.body.importedCount).toBe(0);
+    expect(res2.body.skippedCount).toBe(1);
+    expect(res2.body.repositories).toHaveLength(0);
+
+    // User 2 importing the same source repos gets their OWN row; user 1's rows
+    // are untouched.
+    mockServiceWith([activeRepo, forkRepo, archivedRepo]);
+    const res3 = await request(app)
+      .post("/api/github/repositories/import-all")
+      .set("Authorization", `Bearer ${user2.token}`)
+      .expect(200);
+
+    expect(res3.body.importedCount).toBe(1);
+    expect(res3.body.repositories[0].user).toBe(
+      (user2.user as { id: string }).id
+    );
+
+    const imported1 = await request(app)
+      .get("/api/github/repositories/imported")
+      .set("Authorization", `Bearer ${user1.token}`)
+      .expect(200);
+    expect(imported1.body.repositories).toHaveLength(1);
+    expect(imported1.body.repositories[0].githubRepositoryId).toBe(100);
+    expect(imported1.body.repositories[0].user).toBe(
+      (user1.user as { id: string }).id
+    );
+
+    const imported2 = await request(app)
+      .get("/api/github/repositories/imported")
+      .set("Authorization", `Bearer ${user2.token}`)
+      .expect(200);
+    expect(imported2.body.repositories).toHaveLength(1);
+    expect(imported2.body.repositories[0].user).toBe(
+      (user2.user as { id: string }).id
+    );
   });
 });
 

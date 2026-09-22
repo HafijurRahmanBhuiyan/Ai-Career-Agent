@@ -97,6 +97,7 @@ export interface ICareerEmail extends Document {
   subject?: string;
   receivedAt?: Date;
   snippet?: string;
+  body?: string;
   category?: CareerEmailCategory;
   confidence?: number;
   summary?: string;
@@ -167,6 +168,9 @@ const careerEmailSchema = new Schema<ICareerEmail>(
       type: Date,
     },
     snippet: {
+      type: String,
+    },
+    body: {
       type: String,
     },
     category: {

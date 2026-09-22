@@ -25,7 +25,11 @@ import {
 } from "./careerStatusTransitions";
 import { Types } from "mongoose";
 
+// Classification input is bounded so prompt sizes stay stable.
 const MAX_BODY_CHARS = 6000;
+// Persisted body cap: large enough to represent a full recruitment email
+// while keeping storage bounded.
+const MAX_STORED_BODY_CHARS = 100000;
 
 // Phase 2 Step 5: incremental Gmail sync window. Each sync scans only messages
 // received within this window, so repeated runs stay cheap. Defaults to 1440
@@ -39,6 +43,34 @@ function defaultMaxMessages(): number {
   if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
   return 25;
 }
+
+/**
+ * Runs `fn` over `items` with at most `concurrency` tasks in flight at once.
+ * Preserves input order in the returned results. A rejection from any task
+ * rejects the whole pool (callers should catch errors per-item like the sync
+ * loop does). Counter mutations inside `fn` are synchronous and therefore safe
+ * under concurrency (single-threaded JS, no await between increment and use).
+ */
+export async function runWithConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T) => Promise<unknown>
+): Promise<void> {
+  const size = Math.max(1, Math.min(concurrency, items.length));
+  let nextIndex = 0;
+  const workers = Array.from({ length: size }, async () => {
+    for (;;) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) break;
+      await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+}
+
+// Bounded in-flight message processing within a single sync run.
+const MESSAGE_CONCURRENCY = 3;
 
 const CAREER_KEYWORDS = [
   "interview",
@@ -219,7 +251,12 @@ export class GmailService {
       careerEvents: 0,
     };
 
-    for (const message of messageList) {
+    // Messages are processed with bounded concurrency (meta fetch, AI
+    // classification, persistence all run ~3 at a time) so a slow message
+    // never serializes the whole batch. The per-message dedupe check and the
+    // self/career-candidate filters are unchanged; every counter mutation
+    // below is atomic (no await between increment and read).
+    await runWithConcurrency(messageList, MESSAGE_CONCURRENCY, async (message) => {
       result.synced += 1;
 
       const alreadyProcessed = await CareerEmail.exists({
@@ -229,7 +266,7 @@ export class GmailService {
 
       if (alreadyProcessed) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
       let meta;
@@ -237,18 +274,18 @@ export class GmailService {
         meta = await client.getMessageMeta(message.id);
       } catch {
         result.failed += 1;
-        continue;
+        return;
       }
 
       // Never reclassify our own self-notification emails (loop prevention).
       if (this.isFromSelfOrAgent(meta.from, meta.subject, accountEmail)) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
       if (!this.isCareerCandidate(meta.subject, meta.from)) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
       result.careerEmails += 1;
@@ -258,10 +295,13 @@ export class GmailService {
         full = await client.getMessageFull(message.id);
       } catch {
         result.failed += 1;
-        continue;
+        return;
       }
 
-      const body = this.extractBodyText(full);
+      const storedBody = this.extractBodyText(full);
+
+      // Perspective for the AI: a bounded slice so prompt size stays stable.
+      const body = storedBody.slice(0, MAX_BODY_CHARS);
 
       let classification: EmailClassification;
       try {
@@ -275,7 +315,7 @@ export class GmailService {
         });
       } catch {
         result.failed += 1;
-        continue;
+        return;
       }
 
       let careerStatus;
@@ -330,6 +370,7 @@ export class GmailService {
         subject: meta.subject,
         receivedAt: this.parseEmailDate(meta.date),
         snippet: meta.snippet,
+        body: storedBody,
         category: classification.category,
         confidence: classification.confidence,
         summary: classification.summary,
@@ -433,7 +474,7 @@ export class GmailService {
       } catch {
         result.failed += 1;
       }
-    }
+    });
 
     await GmailConnection.updateOne(
       { user: userId },
@@ -475,6 +516,7 @@ export class GmailService {
         .sort({ receivedAt: sortOrder })
         .skip((options.page - 1) * options.limit)
         .limit(options.limit)
+        .select("-body")
         .lean(),
       CareerEmail.countDocuments(filter),
     ]);
@@ -499,6 +541,31 @@ export class GmailService {
 
     if (!email) {
       throw new AppError("Email intelligence not found", 404);
+    }
+
+    // Full-content lazy backfill: emails synced before the body was persisted
+    // (or truncated at sync time) get their full plain-text body fetched from
+    // Gmail on demand, so the detail modal always shows the real message.
+    // Best-effort: older emails fall back to their stored snippet.
+    if (!email.body) {
+      try {
+        const connection = await GmailConnection.findOne({
+          user: userId,
+          isActive: true,
+        }).select("+encryptedAccessToken +encryptedRefreshToken");
+        if (connection) {
+          const accessToken = await this.ensureValidAccessToken(connection);
+          const client = new GmailClient(accessToken);
+          const full = await client.getMessageFull(email.gmailMessageId);
+          const body = this.extractBodyText(full);
+          if (body) {
+            email.body = body;
+            await email.save();
+          }
+        }
+      } catch {
+        // Best-effort only; never fail reading an already-classified email.
+      }
     }
 
     return email.toObject();
@@ -881,7 +948,7 @@ export class GmailService {
     const parts = message.payload?.parts || [];
     const bodyText = this.collectText(parts, message.payload?.body?.data);
 
-    return bodyText.slice(0, MAX_BODY_CHARS);
+    return bodyText.slice(0, MAX_STORED_BODY_CHARS);
   }
 
   private collectText(

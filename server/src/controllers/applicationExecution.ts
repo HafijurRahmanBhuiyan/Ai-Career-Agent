@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ApplicationExecutionService } from "../services/applicationExecution";
 import { assistJobFit } from "../services/jobFitAssist";
+import { parseRequestId, runAiRequest } from "../integrations/ai/aiProgress";
 
 const executionService = new ApplicationExecutionService();
 
@@ -63,9 +64,8 @@ export const assistApplicationFit = async (
   next: NextFunction
 ) => {
   try {
-    const result = await assistJobFit(
-      req.user!.id,
-      parseId(req.params.id)
+    const result = await runAiRequest(parseRequestId(req.body), () =>
+      assistJobFit(req.user!.id, parseId(req.params.id))
     );
     res.status(200).json(result);
   } catch (error) {

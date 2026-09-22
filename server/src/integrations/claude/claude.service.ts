@@ -61,7 +61,11 @@ export class ClaudeService {
   async analyzeProject(
     input: ProjectAnalysisInput,
     provider?: AIProvider
-  ): Promise<{ result: ProjectAnalysisResult; model: string }> {
+  ): Promise<{
+    result: ProjectAnalysisResult;
+    model: string;
+    provider: AIProvider;
+  }> {
     const userMessage = buildProjectAnalysisUserMessage(
       input.repository.name,
       input.repository.description,
@@ -85,6 +89,7 @@ export class ClaudeService {
     return {
       result: this.parseResponse(rawResponse.text) as ProjectAnalysisResult,
       model: rawResponse.model,
+      provider: rawResponse.provider,
     };
   }
 

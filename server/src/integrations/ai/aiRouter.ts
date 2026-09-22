@@ -16,6 +16,7 @@ import {
 } from "./ai.types";
 import { classifyAiError, toSafeMessage } from "./aiErrorClassifier";
 import type { AiProviderFailure } from "./aiErrorClassifier";
+import { publishAiProgress, setLastAiAttempt } from "./aiProgress";
 import { getProviderModels, getPrimaryModel } from "./aiModelRegistry";
 
 export const ALL_PROVIDER_ORDER: AIProvider[] = [
@@ -123,7 +124,15 @@ export async function analyzeWithAI(
   provider?: AIProvider
 ): Promise<AIResponse> {
   const selectedProvider = provider || getDefaultAIProvider();
-  return callProvider(request, selectedProvider);
+  const model = request.model || getPrimaryModel(selectedProvider);
+  publishAiProgress({
+    provider: selectedProvider,
+    model,
+    status: "trying",
+  });
+  const response = await callProvider(request, selectedProvider);
+  setLastAiAttempt({ provider: response.provider, model: response.model });
+  return response;
 }
 
 /**
@@ -156,11 +165,19 @@ export async function analyzeWithProviderFallback(
   for (const modelConfig of models) {
     if (!modelConfig.enabled) continue;
 
+    publishAiProgress({
+      provider,
+      model: modelConfig.model,
+      status: "trying",
+    });
+
     try {
-      return await callProvider(
+      const response = await callProvider(
         { ...request, model: modelConfig.model },
         provider
       );
+      setLastAiAttempt({ provider: response.provider, model: response.model });
+      return response;
     } catch (error: unknown) {
       lastError = error;
       const failure = classifyAiError(error, provider);
@@ -170,6 +187,14 @@ export async function analyzeWithProviderFallback(
         // Bad request / misconfiguration: never cycle through the pool.
         throw error;
       }
+
+      publishAiProgress({
+        provider,
+        model: modelConfig.model,
+        status: "failed",
+        category: failure.category,
+        message: toSafeMessage(error).slice(0, 200),
+      });
 
       console.info(
         `[AI] ${provider} model ${modelConfig.model} failed: ` +
@@ -232,6 +257,15 @@ export async function analyzeWithAIFallback(
       return await analyzeWithProviderFallback(request, provider);
     } catch (error: unknown) {
       lastError = error;
+
+      const providerFailure = classifyAiError(error, provider);
+      publishAiProgress({
+        provider,
+        model: getPrimaryModel(provider),
+        status: "failed",
+        category: providerFailure.category,
+        message: toSafeMessage(error).slice(0, 200),
+      });
 
       console.error(
         `[AI] ${provider} failed, trying next provider...`,

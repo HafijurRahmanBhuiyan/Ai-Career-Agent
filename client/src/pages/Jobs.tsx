@@ -56,7 +56,6 @@ function Jobs() {
   const [remote, setRemote] = useState("");
   const [employmentType, setEmploymentType] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("");
-  const [sinceLastSearch, setSinceLastSearch] = useState(false);
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
@@ -111,14 +110,12 @@ function Jobs() {
   );
 
   useEffect(() => {
-    if (!sinceLastSearch) return;
     fetchJobs(1);
-  }, [sinceLastSearch, fetchJobs]);
+  }, []);
 
   const handleSearch = (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSinceLastSearch(true);
     fetchJobs(1);
   };
 

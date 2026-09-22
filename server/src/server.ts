@@ -1,10 +1,15 @@
 import { app } from "./app";
 import { connectDatabase } from "./config/database";
 import { PORT } from "./config";
+import { startGmailAutoSync } from "./services/careerEmailScheduler";
 
 const start = async () => {
   try {
     await connectDatabase();
+
+    if (process.env.NODE_ENV !== "test") {
+      startGmailAutoSync();
+    }
 
     const server = app.listen(PORT, () => {
       console.log(`🚀 AI Career Agent API running on port ${PORT}`);

@@ -1,30 +1,34 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import Profile from "./pages/Profile";
-import MakeCV from "./pages/MakeCV";
-import GitHubIntegrations from "./pages/GitHubIntegrations";
-import Connections from "./pages/Connections";
-import ProfessionalContent from "./pages/ProfessionalContent";
-import Jobs from "./pages/Jobs";
-import JobMatches from "./pages/JobMatches";
-import Opportunities from "./pages/Opportunities";
-import Applications from "./pages/Applications";
-import CareerEmails from "./pages/CareerEmails";
-import FollowUps from "./pages/FollowUps";
-import Analytics from "./pages/Analytics";
-import Settings from "./pages/Settings";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
+import PageLoader from "./components/PageLoader";
+
+const Landing = lazy(() => import("./pages/Landing"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Profile = lazy(() => import("./pages/Profile"));
+const MakeCV = lazy(() => import("./pages/MakeCV"));
+const GitHubIntegrations = lazy(() => import("./pages/GitHubIntegrations"));
+const Connections = lazy(() => import("./pages/Connections"));
+const ProfessionalContent = lazy(() => import("./pages/ProfessionalContent"));
+const Jobs = lazy(() => import("./pages/Jobs"));
+const JobMatches = lazy(() => import("./pages/JobMatches"));
+const Opportunities = lazy(() => import("./pages/Opportunities"));
+const Applications = lazy(() => import("./pages/Applications"));
+const CareerEmails = lazy(() => import("./pages/CareerEmails"));
+const FollowUps = lazy(() => import("./pages/FollowUps"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const Settings = lazy(() => import("./pages/Settings"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 
 function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<Landing />} />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -141,6 +145,7 @@ function App() {
           }
         />
       </Routes>
+      </Suspense>
     </AuthProvider>
   );
 }

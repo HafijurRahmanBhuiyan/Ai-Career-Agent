@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
+import AIProviderIndicator from "../components/AIProviderIndicator";
+import { genRequestId, useAIProgress } from "../hooks/useAIProgress";
 import { getErrorMessage } from "../utils/apiError";
 import {
   ImportedRepo,
@@ -44,6 +46,19 @@ function ProfessionalContent() {
 
   const [suggestions, setSuggestions] = useState<LinkedInSuggestion[]>([]);
   const [assistLoading, setAssistLoading] = useState(false);
+  const [assistGeneratedBy, setAssistGeneratedBy] = useState<{
+    provider: string;
+    model: string;
+  } | null>(null);
+
+  const [progressRequestId, setProgressRequestId] = useState<string | null>(
+    null
+  );
+
+  const aiProgress = useAIProgress(
+    progressRequestId ?? "",
+    evidenceUpdating || assistLoading
+  );
 
   const [drafts, setDrafts] = useState<LinkedInDraft[]>([]);
   const [editing, setEditing] = useState<LinkedInDraft | null>(null);
@@ -186,12 +201,15 @@ function ProfessionalContent() {
     if (!selected) return;
     clearError();
     setEvidenceUpdating(true);
+    const requestId = genRequestId();
+    setProgressRequestId(requestId);
     try {
       const res = await api.post<{
         evidence: ProfessionalEvidence;
         derivedFromExistingAnalysis: boolean;
       }>(
-        `${API_BASE}/github/repositories/${selected.githubRepositoryId}/professional-evidence`
+        `${API_BASE}/github/repositories/${selected.githubRepositoryId}/professional-evidence`,
+        { requestId }
       );
       setEvidence(res.data.evidence);
       setDraftNotice(
@@ -203,6 +221,7 @@ function ProfessionalContent() {
       setError(getErrorMessage(err, "Failed to generate professional evidence"));
     } finally {
       setEvidenceUpdating(false);
+      setProgressRequestId(null);
     }
   };
 
@@ -225,18 +244,27 @@ function ProfessionalContent() {
     clearError();
     setAssistLoading(true);
     setSuggestions([]);
+    setAssistGeneratedBy(null);
+    const requestId = genRequestId();
+    setProgressRequestId(requestId);
     try {
       if (!evidence) {
-        setDraftNotice("No professional evidence yet. Generating it first, then Claude will draft your post.");
+        setDraftNotice("No professional evidence yet. Generating it first, then AI will draft your post.");
         const evRes = await api.post<{ evidence: ProfessionalEvidence }>(
-          `${API_BASE}/github/repositories/${selected.githubRepositoryId}/professional-evidence`
+          `${API_BASE}/github/repositories/${selected.githubRepositoryId}/professional-evidence`,
+          { requestId }
         );
         setEvidence(evRes.data.evidence);
       }
-      const res = await api.post<{ suggestions: LinkedInSuggestion[] }>(
-        `${API_BASE}/github/repositories/${selected.githubRepositoryId}/linkedin-draft/assist`
+      const res = await api.post<{
+        suggestions: LinkedInSuggestion[];
+        generatedBy: { provider: string; model: string } | null;
+      }>(
+        `${API_BASE}/github/repositories/${selected.githubRepositoryId}/linkedin-draft/assist`,
+        { requestId }
       );
       setSuggestions(res.data.suggestions);
+      setAssistGeneratedBy(res.data.generatedBy);
       const first = res.data.suggestions[0];
       if (first) {
         setEditing(null);
@@ -251,6 +279,7 @@ function ProfessionalContent() {
       setError(getErrorMessage(err, "Failed to generate LinkedIn suggestions"));
     } finally {
       setAssistLoading(false);
+      setProgressRequestId(null);
     }
   };
 
@@ -344,7 +373,7 @@ function ProfessionalContent() {
             </h1>
             <p className="page-subtitle">
               Turn an approved GitHub project into professional evidence and a
-              LinkedIn draft. Claude suggests — you decide. Nothing is ever
+              LinkedIn draft. AI suggests — you decide. Nothing is ever
               published automatically.
             </p>
           </div>
@@ -487,17 +516,22 @@ function ProfessionalContent() {
                         <h2 className="text-lg font-semibold text-slate-900">
                           Professional Evidence
                         </h2>
-                        <button
-                          onClick={generateEvidence}
-                          disabled={evidenceUpdating}
-                          className="btn btn-primary btn-sm w-full sm:w-auto justify-center shrink-0"
-                        >
-                          {evidenceUpdating
-                            ? "Analyzing..."
-                            : evidence
-                            ? "Regenerate Evidence"
-                            : "Analyze for Professional Use"}
-                        </button>
+                        <div className="flex items-center gap-3">
+                          {evidenceUpdating && (
+                            <AIProviderIndicator state={aiProgress} />
+                          )}
+                          <button
+                            onClick={generateEvidence}
+                            disabled={evidenceUpdating}
+                            className="btn btn-primary btn-sm w-full sm:w-auto justify-center shrink-0"
+                          >
+                            {evidenceUpdating
+                              ? "Analyzing..."
+                              : evidence
+                              ? "Regenerate Evidence"
+                              : "Analyze for Professional Use"}
+                          </button>
+                        </div>
                       </div>
 
                       {evidenceLoading && (
@@ -602,19 +636,33 @@ function ProfessionalContent() {
                         <h2 className="text-lg font-semibold text-slate-900">
                           LinkedIn Post Draft
                         </h2>
-                        <button
-                          onClick={runAssist}
-                          disabled={assistLoading}
-                          className="btn btn-primary btn-sm w-full sm:w-auto justify-center shrink-0"
-                        >
-                          {assistLoading ? "Generating..." : "Generate LinkedIn Post"}
-                        </button>
+                        <div className="flex items-center gap-3">
+                          {assistLoading && (
+                            <AIProviderIndicator state={aiProgress} />
+                          )}
+                          {!assistLoading && assistGeneratedBy && (
+                            <AIProviderIndicator
+                              mode="final"
+                              state={{
+                                provider: assistGeneratedBy.provider,
+                                model: assistGeneratedBy.model,
+                              }}
+                            />
+                          )}
+                          <button
+                            onClick={runAssist}
+                            disabled={assistLoading}
+                            className="btn btn-primary btn-sm w-full sm:w-auto justify-center shrink-0"
+                          >
+                            {assistLoading ? "Generating..." : "Generate LinkedIn Post"}
+                          </button>
+                        </div>
                       </div>
 
                       {suggestions.length > 0 && (
                         <div className="space-y-3 mb-5">
                           <p className="text-xs text-slate-500">
-                            Claude suggestions for review only. Use one to load it
+                            AI suggestions for review only. Use one to load it
                             into the editor below — nothing is saved or published
                             automatically.
                           </p>

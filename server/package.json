@@ -9,13 +9,15 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'Linting not yet configured'",
-    "test": "jest --forceExit --detectOpenHandles"
+    "test": "jest --forceExit --detectOpenHandles",
+    "migration:drop-github-unique": "ts-node-dev --transpile-only scripts/dropGithubUserIdUniqueIndex.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.121.0",
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.20.0",
     "bcryptjs": "^2.4.3",
+    "compression": "^1.8.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
@@ -32,6 +34,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",

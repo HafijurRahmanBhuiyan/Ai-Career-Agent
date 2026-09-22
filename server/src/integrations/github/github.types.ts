@@ -16,6 +16,7 @@ export interface GitHubRepository {
   homepage: string | null;
   private: boolean;
   fork: boolean;
+  archived: boolean;
   default_branch: string;
   language: string | null;
   topics: string[];

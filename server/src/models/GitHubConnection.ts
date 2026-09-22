@@ -26,7 +26,7 @@ const gitHubConnectionSchema = new Schema<IGitHubConnection>(
     githubUserId: {
       type: Number,
       required: true,
-      unique: true,
+      index: true,
     },
     username: {
       type: String,

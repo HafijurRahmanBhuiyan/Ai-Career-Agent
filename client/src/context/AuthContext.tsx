@@ -8,6 +8,7 @@ import {
 } from "react";
 import { getToken, setToken, clearToken } from "../utils/tokenStorage";
 import * as authService from "../services/auth";
+import { triggerAutoGmailSync } from "../utils/gmailAutoSync";
 import { AUTH_UNAUTHORIZED_EVENT } from "../api/client";
 import { User, LoginRequest, RegisterRequest } from "../types/auth";
 
@@ -55,6 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const me = await authService.getMe();
       setUser(me);
+      // Session restored (e.g. page refresh): pull fresh career emails in the
+      // background so the Mail/Career Emails sections are up to date.
+      void triggerAutoGmailSync();
     } catch {
       clearSession();
     } finally {
@@ -66,11 +70,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser();
   }, [refreshUser]);
 
+  useEffect(() => {
+    if (!token) {
+      return undefined;
+    }
+    // Keep career emails detected continuously while the app is open on any
+    // page: check for new mail every minute in the background. The sync
+    // itself is stale-gated, so this stays cheap when nothing has changed.
+    const intervalId = window.setInterval(() => {
+      void triggerAutoGmailSync();
+    }, 60 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, [token]);
+
   const login = useCallback(async (credentials: LoginRequest) => {
     const res = await authService.login(credentials);
     setToken(res.token);
     setTokenState(res.token);
     setUser(res.user);
+    // Auto-fetch career emails right after login — no manual sync needed.
+    void triggerAutoGmailSync();
   }, []);
 
   const register = useCallback(async (data: RegisterRequest) => {

@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import rateLimit from "express-rate-limit";
 import healthRoutes from "./routes/health";
 import authRoutes from "./routes/auth";
@@ -25,6 +26,7 @@ import settingsRoutes from "./routes/settings";
 import aiRoutes from "./routes/ai";
 import { bootstrapJobSources } from "./integrations/jobs/bootstrap";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { requestContextMiddleware } from "./integrations/ai/aiProgress";
 import { NODE_ENV } from "./config";
 
 dotenv.config();
@@ -43,6 +45,10 @@ const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 app.set("trust proxy", 1);
 
 app.use(helmet());
+
+// gzip/brotli-compress all API responses early in the chain (before routes)
+// so every JSON payload ships smaller over the wire.
+app.use(compression());
 
 app.use(
   cors({
@@ -73,6 +79,11 @@ if (NODE_ENV !== "test") {
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+// Give every HTTP request an AsyncLocalStorage scope so the AI router can
+// publish live provider/model progress that controllers bind to an SSE stream
+// via runAiRequest(). Safe for background jobs, which run outside any scope.
+app.use(requestContextMiddleware);
 
 app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);

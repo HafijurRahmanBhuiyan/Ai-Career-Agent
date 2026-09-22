@@ -4,6 +4,7 @@ import {
   getOrCreateApplicationSummary,
   reanalyzeApplicationSummary,
 } from "../services/applicationSummary";
+import { parseRequestId, runAiRequest } from "../integrations/ai/aiProgress";
 
 export const getSummary = async (
   req: Request,
@@ -32,9 +33,9 @@ export const generateSummary = async (
   next: NextFunction
 ) => {
   try {
-    const { summary, cached } = await getOrCreateApplicationSummary(
-      req.user!.id,
-      String(req.params.id)
+    const { summary, cached } = await runAiRequest(
+      parseRequestId(req.body),
+      () => getOrCreateApplicationSummary(req.user!.id, String(req.params.id))
     );
 
     res.status(200).json({ summary: toSafeSummary(summary), cached });
@@ -49,9 +50,9 @@ export const regenerateSummary = async (
   next: NextFunction
 ) => {
   try {
-    const { summary, cached } = await reanalyzeApplicationSummary(
-      req.user!.id,
-      String(req.params.id)
+    const { summary, cached } = await runAiRequest(
+      parseRequestId(req.body),
+      () => reanalyzeApplicationSummary(req.user!.id, String(req.params.id))
     );
 
     res.status(200).json({ summary: toSafeSummary(summary), cached });

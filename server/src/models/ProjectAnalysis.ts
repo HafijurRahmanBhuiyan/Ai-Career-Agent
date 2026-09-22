@@ -21,6 +21,7 @@ export interface IProjectAnalysis extends Document {
   linkedinDescription: string;
   suggestedTags: string[];
   aiModel: string;
+  aiProvider: string | null;
   promptVersion: string;
   analyzedAt: Date;
   createdAt: Date;
@@ -111,6 +112,10 @@ const projectAnalysisSchema = new Schema<IProjectAnalysis>(
     aiModel: {
       type: String,
       required: true,
+    },
+    aiProvider: {
+      type: String,
+      default: null,
     },
     promptVersion: {
       type: String,

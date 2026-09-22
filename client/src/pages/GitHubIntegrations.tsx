@@ -3,6 +3,8 @@ import { useSearchParams, Link } from "react-router-dom";
 import axios from "axios";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
+import AIProviderIndicator from "../components/AIProviderIndicator";
+import { genRequestId, useAIProgress } from "../hooks/useAIProgress";
 import { getErrorMessage } from "../utils/apiError";
 
 interface GitHubStatus {
@@ -27,6 +29,7 @@ interface GitHubRepo {
   forks: number;
   private: boolean;
   fork: boolean;
+  archived?: boolean;
 }
 
 interface ImportedRepo {
@@ -62,6 +65,7 @@ interface AnalysisData {
   linkedinDescription: string;
   suggestedTags: string[];
   aiModel: string;
+  aiProvider: string | null;
   promptVersion: string;
   analyzedAt: string;
 }
@@ -144,6 +148,9 @@ function GitHubIntegrations() {
   const [importLoading, setImportLoading] = useState<string | null>(null);
   const [syncLoading, setSyncLoading] = useState<number | null>(null);
   const [analyzeLoading, setAnalyzeLoading] = useState<number | null>(null);
+  const [progressRequestId, setProgressRequestId] = useState<string | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [analysisNotice, setAnalysisNotice] = useState<string | null>(null);
 
@@ -155,6 +162,11 @@ function GitHubIntegrations() {
   const [aiProviders, setAiProviders] = useState<AIProviderOption[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [providersError, setProvidersError] = useState<string | null>(null);
+
+  const aiProgress = useAIProgress(
+    progressRequestId ?? "",
+    analyzeLoading !== null
+  );
 
   const [linkedInStatus, setLinkedInStatus] = useState<LinkedInStatus | null>(
     null
@@ -338,6 +350,33 @@ function GitHubIntegrations() {
     }
   };
 
+  // Track repos automatically so the user never has to click "Import" per repo.
+  // Quiet background call on first successful connection check: import-all is
+  // metadata-only (no AI), idempotent, and failures are logged not surfaced.
+  const autoImportAll = useCallback(async () => {
+    try {
+      const res = await api.post<{
+        importedCount: number;
+        skippedCount: number;
+        repositories: ImportedRepo[];
+      }>(`${API_BASE}/github/repositories/import-all`);
+      if (res.data.importedCount > 0) {
+        const imported = await api.get<{ repositories: ImportedRepo[] }>(
+          `${API_BASE}/github/repositories/imported`
+        );
+        setImportedRepos(imported.data.repositories);
+      }
+    } catch (err) {
+      console.error("Background GitHub repository import skipped:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status?.connected) {
+      void autoImportAll();
+    }
+  }, [status?.connected, autoImportAll]);
+
   const handleImport = async (repoId: number) => {
     setImportLoading(String(repoId));
     try {
@@ -384,10 +423,12 @@ function GitHubIntegrations() {
     setAnalyzeLoading(repoId);
     setError(null);
     setAnalysisNotice(null);
+    const requestId = genRequestId();
+    setProgressRequestId(requestId);
     try {
       const res = await api.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
         `${API_BASE}/github/repositories/${repoId}/analyze`,
-        { provider: selectedProvider || undefined }
+        { provider: selectedProvider || undefined, requestId }
       );
       setAnalysis(res.data.analysis);
 
@@ -413,6 +454,7 @@ function GitHubIntegrations() {
       setError(msg);
     } finally {
       setAnalyzeLoading(null);
+      setProgressRequestId(null);
     }
   };
 
@@ -420,10 +462,12 @@ function GitHubIntegrations() {
     setAnalyzeLoading(repoId);
     setError(null);
     setAnalysisNotice(null);
+    const requestId = genRequestId();
+    setProgressRequestId(requestId);
     try {
       const res = await api.post<{ analysis: AnalysisData; readmeTruncated: boolean }>(
         `${API_BASE}/github/repositories/${repoId}/reanalyze`,
-        { provider: selectedProvider || undefined }
+        { provider: selectedProvider || undefined, requestId }
       );
       setAnalysis(res.data.analysis);
       if (selectedRepo) {
@@ -442,6 +486,7 @@ function GitHubIntegrations() {
       setError(msg);
     } finally {
       setAnalyzeLoading(null);
+      setProgressRequestId(null);
     }
   };
 
@@ -792,6 +837,12 @@ function GitHubIntegrations() {
                               ? "Analyzing..."
                               : "Analyze with AI"}
                           </button>
+                          {analyzeLoading === repo.githubRepositoryId && (
+                            <AIProviderIndicator
+                              state={aiProgress}
+                              classes="max-w-full"
+                            />
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -842,9 +893,25 @@ function GitHubIntegrations() {
                         <h2 className="text-base font-semibold text-slate-900">
                           Analysis: {selectedRepo.fullName}
                         </h2>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          AI-powered project analysis
-                        </p>
+                        {analyzeLoading === selectedRepo.githubRepositoryId ? (
+                          <div className="mt-1.5">
+                            <AIProviderIndicator state={aiProgress} />
+                          </div>
+                        ) : analysis ? (
+                          <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                            <AIProviderIndicator
+                              mode="final"
+                              state={{
+                                provider: analysis.aiProvider ?? "",
+                                model: analysis.aiModel,
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            AI-powered project analysis
+                          </p>
+                        )}
                       </div>
                     </div>
                     <button
@@ -888,15 +955,21 @@ function GitHubIntegrations() {
                       <p className="text-sm text-slate-400">
                         No analysis available yet
                       </p>
-                      <button
-                        onClick={() =>
-                          handleAnalyze(selectedRepo.githubRepositoryId)
-                        }
-                        disabled={analyzeLoading === selectedRepo.githubRepositoryId}
-                        className="btn-primary btn-sm"
-                      >
-                        Run AI Analysis
-                      </button>
+                      {analyzeLoading === selectedRepo.githubRepositoryId ? (
+                        <AIProviderIndicator state={aiProgress} />
+                      ) : (
+                        <button
+                          onClick={() =>
+                            handleAnalyze(selectedRepo.githubRepositoryId)
+                          }
+                          disabled={
+                            analyzeLoading === selectedRepo.githubRepositoryId
+                          }
+                          className="btn-primary btn-sm"
+                        >
+                          Run AI Analysis
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -986,7 +1059,10 @@ function GitHubIntegrations() {
                       />
                       <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-100">
                         <span className="chip bg-slate-50 border border-slate-100 text-slate-500">
-                          Model: {analysis.aiModel}
+                          Model:{" "}
+                          {[analysis.aiProvider, analysis.aiModel]
+                            .filter(Boolean)
+                            .join(" · ") || analysis.aiModel}
                         </span>
                         <span className="chip bg-slate-50 border border-slate-100 text-slate-500">
                           Prompt: {analysis.promptVersion}
@@ -1247,7 +1323,10 @@ function GitHubIntegrations() {
                                 {new Date(a.analyzedAt).toLocaleString()}
                               </span>
                               <span className="text-xs text-slate-400">
-                                {a.aiModel} | {a.difficultyLevel}
+                                {[a.aiProvider, a.aiModel]
+                                  .filter(Boolean)
+                                  .join(" · ") || a.aiModel}{" "}
+                                | {a.difficultyLevel}
                               </span>
                             </div>
                           </button>

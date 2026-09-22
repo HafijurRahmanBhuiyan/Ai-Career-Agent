@@ -6,6 +6,7 @@ import {
   listJobMatches,
 } from "../services/jobMatching";
 import { jobMatchListQuerySchema } from "../validators/jobMatchQuery";
+import { parseRequestId, runAiRequest } from "../integrations/ai/aiProgress";
 
 export const analyzeMatch = async (
   req: Request,
@@ -15,8 +16,11 @@ export const analyzeMatch = async (
   try {
     const userId = req.user!.id;
     const jobId = String(req.params.id);
+    const requestId = parseRequestId(req.body);
 
-    const { match, job, cached } = await analyzeJobMatch(userId, jobId);
+    const { match, job, cached } = await runAiRequest(requestId, () =>
+      analyzeJobMatch(userId, jobId)
+    );
 
     res.status(200).json({
       job: toSafeJob(job),
@@ -56,8 +60,11 @@ export const reanalyzeMatch = async (
   try {
     const userId = req.user!.id;
     const jobId = String(req.params.id);
+    const requestId = parseRequestId(req.body);
 
-    const { match, job } = await reanalyzeJobMatch(userId, jobId);
+    const { match, job } = await runAiRequest(requestId, () =>
+      reanalyzeJobMatch(userId, jobId)
+    );
 
     res.status(200).json({
       job: toSafeJob(job),

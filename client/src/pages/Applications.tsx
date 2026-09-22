@@ -3,6 +3,8 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/client";
 import DashboardLayout from "../components/DashboardLayout";
+import AIProviderIndicator from "../components/AIProviderIndicator";
+import { genRequestId, useAIProgress } from "../hooks/useAIProgress";
 import {
   Application,
   ApplicationPagination,
@@ -983,6 +985,11 @@ function ApplicationDetailModal({
 
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
+  const [progressRequestId, setProgressRequestId] = useState<string | null>(
+    null
+  );
+
+  const aiProgress = useAIProgress(progressRequestId ?? "", summaryLoading);
   const [eventCopied, setEventCopied] = useState(false);
   const [eventIcsAdded, setEventIcsAdded] = useState(false);
 
@@ -1084,15 +1091,19 @@ function ApplicationDetailModal({
   const handleGenerateSummary = async () => {
     setSummaryLoading(true);
     setError(null);
+    const requestId = genRequestId();
+    setProgressRequestId(requestId);
     try {
       const res = await api.post<{ summary: Record<string, unknown> }>(
-        `${API_BASE}/applications/${application._id}/summary`
+        `${API_BASE}/applications/${application._id}/summary`,
+        { requestId }
       );
       setSummary(res.data.summary);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to generate AI summary"));
     } finally {
       setSummaryLoading(false);
+      setProgressRequestId(null);
     }
   };
 
@@ -1577,13 +1588,18 @@ function ApplicationDetailModal({
                   <h3 className="text-sm font-semibold text-slate-800 tracking-tight">
                     AI summary
                   </h3>
-                  <button
-                    onClick={handleGenerateSummary}
-                    disabled={summaryLoading}
-                    className="btn btn-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {summaryLoading ? "Generating..." : summary ? "Regenerate" : "Generate summary"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {summaryLoading && (
+                      <AIProviderIndicator state={aiProgress} />
+                    )}
+                    <button
+                      onClick={handleGenerateSummary}
+                      disabled={summaryLoading}
+                      className="btn btn-sm text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {summaryLoading ? "Generating..." : summary ? "Regenerate" : "Generate summary"}
+                    </button>
+                  </div>
                 </div>
                 {summary ? (
                   <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-2 text-sm">
@@ -1837,19 +1853,28 @@ function JobFitAssistSection({
 }) {
   const [result, setResult] = useState<JobFitAssistResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progressRequestId, setProgressRequestId] = useState<string | null>(
+    null
+  );
+
+  const aiProgress = useAIProgress(progressRequestId ?? "", loading);
 
   const handleAssist = async () => {
     setLoading(true);
     setError(null);
+    const requestId = genRequestId();
+    setProgressRequestId(requestId);
     try {
       const res = await api.post<JobFitAssistResult>(
-        `${API_BASE}/applications/${applicationId}/fit-assist`
+        `${API_BASE}/applications/${applicationId}/fit-assist`,
+        { requestId }
       );
       setResult(res.data);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to get job-fit assist"));
     } finally {
       setLoading(false);
+      setProgressRequestId(null);
     }
   };
 
@@ -1859,13 +1884,16 @@ function JobFitAssistSection({
     <div className="border border-slate-200/80 rounded-xl p-4 space-y-2 bg-surface-50/40">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Job-fit assist</h3>
-        <button
-          onClick={handleAssist}
-          disabled={loading}
-          className="btn btn-primary btn-sm"
-        >
-          {loading ? "Analyzing..." : result ? "Re-run" : "Run assist"}
-        </button>
+        <div className="flex items-center gap-2">
+          {loading && <AIProviderIndicator state={aiProgress} />}
+          <button
+            onClick={handleAssist}
+            disabled={loading}
+            className="btn btn-primary btn-sm"
+          >
+            {loading ? "Analyzing..." : result ? "Re-run" : "Run assist"}
+          </button>
+        </div>
       </div>
 
       {result?.advisoryOnly && (
@@ -1973,6 +2001,11 @@ function PreparationSection({
 
   const [assistLoading, setAssistLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<PrepAssistSuggestions | null>(null);
+  const [progressRequestId, setProgressRequestId] = useState<string | null>(
+    null
+  );
+
+  const aiProgress = useAIProgress(progressRequestId ?? "", assistLoading);
 
   // Sync local state when the loaded preparation changes.
   useEffect(() => {
@@ -2031,15 +2064,19 @@ function PreparationSection({
   const handleAssist = async () => {
     setAssistLoading(true);
     setError(null);
+    const requestId = genRequestId();
+    setProgressRequestId(requestId);
     try {
       const res = await api.post<{ suggestions: PrepAssistSuggestions }>(
-        `${API_BASE}/applications/${applicationId}/preparation/assist`
+        `${API_BASE}/applications/${applicationId}/preparation/assist`,
+        { requestId }
       );
       setSuggestions(res.data.suggestions);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to generate suggestions"));
     } finally {
       setAssistLoading(false);
+      setProgressRequestId(null);
     }
   };
 
@@ -2060,13 +2097,16 @@ function PreparationSection({
     <div>
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Interview preparation</h3>
-        <button
-          onClick={handleAssist}
-          disabled={assistLoading}
-          className="btn btn-sm text-emerald-700 border border-emerald-200 bg-white hover:bg-emerald-50 disabled:opacity-50"
-        >
-          {assistLoading ? "Generating..." : "Ask AI for suggestions"}
-        </button>
+        <div className="flex items-center gap-2">
+          {assistLoading && <AIProviderIndicator state={aiProgress} />}
+          <button
+            onClick={handleAssist}
+            disabled={assistLoading}
+            className="btn btn-sm text-emerald-700 border border-emerald-200 bg-white hover:bg-emerald-50 disabled:opacity-50"
+          >
+            {assistLoading ? "Generating..." : "Ask AI for suggestions"}
+          </button>
+        </div>
       </div>
 
       <div className="border border-slate-200/80 rounded-xl p-4 space-y-5">
@@ -2327,6 +2367,12 @@ function FollowUpsSection({
   const [assistLoading, setAssistLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<FollowUpSuggestion[]>([]);
 
+  const [progressRequestId, setProgressRequestId] = useState<string | null>(
+    null
+  );
+
+  const aiProgress = useAIProgress(progressRequestId ?? "", assistLoading);
+
   const open = followUps.filter((f) => !f.completed);
   const completed = followUps.filter((f) => f.completed);
 
@@ -2416,15 +2462,19 @@ function FollowUpsSection({
   const handleAssist = async () => {
     setAssistLoading(true);
     setError(null);
+    const requestId = genRequestId();
+    setProgressRequestId(requestId);
     try {
       const res = await api.post<{ suggestions: FollowUpSuggestion[] }>(
-        `${API_BASE}/applications/${applicationId}/follow-ups/assist`
+        `${API_BASE}/applications/${applicationId}/follow-ups/assist`,
+        { requestId }
       );
       setSuggestions(res.data.suggestions ?? []);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to generate follow-up suggestions"));
     } finally {
       setAssistLoading(false);
+      setProgressRequestId(null);
     }
   };
 
@@ -2513,13 +2563,16 @@ function FollowUpsSection({
     <div>
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <h3 className="text-sm font-semibold text-slate-800 tracking-tight">Follow-ups</h3>
-        <button
-          onClick={handleAssist}
-          disabled={assistLoading}
-          className="btn btn-sm text-emerald-700 border border-emerald-200 bg-white hover:bg-emerald-50 disabled:opacity-50"
-        >
-          {assistLoading ? "Generating..." : "Ask AI for follow-up suggestions"}
-        </button>
+        <div className="flex items-center gap-2">
+          {assistLoading && <AIProviderIndicator state={aiProgress} />}
+          <button
+            onClick={handleAssist}
+            disabled={assistLoading}
+            className="btn btn-sm text-emerald-700 border border-emerald-200 bg-white hover:bg-emerald-50 disabled:opacity-50"
+          >
+            {assistLoading ? "Generating..." : "Ask AI for follow-up suggestions"}
+          </button>
+        </div>
       </div>
 
       {suggestions.length > 0 && (

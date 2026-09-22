@@ -19,6 +19,11 @@ import ProfessionalEvidence from "../models/ProfessionalEvidence";
 import GitHubRepositoryModel from "../models/GitHubRepository";
 import { AppError } from "../middleware/errorHandler";
 import { LinkedInService } from "../services/linkedIn";
+import {
+  consumeAiAttempt,
+  parseRequestId,
+  runAiRequest,
+} from "../integrations/ai/aiProgress";
 
 const linkedInService = new LinkedInService();
 
@@ -41,11 +46,15 @@ export const generateEvidence = async (
     if (isNaN(repoId)) {
       return next(new AppError("Invalid repository ID", 400));
     }
-    const { evidence, derivedFromExistingAnalysis } =
-      await deriveProfessionalEvidence({
-        userId: req.user!.id,
-        githubRepositoryId: repoId,
-      });
+    const requestId = parseRequestId(req.body);
+    const { evidence, derivedFromExistingAnalysis } = await runAiRequest(
+      requestId,
+      () =>
+        deriveProfessionalEvidence({
+          userId: req.user!.id,
+          githubRepositoryId: repoId,
+        })
+    );
     res.status(201).json({ evidence, derivedFromExistingAnalysis });
   } catch (error) {
     next(error);
@@ -137,11 +146,20 @@ export const assistDraft = async (
     if (isNaN(repoId)) {
       return next(new AppError("Invalid repository ID", 400));
     }
-    const { suggestions } = await assistLinkedInSuggestions({
-      userId: req.user!.id,
-      githubRepositoryId: repoId,
+    const requestId = parseRequestId(req.body);
+    const { suggestions } = await runAiRequest(requestId, () =>
+      assistLinkedInSuggestions({
+        userId: req.user!.id,
+        githubRepositoryId: repoId,
+      })
+    );
+    const attempt = consumeAiAttempt(requestId);
+    res.status(200).json({
+      suggestions,
+      generatedBy: attempt
+        ? { provider: attempt.provider, model: attempt.model }
+        : null,
     });
-    res.status(200).json({ suggestions });
   } catch (error) {
     next(error);
   }

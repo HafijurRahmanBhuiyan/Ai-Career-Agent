@@ -12,6 +12,7 @@ import {
   DetectedCareerStatus,
 } from "../types/careerEmail";
 import { getErrorMessage } from "../utils/apiError";
+import { triggerAutoGmailSync } from "../utils/gmailAutoSync";
 import { validateHandoffUrl } from "../utils/handoffUrl";
 import {
   buildInterviewIcs,
@@ -208,6 +209,22 @@ function CareerEmails() {
     fetchEmails(1);
   }, [fetchEmails]);
 
+  // Fire a background Gmail sync on first visit so the section is as fresh as
+  // possible without requiring a manual sync button.
+  useEffect(() => {
+    void triggerAutoGmailSync();
+  }, []);
+
+  // Keep the section updated automatically: refresh career emails (and, when
+  // stale, the underlying Gmail sync) every minute while the page is open.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void triggerAutoGmailSync();
+      fetchEmails(pagination.page || 1);
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, [fetchEmails, pagination.page]);
+
   const handleFilter = () => {
     fetchEmails(1);
   };
@@ -215,6 +232,23 @@ function CareerEmails() {
   const handlePageChange = (page: number) => {
     fetchEmails(page);
   };
+
+  // Opening a card loads the full email detail (which includes the full body
+  // via the server-side lazy backfill) and updates both the list and modal.
+  const handleOpenEmail = useCallback(async (email: CareerEmail) => {
+    setViewing(email);
+    try {
+      const res = await api.get<{ email: CareerEmail }>(
+        `${API_BASE}/gmail/emails/${email.id}`
+      );
+      setEmails((prev) =>
+        prev.map((e) => (e.id === res.data.email.id ? res.data.email : e))
+      );
+      setViewing(res.data.email);
+    } catch {
+      // Keep the list-row version; the modal still renders from the snippet.
+    }
+  }, []);
 
   return (
     <DashboardLayout active="Career Emails">
@@ -300,10 +334,11 @@ function CareerEmails() {
             </button>
           </div>
           <p className="mt-4 text-xs text-slate-400">
-            Emails are synced from your connected Gmail account on the
-            Integrations page. Detected hiring-stage signals are shown for
-            review; high-confidence signals can update your application status
-            automatically when you enable that in Settings.
+            Career emails sync automatically from your connected Gmail account
+            after login and refresh in the background. Detected hiring-stage
+            signals are shown for review; high-confidence signals can update
+            your application status automatically when you enable that in
+            Settings.
           </p>
         </div>
 
@@ -319,136 +354,107 @@ function CareerEmails() {
             </div>
             <p className="text-slate-600 text-sm font-medium mb-1">No career emails yet.</p>
             <p className="text-slate-400 text-xs mb-4">
-              Connect your Gmail account and run a sync to classify incoming
-              career emails.
+              Connect your Gmail account and new career emails will be
+              detected automatically.
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <div className="table-wrap min-w-[900px]">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="th">Subject</th>
-                    <th className="th">Company</th>
-                    <th className="th">Role</th>
-                    <th className="th">Category</th>
-                    <th className="th">Suggested Status</th>
-                    <th className="th">Detected</th>
-                    <th className="th">Application</th>
-                    <th className="th">Received</th>
-                    <th className="th text-right">Details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {emails.map((email) => (
-                    <tr key={email.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="td">
-                        <p className="font-medium text-slate-900 truncate max-w-xs">
-                          {email.subject || "(no subject)"}
-                        </p>
-                        <p className="text-xs text-slate-500 truncate max-w-xs">
-                          {email.from || ""}
-                        </p>
-                      </td>
-                      <td className="td">
-                        {email.companyName || "—"}
-                      </td>
-                      <td className="td">
-                        {email.jobTitle || "—"}
-                      </td>
-                      <td className="td">
-                        <span
-                          className={`badge ${
-                            email.category
-                              ? CATEGORY_STYLES[email.category]
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {formatCategory(email.category)}
-                        </span>
-                      </td>
-                      <td className="td">
-                        {email.suggestedApplicationStatus ? (
-                          <span className="badge bg-blue-50 text-blue-700">
-                            {email.suggestedApplicationStatus}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="td">
-                        {email.careerStatus ? (
-                          <div>
-                            <span
-                              className={`badge ${
-                                DETECTED_STATUS_STYLES[email.careerStatus]
-                              }`}
-                            >
-                              {email.careerStatus}
-                              {email.careerStatusConfidence != null
-                                ? ` ${Math.round(email.careerStatusConfidence * 100)}%`
-                                : ""}
-                              {email.autoStatusApplied ? " • auto" : ""}
-                              {email.manualStatusApplied ? " • manual" : ""}
-                            </span>
-                            {email.careerStatusDetectedAt && (
-                              <p className="text-[10px] text-slate-400 mt-1">
-                                detected {formatDateTime(email.careerStatusDetectedAt)}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-xs">—</span>
-                        )}
-                        {email.careerEvent?.type && (
-                          <div className="mt-1.5 inline-flex flex-wrap items-center gap-1">
-                            <span className="badge border border-emerald-200 bg-emerald-50 text-emerald-700">
-                              {email.careerEvent.type.replace(/_/g, " ")}
-                            </span>
-                            {email.careerEvent.detectedAt && (
-                              <span className="text-[10px] text-slate-400">
-                                {formatDateTime(email.careerEvent.detectedAt)}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="td">
-                        {email.application ? (
-                          <span className="inline-flex flex-wrap items-center gap-2">
-                            <span className="text-xs text-slate-600">
-                              {email.application.status || "—"}
-                            </span>
-                            <a
-                              href={`/dashboard/applications?id=${email.application._id}`}
-                              className="text-xs font-medium text-brand-600 hover:text-brand-700 hover:underline"
-                            >
-                              View
-                            </a>
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-400">
-                            Not matched
-                          </span>
-                        )}
-                      </td>
-                      <td className="td text-xs text-slate-500 whitespace-nowrap">
-                        {formatDate(email.receivedAt)}
-                      </td>
-                      <td className="td text-right">
-                        <button
-                          onClick={() => setViewing(email)}
-                          className="btn-sm text-brand-700 bg-brand-50 border border-brand-200 rounded-lg hover:bg-brand-100 hover:border-brand-300 transition-colors whitespace-nowrap"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {emails.map((email) => (
+              <button
+                key={email.id}
+                onClick={() => handleOpenEmail(email)}
+                className="card p-5 text-left transition-all hover:border-brand-300 hover:shadow-glow-primary group"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span
+                    className={`badge ${
+                      email.category
+                        ? CATEGORY_STYLES[email.category]
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {formatCategory(email.category)}
+                  </span>
+                  <span className="text-xs text-slate-400 shrink-0">
+                    {formatDate(email.receivedAt)}
+                  </span>
+                </div>
+
+                <p className="mt-3 text-sm font-semibold text-slate-900 line-clamp-2 group-hover:text-brand-700">
+                  {email.subject || "(no subject)"}
+                </p>
+                <p className="text-xs text-slate-500 mt-1 truncate">
+                  {email.from || ""}
+                </p>
+
+                {(email.companyName || email.jobTitle) && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {email.companyName && (
+                      <span className="chip bg-slate-50 border border-slate-100 text-slate-500">
+                        {email.companyName}
+                      </span>
+                    )}
+                    {email.jobTitle && (
+                      <span className="chip bg-slate-50 border border-slate-100 text-slate-500">
+                        {email.jobTitle}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                  {email.careerStatus && (
+                    <span
+                      className={`badge ${
+                        DETECTED_STATUS_STYLES[email.careerStatus]
+                      }`}
+                    >
+                      {email.careerStatus}
+                      {email.careerStatusConfidence != null
+                        ? ` ${Math.round(email.careerStatusConfidence * 100)}%`
+                        : ""}
+                      {email.autoStatusApplied ? " • auto" : ""}
+                      {email.manualStatusApplied ? " • manual" : ""}
+                    </span>
+                  )}
+                  {email.careerEvent?.type && (
+                    <span className="badge border border-emerald-200 bg-emerald-50 text-emerald-700">
+                      {email.careerEvent.type.replace(/_/g, " ")}
+                    </span>
+                  )}
+                  {email.suggestedApplicationStatus && (
+                    <span className="badge bg-blue-50 text-blue-700">
+                      {email.suggestedApplicationStatus}
+                    </span>
+                  )}
+                </div>
+
+                {email.snippet && (
+                  <p className="text-xs text-slate-500 mt-3 line-clamp-2 leading-relaxed">
+                    {email.snippet}
+                  </p>
+                )}
+
+                {email.application && (
+                  <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-600">
+                      Application:{" "}
+                      <span className="font-medium">
+                        {email.application.status || "—"}
+                      </span>
+                    </span>
+                    <a
+                      href={`/dashboard/applications?id=${email.application._id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                    >
+                      View
+                    </a>
+                  </div>
+                )}
+              </button>
+            ))}
           </div>
         )}
 
@@ -598,6 +604,20 @@ function EmailDetailModal({
             {info("Action Deadline", email.actionDeadline ? formatDate(email.actionDeadline) : null)}
           </dl>
 
+          {email.body ? (
+            <div className="mb-6">
+              <p className="field-label">Full Email Content</p>
+              <div className="text-sm text-slate-700 bg-white border border-slate-100 rounded-xl p-4 leading-relaxed whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
+                {email.body}
+              </div>
+            </div>
+          ) : email.snippet ? (
+            <div className="mb-6">
+              <p className="field-label">Email Content</p>
+              <p className="text-sm text-slate-600 leading-relaxed">{email.snippet}</p>
+            </div>
+          ) : null}
+
           {email.careerEvent?.type && (
             <div className="bg-emerald-50 border border-emerald-200/70 rounded-2xl p-5 mb-6">
               <h3 className="text-sm font-semibold text-emerald-900 mb-1">
@@ -685,13 +705,6 @@ function EmailDetailModal({
               <p className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-4 leading-relaxed">
                 {email.summary}
               </p>
-            </div>
-          )}
-
-          {email.snippet && (
-            <div className="mb-6">
-              <p className="field-label">Excerpt</p>
-              <p className="text-sm text-slate-600 leading-relaxed">{email.snippet}</p>
             </div>
           )}
 

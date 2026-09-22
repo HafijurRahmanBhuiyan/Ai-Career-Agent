@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { GitHubClient } from "../integrations/github/githubClient";
 import { GitHubService } from "../integrations/github/github.service";
+import { GitHubRepository } from "../integrations/github/github.types";
 import GitHubConnection from "../models/GitHubConnection";
 import GitHubRepositoryModel from "../models/GitHubRepository";
 import { encryptToken } from "../utils/encryption";
@@ -287,6 +288,7 @@ export const getRepositories = async (
       homepage: repo.homepage,
       private: repo.private,
       fork: repo.fork,
+      archived: repo.archived,
       defaultBranch: repo.default_branch,
       language: repo.language,
       topics: repo.topics,
@@ -302,6 +304,87 @@ export const getRepositories = async (
       repositories: safeRepos,
       page,
       perPage,
+    });
+  } catch (error) {
+    next(toAppError(error));
+  }
+};
+
+export const importAllRepositories = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user?.id) {
+      return next(new AppError("User authentication required", 401));
+    }
+
+    const githubService = await getGitHubServiceForUser(req.user.id);
+
+    // Collect every repository, paginated (GitHub caps per_page at 100);
+    // bounded so an enormous account cannot trigger an unbounded loop.
+    const PER_PAGE = 100;
+    const MAX_PAGES = 10;
+    const allRepos: GitHubRepository[] = [];
+    for (let page = 1; page <= MAX_PAGES; page += 1) {
+      const repos = await githubService.getUserRepositories(page, PER_PAGE);
+      allRepos.push(...repos);
+      if (repos.length < PER_PAGE) break;
+    }
+
+    // Default: skip forks and archived repositories (metadata-only import, no
+    // AI calls). Forks/archived can still be imported individually via the
+    // per-repo endpoint.
+    const candidates = allRepos.filter((repo) => !repo.fork && !repo.archived);
+
+    const existing = await GitHubRepositoryModel.find({
+      user: req.user.id,
+      githubRepositoryId: { $in: candidates.map((repo) => repo.id) },
+    }).select("githubRepositoryId");
+
+    const existingIds = new Set(
+      existing.map((connection) => connection.githubRepositoryId)
+    );
+
+    const toImport = candidates.filter(
+      (repo) => !existingIds.has(repo.id)
+    );
+
+    const importedDocs = toImport.length
+      ? await GitHubRepositoryModel.insertMany(
+          toImport.map((repoData) => ({
+            user: req.user.id,
+            githubRepositoryId: repoData.id,
+            name: repoData.name,
+            fullName: repoData.full_name,
+            description: repoData.description,
+            htmlUrl: repoData.html_url,
+            homepage: repoData.homepage,
+            private: repoData.private,
+            fork: repoData.fork,
+            defaultBranch: repoData.default_branch,
+            language: repoData.language,
+            topics: repoData.topics,
+            stars: repoData.stargazers_count,
+            forks: repoData.forks_count,
+            size: repoData.size,
+            createdAtGithub: new Date(repoData.created_at),
+            updatedAtGithub: new Date(repoData.updated_at),
+            pushedAtGithub: new Date(repoData.pushed_at),
+          })),
+          { ordered: false }
+        )
+      : [];
+
+    const importedCount = importedDocs.length;
+    // skipped = non-fork/non-archived repos that were already imported.
+    const skippedCount = candidates.length - importedCount;
+
+    res.status(200).json({
+      importedCount,
+      skippedCount,
+      repositories: importedDocs,
     });
   } catch (error) {
     next(toAppError(error));

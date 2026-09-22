@@ -5,6 +5,7 @@ import {
   disconnect,
   getStatus,
   getRepositories,
+  importAllRepositories,
   importRepository,
   syncRepository,
   deleteRepository,
@@ -37,6 +38,7 @@ router.post("/disconnect", authenticate, disconnect);
 router.get("/status", authenticate, getStatus);
 router.get("/repositories", authenticate, getRepositories);
 router.get("/repositories/imported", authenticate, getImportedRepositories);
+router.post("/repositories/import-all", authenticate, importAllRepositories);
 router.post("/repositories/:githubRepositoryId/import", authenticate, importRepository);
 router.post("/repositories/:githubRepositoryId/sync", authenticate, syncRepository);
 router.delete("/repositories/:githubRepositoryId", authenticate, deleteRepository);

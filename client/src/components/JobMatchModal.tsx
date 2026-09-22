@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import api from "../api/client";
+import AIProviderIndicator from "./AIProviderIndicator";
+import { genRequestId, useAIProgress } from "../hooks/useAIProgress";
 import { JobMatch } from "../types/jobMatch";
 import {
   matchLevelLabel,
@@ -39,17 +41,25 @@ export default function JobMatchModal({
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [cached, setCached] = useState(false);
+  const [progressRequestId, setProgressRequestId] = useState<string | null>(
+    null
+  );
+
+  const aiProgress = useAIProgress(progressRequestId ?? "", loading);
 
   const runAnalysis = async (reanalyze: boolean) => {
     setLoading(true);
     setError(null);
     setInfo(null);
+    const requestId = genRequestId();
+    setProgressRequestId(requestId);
     try {
       const url = `${API_BASE}/jobs/${jobId}/match${
         reanalyze ? "/reanalyze" : ""
       }`;
       const res = await api.post<{ match: JobMatch; job?: MatchJobMeta; cached?: boolean }>(
-        url
+        url,
+        { requestId }
       );
       setMatch(res.data.match);
       if (res.data.cached) {
@@ -69,6 +79,7 @@ export default function JobMatchModal({
       );
     } finally {
       setLoading(false);
+      setProgressRequestId(null);
     }
   };
 
@@ -114,6 +125,11 @@ export default function JobMatchModal({
                   Analyzed {formatAnalyzedDate(match.analyzedAt)}
                 </p>
               )}
+              {loading && (
+                <div className="mt-2">
+                  <AIProviderIndicator state={aiProgress} />
+                </div>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -137,6 +153,9 @@ export default function JobMatchModal({
             <div className="py-16 text-center">
               <div className="spinner mb-4 h-8 w-8"></div>
               <p className="text-sm text-slate-500">Analyzing match...</p>
+              <div className="mt-3 flex justify-center">
+                <AIProviderIndicator state={aiProgress} />
+              </div>
             </div>
           )}
 

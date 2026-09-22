@@ -4,6 +4,7 @@ import { Application } from "../models/Application";
 import { InterviewPreparation, CHECKLIST_KEYS } from "../models/InterviewPreparation";
 import { AppError } from "../middleware/errorHandler";
 import { generatePrepAssist } from "../services/prepAssist";
+import { parseRequestId, runAiRequest } from "../integrations/ai/aiProgress";
 import {
   CreatePreparationInput,
   UpdatePreparationInput,
@@ -76,7 +77,9 @@ export const assistPreparation = async (
     }
 
     // Suggestions are generated for the user's review only; nothing is persisted.
-    const suggestions = await generatePrepAssist(userId, appId);
+    const suggestions = await runAiRequest(parseRequestId(req.body), () =>
+      generatePrepAssist(userId, appId)
+    );
 
     res.status(200).json({ suggestions });
   } catch (error) {

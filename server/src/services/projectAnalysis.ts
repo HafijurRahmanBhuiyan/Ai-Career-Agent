@@ -70,6 +70,7 @@ export async function analyzeGitHubRepository({
   const {
     result: analysisResult,
     model,
+    provider: aiProvider,
   } = await claudeService.analyzeProject(
     {
       repository: {
@@ -119,6 +120,7 @@ export async function analyzeGitHubRepository({
     linkedinDescription: validation.data.linkedinDescription,
     suggestedTags: validation.data.suggestedTags,
     aiModel: model,
+    aiProvider: aiProvider,
     promptVersion: PROJECT_ANALYSIS_PROMPT_VERSION,
     analyzedAt: new Date(),
   });

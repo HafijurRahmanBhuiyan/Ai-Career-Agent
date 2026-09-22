@@ -70,6 +70,7 @@ export interface CareerEmail {
   subject?: string;
   receivedAt?: string;
   snippet?: string;
+  body?: string;
   category?: CareerEmailCategory;
   confidence?: number;
   summary?: string;

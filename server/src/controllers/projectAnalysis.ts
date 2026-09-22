@@ -8,6 +8,7 @@ import {
 import { AppError } from "../middleware/errorHandler";
 import { AIProvider } from "../integrations/ai/ai.types";
 import { ALL_PROVIDER_ORDER } from "../integrations/ai/aiRouter";
+import { parseRequestId, runAiRequest } from "../integrations/ai/aiProgress";
 
 function toAppError(error: unknown): AppError {
   if (error instanceof AppError) {
@@ -60,12 +61,15 @@ export const analyze = async (
     }
 
     const provider = parseProvider(req.body?.provider);
+    const requestId = parseRequestId(req.body);
 
-    const { analysis, readmeTruncated } = await analyzeGitHubRepository({
-      userId: req.user!.id,
-      githubRepositoryId: repoId,
-      provider,
-    });
+    const { analysis, readmeTruncated } = await runAiRequest(requestId, () =>
+      analyzeGitHubRepository({
+        userId: req.user!.id,
+        githubRepositoryId: repoId,
+        provider,
+      })
+    );
 
     res.status(201).json({
       analysis,
@@ -135,12 +139,15 @@ export const reanalyze = async (
     }
 
     const provider = parseProvider(req.body?.provider);
+    const requestId = parseRequestId(req.body);
 
-    const { analysis, readmeTruncated } = await reanalyzeRepository({
-      userId: req.user!.id,
-      githubRepositoryId: repoId,
-      provider,
-    });
+    const { analysis, readmeTruncated } = await runAiRequest(requestId, () =>
+      reanalyzeRepository({
+        userId: req.user!.id,
+        githubRepositoryId: repoId,
+        provider,
+      })
+    );
 
     res.status(201).json({
       analysis,
