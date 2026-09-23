@@ -85,6 +85,10 @@ app.use(express.urlencoded({ extended: true }));
 // via runAiRequest(). Safe for background jobs, which run outside any scope.
 app.use(requestContextMiddleware);
 
+app.get("/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
