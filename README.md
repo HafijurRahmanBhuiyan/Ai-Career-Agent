@@ -19,6 +19,8 @@ A personal, AI-powered **career automation platform** built on the MERN stack. I
 - [Running Locally](#running-locally)
 - [Testing](#testing)
 - [Building for Production](#building-for-production)
+- [Performance & Optimization](#performance--optimization)
+- [Deployment](#deployment)
 - [API Overview](#api-overview)
 - [GitHub Integration](#github-integration)
 - [AI Project Analysis](#ai-project-analysis)
@@ -62,16 +64,16 @@ Searching for a job and preparing professional content is repetitive, manual wor
 - **GitHub integration** — OAuth connect, repository browsing/import/sync, languages, READMEs, **AI project analysis**, re-analysis with version history, and "approve for professional use" gating.
 - **Professional content workflow** — deterministic professional evidence derived from validated analyses, AI-suggested LinkedIn post ideas, and a full **LinkedIn draft lifecycle** (draft → reviewed → approved → published).
 - **LinkedIn publishing** — publish approved drafts to a real LinkedIn member timeline through the official Posts API (`w_member_social`).
-- **Job discovery & ingestion** — real connectors for **Adzuna**, **Arbeitnow**, and **RemoteOK** (plus a deterministic mock source for development), normalized, de-duplicated, and persisted through one pipeline.
+- **Job discovery & ingestion** — real connectors for **Adzuna**, **Arbeitnow**, and **RemoteOK**, normalized, de-duplicated, and persisted through one pipeline.
 - **Career opportunity feed** — user-scoped, score-ranked feed with plain-language match explanations, apply capability (`external_url` / `supported_api` / `manual_required`), real handoff URLs, and save-to-application tracking. **No AI is called on feed load.**
 - **AI job matching** — per-request AI match analysis on the fallback chain (cached) with a strictly validated 0–100 score and backend-owned match levels.
 - **Application tracking** — saved/applied/screening/interview/offer/rejected/withdrawn statuses, per-application timeline, interview intelligence, AI summaries (cached), interview preparation, follow-ups (with assist), and a review → handoff → explicit-confirmation execution flow.
 - **Career application analytics** — deterministic KPIs, funnel, conversion rates, time-to-stage metrics, stale-application detection, follow-up/preparation performance, company insights, and attention items. **No AI is called to compute analytics.**
-- **Gmail / career email intelligence** — read-only Gmail sync, **conservative** AI classification (fallback chain) of career emails, interview detail extraction, and human-approved application-status updates. A best-effort **self-notification email** is sent only to the user's own address when an interview/upswing is detected (toggleable). The platform never sends or replies on the user's behalf.
+- **Gmail / career email intelligence** — read-only Gmail sync, **conservative** AI classification (fallback chain) of career emails, interview detail extraction, and human-approved application-status updates. Career emails are auto-detected on a **1-minute server-side scheduler** (stale-gated, bounded concurrency) and on a 1-minute foreground poll while the app is open, so new mail surfaces quickly without any manual action. A best-effort **self-notification email** is sent only to the user's own address when an interview/upswing is detected (toggleable). The platform never sends or replies on the user's behalf.
 - **Career intelligence dashboard** — a deterministic, no-AI aggregation of pipeline overview, attention items, upcoming interviews, recent status changes, career emails, activity, and next actions.
 - **Notification center** — read-only aggregation of high-match opportunities, drafts needing review, handoffs to confirm, and notify-worthy career emails.
 - **Settings** — per-source job-source status, job search preferences, and notification preferences.
-- **Scheduled ingestion** — a bundled n8n workflow triggers job discovery every 6 hours (JWT-protected, rate-limited). No background workers/cron on the server itself.
+- **Scheduled ingestion** — a bundled n8n workflow can trigger job discovery on a schedule (e.g. every 6 hours, JWT-protected, rate-limited). Gmail career-email detection runs on the server itself (see above) — no separate worker is needed for it.
 
 ---
 
@@ -117,18 +119,18 @@ Searching for a job and preparing professional content is repetitive, manual wor
         |  analyses)|     | OpenAI ·  |  |  notify)  |   |           |
         +-----------+     | Groq · …  |  +-----------+   +-----------+
                           +-----------+        |
-                                      +--------+-----------+
-                                      | Job sources:       |
-                                      | Adzuna · Arbeitnow |
-                                      | RemoteOK · Mock    |
-                                      +--------------------+
++--------+-----------+
+                                       | Job sources:       |
+                                       | Adzuna · Arbeitnow |
+                                       | RemoteOK           |
+                                       +--------------------+
 ```
 
 > The "AI router" is a server-side fallback chain: **claude → gemini → openai → groq → openrouter → cerebras → mistral**, where each provider tries its **pool of free models** in priority order before the next provider. See [AI Provider Fallback & Free Model Pools](#ai-provider-fallback--free-model-pools).
 
 ### Core request flow
 
-1. **Auth & token management.** The user registers/logs in with email + password. The server returns a signed JWT; the client stores it in `sessionStorage` and attaches it via an Axios interceptor to every request. On any `401`, the token is cleared and the user is redirected to `/login`.
+1. **Auth & token management.** The user registers/logs in with email + password. The server returns a signed JWT; the client stores it in `sessionStorage` and attaches it via an Axios interceptor to every request. On a `401`, the client first verifies the session itself via `GET /auth/me` and only clears the token + redirects to `/login` when the session token is genuinely rejected — so a `401` from an expired Gmail/GitHub/LinkedIn credential (a normal integration failure) never logs the user out.
 2. **OAuth connections.** GitHub, Gmail, and LinkedIn follow the same pattern: the server returns a signed authorize URL (`/connect`), the provider redirects back to `/callback`, the server validates a single-use signed state, exchanges the code for tokens, and stores them **encrypted at rest** (`select: false` in MongoDB). GitHub access tokens are automatically refreshed when near expiry; Gmail access tokens auto-refresh with an offline refresh token and degrade to `isActive=false` if revoked.
 3. **AI analysis (all server-side).** The backend builds a bounded input payload (repository metadata + README, or profile + job, or email body, or application data), calls the AI router (`analyzeWithAIFallback`, primary Claude with automatic fallback to Gemini, OpenAI, Groq, OpenRouter, Cerebras, and Mistral — each provider tries every enabled free model before the next provider), strictly validates the JSON output with Zod, and persists only validated results. No secrets, passwords, or `.env` content ever reach the AI.
 4. **Human-in-the-loop execution.** AI output is always treated as a **suggestion** (e.g. `suggestedApplicationStatus`, draft ideas, fit assessment). External side effects happen only after explicit user action: approving a repository, approving a draft, confirming `{ submitted: true }` for an application, or choosing a status in the Gmail detail modal. Backend-owned statuses and levels are never supplied by the AI.
@@ -137,7 +139,6 @@ Searching for a job and preparing professional content is repetitive, manual wor
 
 ```
 JobSource (interface)
-  ├─ MockJobSource      # deterministic source for dev/tests (id = "mock")
   ├─ AdzunaJobSource    # keyed (ADZUNA_APP_ID / ADZUNA_APP_KEY)
   ├─ ArbeitnowJobSource # keyless, always enabled
   └─ RemoteOkJobSource  # keyless, always enabled
@@ -299,6 +300,7 @@ All values are read from `server/.env`. A full template lives in `server/.env.ex
 | `GOOGLE_GMAIL_SCOPES` | no | Defaults to read + `gmail.send` (used **only** for read + self-notify) |
 | `GMAIL_SYNC_MAX_RESULTS` | no | Max emails fetched per sync (default `25`) |
 | `GMAIL_SYNC_LOOKBACK_MINUTES` | no | How far back each sync scans (clamped `[60, 10080]`, default `1440`) |
+| `GMAIL_AUTO_SYNC_INTERVAL_MINUTES` | no | Server-side career-email auto-sync interval (default `1`, min `1`) |
 | `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` | LinkedIn only | LinkedIn OAuth App credentials |
 | `LINKEDIN_CALLBACK_URL` | LinkedIn only | e.g. `http://localhost:5001/api/linkedin/callback` |
 | `LINKEDIN_API_VERSION` | no | LinkedIn API version `YYYYMM` (default `202605`) |
@@ -340,7 +342,7 @@ npm test
 npm run typecheck          # Server + client
 ```
 
-The suite is large (~47 suites / 900+ tests) and covers auth, ownership/IDOR protection, strict Zod validation, deduplication, OAuth flows, PDF generation, and the human-in-the-loop boundaries for every feature.
+The suite is large (~50 suites / 990+ tests) and covers auth, ownership/IDOR protection, strict Zod validation, deduplication, OAuth flows, PDF generation, and the human-in-the-loop boundaries for every feature.
 
 ---
 
@@ -357,6 +359,23 @@ cd server && npm start      # node dist/server.js
 ```
 
 Serve the built `client/dist/` with any static host; the API is served by `server/dist/`. The live demo runs on **Render**.
+
+---
+
+## Performance & Optimization
+
+- **Compressed API responses** — the Express app applies the `compression` middleware (after `helmet`, before routes) so every JSON response is gzip/brotli-compressed on the wire.
+- **Route-based code splitting** — every page in `client/src/App.tsx` is loaded via `React.lazy()` under a single `<Suspense>` with a branded `PageLoader`, so the initial JS bundle is small and each of the 20+ pages ships as its own on-demand chunk.
+- **Fast, deterministic core pages** — the opportunity feed and career-intelligence dashboards never call the AI, so they render without spinner time.
+- **Bounded concurrency** — the Gmail auto-sync scheduler processes connections ~5 at a time and a single sync processes career-candidate messages ~3 at a time, so a slow account or message never serializes everyone else.
+- **Cached AI output** — job matches and application summaries are cached against unchanged state; re-analysis is explicit.
+
+---
+
+## Deployment
+
+- **Render (reference deployment):** the backend (`server/dist`) and the built frontend (`client/dist`) are deployed to Render with `MONGODB_URI`, `JWT_SECRET`, and the integration/AI keys configured as environment variables. The health route lives at `GET /api/health`.
+- **Keep-alive workflow:** `.github/workflows/keep-alive.yml` is a free GitHub Actions workflow that pings the health endpoint every 10 minutes (`curl -fsS --max-time 60`) so the Render free tier (which idles after ~15 minutes) never spins down. Add the deployed health URL as a repository secret named `RENDER_HEALTH_URL` (e.g. `https://your-app.onrender.com/api/health`) — the URL is never committed to the repo. The workflow also supports `workflow_dispatch` for manual warm-up.
 
 ---
 
@@ -402,6 +421,7 @@ All authenticated endpoints require `Authorization: Bearer <JWT>`. User-scoped r
 | GET | `/api/github/status` | Connection status + token health | Yes |
 | GET | `/api/github/repositories` | List the user's GitHub repositories | Yes |
 | GET | `/api/github/repositories/imported` | List imported repositories | Yes |
+| POST | `/api/github/repositories/import-all` | Opt-in bulk import of all repos (never called automatically) | Yes |
 | POST | `/api/github/repositories/:id/import` | Import (persist) a repository | Yes |
 | POST | `/api/github/repositories/:id/sync` | Refresh an imported repository | Yes |
 | DELETE | `/api/github/repositories/:id` | Remove an imported repository | Yes |
@@ -487,13 +507,15 @@ All authenticated endpoints require `Authorization: Bearer <JWT>`. User-scoped r
 | GET | `/api/notification-center` | Read-only notification feed | Yes |
 | POST | `/api/notification-center/seen` | Mark notifications as seen | Yes |
 | GET | `/api/settings` | Job-source status + search/notification preferences (keys never leaked) | Yes |
+| GET | `/api/ai/providers` | Configured AI providers + default (for the provider indicator) | Yes |
+| GET | `/api/ai/progress/:requestId` | SSE stream of live provider/model attempts for a running AI request | Yes |
 
 ---
 
 ## GitHub Integration
 
 - **Connection.** OAuth connect → callback → state validation → token exchange → persistence with **AES-256-GCM encryption** (`select: false`). GitHub now also stores `refresh_token` / expiry fields so that access tokens **auto-refresh** when nearing expiry (with a single-flight refresh guard) — repositories continue to load without repeated disconnects. One-time reconnect is required for accounts connected before refresh tokens were stored.
-- **Repositories.** Browse the connected account's repos, import the ones you own, and sync changes. Language stats and READMEs come directly from the GitHub API.
+- **Repositories.** Browse the connected account's repos and import the specific repositories you want with the per-repo **Import** button — nothing is imported automatically. Imported repos can be synced, analyzed, or removed. (`POST /api/github/repositories/import-all` exists as an opt-in bulk import, but no client or background job calls it automatically.)
 - **Errors are user-friendly.** GitHub API failures are mapped to readable errors (401 → "reconnect your GitHub account", 403/429 → rate-limit messaging) and never surface as opaque 500s.
 
 ---
@@ -600,6 +622,7 @@ Each provider exposes a **pool of free models** (tried in priority order, `serve
 ## Gmail / Career Email Intelligence
 
 - **OAuth** with `access_type=offline` + `prompt=consent` so a refresh token is obtained; tokens encrypted at rest.
+- **Background auto-sync:** the server runs a `careerEmailScheduler` (default every **1 minute**, initial warm-up ~30s after boot, `GMAIL_AUTO_SYNC_INTERVAL_MINUTES` to override) that syncs every active connection with a last sync older than the interval — connections are processed with bounded concurrency and one user's failure never affects others. While the app is open, the client also polls on a 1-minute stale-gated timer, so a career email typically appears within a minute of arrival. There is no Gmail Push/Pub/Sub integration, so detection is polling-based.
 - **Sync pipeline:** keyword pre-filter → bounded fetch → dedupe → body extraction (capped) → relevance check → AI classification (fallback chain) → persist `CareerEmail`.
 - **Classification categories:** `recruiter_outreach`, `application_received`, `application_update`, `interview_invitation`, `interview_reschedule`, `assessment`, `rejection`, `offer`, `follow_up`, `networking`, `unrelated`.
 - **Conservative matching:** an email links to an application only when normalized company + title match exactly one of the user's applications (no match or ambiguous → `application: null`).
@@ -647,7 +670,7 @@ The **Make CV** page lets users assemble a structured CV from their profile data
 To keep the opportunity feed fresh automatically, import the bundled n8n workflow (`n8n/workflows/job-ingestion-workflow.json`):
 
 1. Start the server (`npm run dev` in `server/`).
-2. Configure job sources in `server/.env` (Adzuna optional; Arbeitnow + RemoteOK always enabled; `mock` always available locally).
+2. Configure job sources in `server/.env` (Adzuna optional; Arbeitnow + RemoteOK always enabled).
 3. In n8n, create an **HTTP Header Auth** credential: header `Authorization`, value `Bearer <JWT>` (get a JWT via `POST /api/auth/login`).
 4. Import the workflow (Workflows → Import from File) and connect the credential to the **Trigger job discovery** node.
 5. Optionally edit the target URL/body (roles, locations, remote preference, `limit`, `page`).
@@ -660,7 +683,6 @@ The node POSTs `{ roles, locations, remote, experienceLevel, salaryMinimum, limi
   "jobs": [],
   "count": 12,
   "sources": [
-    { "source": "mock", "status": "success", "count": 6 },
     { "source": "adzuna", "status": "error", "message": "Adzuna is not configured..." },
     { "source": "arbeitnow", "status": "success", "count": 4 },
     { "source": "remoteok", "status": "success", "count": 2 }
@@ -692,7 +714,7 @@ The agent is deliberately constrained so AI output is advice, never action:
 - **No outbound email.** Gmail is read + self-notify only, and only to the user's own address.
 - **No auto status changes.** AI stores `suggestedApplicationStatus`; only the explicit apply-status endpoint (or user-confirmed execution) changes an application status.
 - **No second matcher / no background AI.** The feed and dashboards are deterministic; AI is called only on explicit user actions (through the fallback chain) and cached thereafter.
-- **No cron/queues on the server.** Scheduled work is delegated to the n8n workflow.
+- **No cron/queues for job discovery.** Scheduled job discovery is delegated to the optional n8n workflow. The only server-side background task is the Gmail auto-sync scheduler (fit for a low, stale-gated 1-minute cadence).
 
 ---
 

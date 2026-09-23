@@ -350,32 +350,9 @@ function GitHubIntegrations() {
     }
   };
 
-  // Track repos automatically so the user never has to click "Import" per repo.
-  // Quiet background call on first successful connection check: import-all is
-  // metadata-only (no AI), idempotent, and failures are logged not surfaced.
-  const autoImportAll = useCallback(async () => {
-    try {
-      const res = await api.post<{
-        importedCount: number;
-        skippedCount: number;
-        repositories: ImportedRepo[];
-      }>(`${API_BASE}/github/repositories/import-all`);
-      if (res.data.importedCount > 0) {
-        const imported = await api.get<{ repositories: ImportedRepo[] }>(
-          `${API_BASE}/github/repositories/imported`
-        );
-        setImportedRepos(imported.data.repositories);
-      }
-    } catch (err) {
-      console.error("Background GitHub repository import skipped:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (status?.connected) {
-      void autoImportAll();
-    }
-  }, [status?.connected, autoImportAll]);
+  // Repositories are imported on-demand only, via the per-repo "Import"
+  // button. There is deliberately no background auto-import of every repo on
+  // connect: the user stays in control of which projects they bring in.
 
   const handleImport = async (repoId: number) => {
     setImportLoading(String(repoId));

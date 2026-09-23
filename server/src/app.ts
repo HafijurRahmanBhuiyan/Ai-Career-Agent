@@ -32,8 +32,8 @@ import { NODE_ENV } from "./config";
 dotenv.config();
 
 // Register the live job sources (Adzuna, RemoteOK, Arbeitnow) at startup.
-// Adzuna is only registered when its API credentials are present; the Mock
-// source is excluded in production. Safe to run once at application startup.
+// Adzuna is only registered when its API credentials are present. Safe to run
+// once at application startup.
 bootstrapJobSources();
 
 const app = express();
