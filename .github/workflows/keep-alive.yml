@@ -1,0 +1,18 @@
+# Keep the Render-hosted backend warm so it never spins down due to
+# inactivity (Render's free tier idles after ~15 minutes and cold-starts
+# take up to ~60s). Every ~10 minutes this pings the existing lightweight
+# GET /api/health endpoint (server/src/routes/health.ts), which is safe to
+# call frequently.
+name: Keep Render Warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: curl -fsS --max-time 60 "${{ secrets.RENDER_HEALTH_URL }}"
