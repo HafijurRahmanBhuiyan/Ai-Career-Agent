@@ -1,17 +1,17 @@
 # AI Career Agent
 
-A personal, AI-powered **career automation platform** built on the MERN stack. It connects a user's GitHub, Gmail, and LinkedIn accounts, analyzes real repositories, discovers and scores job opportunities, tracks applications end-to-end, and generates professional content and CV documents — all with a **multi-provider AI fallback chain** (Claude → Gemini → OpenAI → Groq → OpenRouter → Cerebras → Mistral, each backed by a pool of free models) and **strict human-in-the-loop approval** at every external side effect.
+> A personal, AI-powered **career automation platform**. Connect your GitHub, Gmail, and LinkedIn accounts, analyze real repositories, discover and score job opportunities, track applications end-to-end, and generate professional content and CV documents — all with a **multi-provider AI fallback chain** and **strict human-in-the-loop approval** at every external side effect.
 
-> **Live demo:** <https://ai-career-agent-1bn8.onrender.com>
+**Live Link:** <https://ai-career-agent-1bn8.onrender.com>
 
 ---
 
 ## Table of Contents
 
-- [Purpose](#purpose)
+- [Overview](#overview)
 - [Features](#features)
 - [Technology Stack](#technology-stack)
-- [How It Works](#how-it-works)
+- [Architecture & How It Works](#architecture--how-it-works)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
 - [Local Setup](#local-setup)
@@ -22,19 +22,20 @@ A personal, AI-powered **career automation platform** built on the MERN stack. I
 - [Performance & Optimization](#performance--optimization)
 - [Deployment](#deployment)
 - [API Overview](#api-overview)
-- [GitHub Integration](#github-integration)
-- [AI Project Analysis](#ai-project-analysis)
-- [AI Provider Fallback & Free Model Pools](#ai-provider-fallback--free-model-pools)
-- [AI Job Matching](#ai-job-matching)
-- [Career Opportunity Feed](#career-opportunity-feed)
-- [Job Discovery & Ingestion](#job-discovery--ingestion)
-- [Application Tracking & Execution](#application-tracking--execution)
-- [Gmail / Career Email Intelligence](#gmail--career-email-intelligence)
-- [LinkedIn Content & Publishing](#linkedin-content--publishing)
-- [CV Builder & PDF Generation](#cv-builder--pdf-generation)
-- [Career Intelligence & Analytics](#career-intelligence--analytics)
-- [Notifications & Settings](#notifications--settings)
-- [n8n Scheduled Ingestion](#n8n-scheduled-ingestion)
+- [Key Modules](#key-modules)
+  - [GitHub Integration](#github-integration)
+  - [AI Project Analysis](#ai-project-analysis)
+  - [AI Provider Fallback & Free Model Pools](#ai-provider-fallback--free-model-pools)
+  - [AI Job Matching](#ai-job-matching)
+  - [Career Opportunity Feed](#career-opportunity-feed)
+  - [Job Discovery & Ingestion](#job-discovery--ingestion)
+  - [Application Tracking & Execution](#application-tracking--execution)
+  - [Gmail / Career Email Intelligence](#gmail--career-email-intelligence)
+  - [LinkedIn Content & Publishing](#linkedin-content--publishing)
+  - [CV Builder & PDF Generation](#cv-builder--pdf-generation)
+  - [Career Intelligence & Analytics](#career-intelligence--analytics)
+  - [Notifications & Settings](#notifications--settings)
+- [Scheduled Ingestion (n8n)](#scheduled-ingestion-n8n)
 - [Security & Privacy](#security--privacy)
 - [Human-in-the-Loop Principles](#human-in-the-loop-principles)
 - [Cost Safeguards](#cost-safeguards)
@@ -44,7 +45,7 @@ A personal, AI-powered **career automation platform** built on the MERN stack. I
 
 ---
 
-## Purpose
+## Overview
 
 Searching for a job and preparing professional content is repetitive, manual work. AI Career Agent consolidates the whole workflow into one place:
 
@@ -74,6 +75,7 @@ Searching for a job and preparing professional content is repetitive, manual wor
 - **Notification center** — read-only aggregation of high-match opportunities, drafts needing review, handoffs to confirm, and notify-worthy career emails.
 - **Settings** — per-source job-source status, job search preferences, and notification preferences.
 - **Scheduled ingestion** — a bundled n8n workflow can trigger job discovery on a schedule (e.g. every 6 hours, JWT-protected, rate-limited). Gmail career-email detection runs on the server itself (see above) — no separate worker is needed for it.
+- **Health monitoring** — a lightweight `GET /health` endpoint (returns `200 { "status": "ok" }`) for uptime checks, plus a rich `GET /api/health` endpoint that also reports database connectivity.
 
 ---
 
@@ -88,12 +90,12 @@ Searching for a job and preparing professional content is repetitive, manual wor
 | **Integrations** | GitHub OAuth, Google Gmail OAuth, LinkedIn OAuth (`w_member_social`), Adzuna / Arbeitnow / RemoteOK APIs |
 | **Documents** | PDFKit (CV PDF), mammoth (DOCX text), pdf-parse (PDF text), multer + GridFS (upload storage) |
 | **Automation** | n8n (scheduled job ingestion workflow) |
-| **Security** | bcryptjs (password hashing), jsonwebtoken, AES-256-GCM (OAuth token encryption), helmet, express-rate-limit, CORS |
+| **Security** | bcryptjs (password hashing), jsonwebtoken, AES-256-GCM (OAuth token encryption), helmet, express-rate-limit, CORS, compression |
 | **Testing** | Jest + Supertest + mongodb-memory-server (in-memory MongoDB) |
 
 ---
 
-## How It Works
+## Architecture & How It Works
 
 ### Architecture overview
 
@@ -170,14 +172,14 @@ ai-career-agent/
 ├── client/                      # React frontend (Vite)
 │   ├── src/
 │   │   ├── api/                 # Central Axios instance + interceptors
-│   │   ├── components/          # Auth layout, dashboard layout, guards, modals
+│   │   ├── components/          # Auth layout, dashboard layout, guards, modals, PageLoader
 │   │   ├── context/             # AuthContext (single auth source of truth)
-│   │   ├── pages/               # Landing, Login, Register, Dashboard, Jobs,
-│   │   │                        #   Opportunities, Job Matches, Applications,
-│   │   │                        #   Follow-ups, Analytics, Career Emails,
-│   │   │                        #   GitHub Integrations, Connections,
-│   │   │                        #   Professional Content, Make CV, Profile,
-│   │   │                        #   Settings, Privacy Policy
+│   │   ├── hooks/               # Shared React hooks
+│   │   ├── pages/               # Landing, Login, Register, Dashboard, Profile,
+│   │   │                        #   Make CV, GitHub Integrations, Connections,
+│   │   │                        #   Professional Content, Jobs, Job Matches,
+│   │   │                        #   Opportunities, Applications, Career Emails,
+│   │   │                        #   Follow-Ups, Analytics, Settings, Privacy Policy
 │   │   ├── services/            # API service modules (auth, applications)
 │   │   ├── types/               # Shared frontend TypeScript types
 │   │   └── utils/               # apiError, tokenStorage, match helpers
@@ -210,13 +212,16 @@ ai-career-agent/
 │   │   ├── validators/          # Zod schemas (`.strict()` where required)
 │   │   ├── app.ts               # Express app + route mounting
 │   │   └── server.ts            # Entry point (connect DB + listen)
-│   ├── tests/                   # Jest + Supertest suites (48+ files)
+│   ├── tests/                   # Jest + Supertest suites (54 files / 990+ tests)
 │   ├── .env.example
 │   └── package.json
 │
 ├── n8n/                         # n8n workflow definitions
 │   └── workflows/
 │       └── job-ingestion-workflow.json   # Scheduled job discovery (6h)
+│
+├── .github/workflows/
+│   └── keep-alive.yml           # Free Render keep-alive (pings /api/health)
 │
 ├── package.json                 # Root scripts (dev, build, test, typecheck)
 └── .gitignore
@@ -242,7 +247,7 @@ ai-career-agent/
 
 ```bash
 # 1. Clone the repository
-git clone <repo-url>
+git clone https://github.com/HafijurRahmanBhuiyan/Ai-Career-Agent.git
 cd ai-career-agent
 
 # 2. Install all dependencies (root + server + client)
@@ -285,6 +290,7 @@ All values are read from `server/.env`. A full template lives in `server/.env.ex
 | `GEMINI_API_KEY` | no | Gemini API key (free Flash/Flash-Lite model pool) |
 | `GEMINI_MODEL` / `GEMINI_FREE_MODELS` | no | Optional single-model override / comma-separated free-model pool override (replaces registry defaults) |
 | `OPENAI_API_KEY` | no | OpenAI API key (fallback; single model `gpt-4o-mini`) |
+| `OPENAI_MODEL` | no | Optional single-model override (`gpt-4o-mini` default) |
 | `GROQ_API_KEY` / `GROQ_MODEL` / `GROQ_FREE_MODELS` | no | Groq key + optional model/free-pool overrides (free developer plan) |
 | `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` / `OPENROUTER_FREE_MODELS` | no | OpenRouter key + optional model/free-pool overrides (free collection) |
 | `CEREBRAS_API_KEY` / `CEREBRAS_MODEL` / `CEREBRAS_FREE_MODELS` | no | Cerebras key + optional model/free-pool overrides (free = time-bounded trial) |
@@ -326,7 +332,9 @@ npm run server    # Backend on http://localhost:5001
 npm run client    # Frontend on http://localhost:5173
 ```
 
-Health check: `http://localhost:5001/api/health`
+Health checks:
+- `http://localhost:5001/health` — lightweight liveness probe → `{ "status": "ok" }`
+- `http://localhost:5001/api/health` — detailed check incl. DB connectivity
 
 ---
 
@@ -342,7 +350,7 @@ npm test
 npm run typecheck          # Server + client
 ```
 
-The suite is large (~50 suites / 990+ tests) and covers auth, ownership/IDOR protection, strict Zod validation, deduplication, OAuth flows, PDF generation, and the human-in-the-loop boundaries for every feature.
+The suite is large (**54 files / 990+ tests**) and covers auth, ownership/IDOR protection, strict Zod validation, deduplication, OAuth flows, PDF generation, and the human-in-the-loop boundaries for every feature.
 
 ---
 
@@ -365,7 +373,7 @@ Serve the built `client/dist/` with any static host; the API is served by `serve
 ## Performance & Optimization
 
 - **Compressed API responses** — the Express app applies the `compression` middleware (after `helmet`, before routes) so every JSON response is gzip/brotli-compressed on the wire.
-- **Route-based code splitting** — every page in `client/src/App.tsx` is loaded via `React.lazy()` under a single `<Suspense>` with a branded `PageLoader`, so the initial JS bundle is small and each of the 20+ pages ships as its own on-demand chunk.
+- **Route-based code splitting** — every page in `client/src/App.tsx` is loaded via `React.lazy()` under a single `<Suspense>` with a branded `PageLoader`, so the initial JS bundle is small and each of the 15+ pages ships as its own on-demand chunk.
 - **Fast, deterministic core pages** — the opportunity feed and career-intelligence dashboards never call the AI, so they render without spinner time.
 - **Bounded concurrency** — the Gmail auto-sync scheduler processes connections ~5 at a time and a single sync processes career-candidate messages ~3 at a time, so a slow account or message never serializes everyone else.
 - **Cached AI output** — job matches and application summaries are cached against unchanged state; re-analysis is explicit.
@@ -374,7 +382,7 @@ Serve the built `client/dist/` with any static host; the API is served by `serve
 
 ## Deployment
 
-- **Render (reference deployment):** the backend (`server/dist`) and the built frontend (`client/dist`) are deployed to Render with `MONGODB_URI`, `JWT_SECRET`, and the integration/AI keys configured as environment variables. The health route lives at `GET /api/health`.
+- **Render (reference deployment):** the backend (`server/dist`) and the built frontend (`client/dist`) are deployed to Render with `MONGODB_URI`, `JWT_SECRET`, and the integration/AI keys configured as environment variables. The health routes live at `GET /health` and `GET /api/health`.
 - **Keep-alive workflow:** `.github/workflows/keep-alive.yml` is a free GitHub Actions workflow that pings the health endpoint every 10 minutes (`curl -fsS --max-time 60`) so the Render free tier (which idles after ~15 minutes) never spins down. Add the deployed health URL as a repository secret named `RENDER_HEALTH_URL` (e.g. `https://your-app.onrender.com/api/health`) — the URL is never committed to the repo. The workflow also supports `workflow_dispatch` for manual warm-up.
 
 ---
@@ -387,7 +395,8 @@ All authenticated endpoints require `Authorization: Bearer <JWT>`. User-scoped r
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| GET | `/api/health` | Health check | No |
+| GET | `/health` | Lightweight liveness probe → `{ "status": "ok" }` | No |
+| GET | `/api/health` | Health check (incl. DB connectivity) | No |
 | POST | `/api/auth/register` | Register a new user | No |
 | POST | `/api/auth/login` | Log in | No |
 | GET | `/api/auth/me` | Get the current user | Yes |
@@ -512,15 +521,15 @@ All authenticated endpoints require `Authorization: Bearer <JWT>`. User-scoped r
 
 ---
 
-## GitHub Integration
+## Key Modules
 
-- **Connection.** OAuth connect → callback → state validation → token exchange → persistence with **AES-256-GCM encryption** (`select: false`). GitHub now also stores `refresh_token` / expiry fields so that access tokens **auto-refresh** when nearing expiry (with a single-flight refresh guard) — repositories continue to load without repeated disconnects. One-time reconnect is required for accounts connected before refresh tokens were stored.
+### GitHub Integration
+
+- **Connection.** OAuth connect → callback → state validation → token exchange → persistence with **AES-256-GCM encryption** (`select: false`). GitHub also stores `refresh_token` / expiry fields so access tokens **auto-refresh** when nearing expiry (with a single-flight refresh guard) — repositories continue to load without repeated disconnects. One-time reconnect is required for accounts connected before refresh tokens were stored.
 - **Repositories.** Browse the connected account's repos and import the specific repositories you want with the per-repo **Import** button — nothing is imported automatically. Imported repos can be synced, analyzed, or removed. (`POST /api/github/repositories/import-all` exists as an opt-in bulk import, but no client or background job calls it automatically.)
 - **Errors are user-friendly.** GitHub API failures are mapped to readable errors (401 → "reconnect your GitHub account", 403/429 → rate-limit messaging) and never surface as opaque 500s.
 
----
-
-## AI Project Analysis
+### AI Project Analysis
 
 For each imported repository the service collects **repository metadata, GitHub language statistics (deterministic), and the README (truncated to a safe max)** — nothing else is sent to the AI. No `.env` files, private keys, passwords, tokens, or other repository contents ever leave the server.
 
@@ -541,15 +550,13 @@ The validated, versioned analysis schema:
 
 Re-analysis creates a **new version** without destroying history; it only runs when explicitly requested.
 
----
-
-## AI Provider Fallback & Free Model Pools
+### AI Provider Fallback & Free Model Pools
 
 Every AI feature calls the **AI router** (`analyzeWithAIFallback` → `analyzeWithProviderFallback`), which resolves the actual model server-side and falls back in a fixed order:
 
 > **claude → gemini → openai → groq → openrouter → cerebras → mistral**
 
-Each provider exposes a **pool of free models** (tried in priority order, `server-side only`). Models within one provider share the same API key and quota — exhausting one model's rate limit never inflates capacity; only the next model or provider is attempted. The chain is bounded (no infinite retries) and never fabricates a result when everything fails.
+Each provider exposes a **pool of free models** (tried in priority order, server-side only). Models within one provider share the same API key and quota — exhausting one model's rate limit never inflates capacity; only the next model or provider is attempted. The chain is bounded (no infinite retries) and never fabricates a result when everything fails.
 
 | Provider | Free model pool (priority order) |
 |----------|----------------------------------|
@@ -569,9 +576,7 @@ Each provider exposes a **pool of free models** (tried in priority order, `serve
 
 **When does the chain advance?** Only capacity/provider-side errors move on — model not found/unavailable, 429 / rate limit, quota / free-tier / daily limits, overload, 5xx, and timeouts. Application/config errors (invalid API key, invalid input/schema/request) stop the chain immediately and are surfaced to the user — never papered over by cycling models.
 
----
-
-## AI Job Matching
+### AI Job Matching
 
 1. `prepareMatchProfile(userId)` loads profile, skills (≤50), experience (≤15), education (≤10), projects (≤10), and GitHub analyses (≤8) in parallel, with completeness flags.
 2. `prepareMatchJob` prepares the job and truncates the description (`JOB_MATCH_MAX_DESCRIPTION_CHARS`, default 10,000).
@@ -587,9 +592,7 @@ Each provider exposes a **pool of free models** (tried in priority order, `serve
 | 60–74 | `partial_match` |
 | 0–59 | `weak_match` |
 
----
-
-## Career Opportunity Feed
+### Career Opportunity Feed
 
 `GET /api/jobs/opportunities` is a **user-scoped, fully deterministic** feed:
 
@@ -598,18 +601,14 @@ Each provider exposes a **pool of free models** (tried in priority order, `serve
 - `alreadyApplied` is derived per authenticated user.
 - **No AI call on load** — the feed never creates `JobMatch` records, never auto-applies, and never changes status. Browsing the feed is cheap and reproducible.
 
----
-
-## Job Discovery & Ingestion
+### Job Discovery & Ingestion
 
 - **Discovery:** `POST /api/jobs/discover` runs every configured `JobSource`, isolating failures per source (a source that is not configured reports `status: "error"` and is skipped — the rest of the pipeline keeps working).
 - **Ingestion:** `POST /api/jobs/ingest` accepts strictly-validated listings (unknown fields like `userId`/`ownerId` → 422; only `http(s)` URLs persisted; sensitive keys stripped from `rawSource`).
 - **Normalization & deduplication:** primary identity is `source + sourceJobId` (unique compound index), backed by a SHA-256 fingerprint (source/company/title/location/apply URL). `discoveredAt` is preserved via `$setOnInsert`; `lastSeenAt` refreshes each run.
 - **Deactivation:** jobs unseen for `JOB_STALE_DAYS` are soft-deactivated (`isActive: false`) — never hard-deleted.
 
----
-
-## Application Tracking & Execution
+### Application Tracking & Execution
 
 - **Statuses:** `saved → applied → screening → interview → offer` (plus `rejected` / `withdrawn`); one application per user per job.
 - **Timeline:** immutable `system` events (created, status changes), idempotent `gmail` events derived from message ids, and editable `user` events.
@@ -617,9 +616,7 @@ Each provider exposes a **pool of free models** (tried in priority order, `serve
 - **AI summary:** grounded only in the job, application, timeline, related emails, latest match, and profile; cached until the state hash changes.
 - **Execution (human-in-the-loop):** the execution view shows the capability and the real handoff URL. `{ submitted: true }` is the **only** action that records `applied`. Job-fit assist never changes status.
 
----
-
-## Gmail / Career Email Intelligence
+### Gmail / Career Email Intelligence
 
 - **OAuth** with `access_type=offline` + `prompt=consent` so a refresh token is obtained; tokens encrypted at rest.
 - **Background auto-sync:** the server runs a `careerEmailScheduler` (default every **1 minute**, initial warm-up ~30s after boot, `GMAIL_AUTO_SYNC_INTERVAL_MINUTES` to override) that syncs every active connection with a last sync older than the interval — connections are processed with bounded concurrency and one user's failure never affects others. While the app is open, the client also polls on a 1-minute stale-gated timer, so a career email typically appears within a minute of arrival. There is no Gmail Push/Pub/Sub integration, so detection is polling-based.
@@ -629,9 +626,7 @@ Each provider exposes a **pool of free models** (tried in priority order, `serve
 - **Human-in-the-loop:** syncing never changes an application status; the UI shows the AI suggestion separately and the user must explicitly confirm before `POST .../apply-status` applies it.
 - **Read + self-notify only:** the `gmail.send` scope exists solely for a best-effort self-notification email (interview/upswing detected) to the user's own `Profile.notificationEmail`, gated by `gmailNotifyEnabled`. The platform never sends, replies, deletes, or auto-applies.
 
----
-
-## LinkedIn Content & Publishing
+### LinkedIn Content & Publishing
 
 1. **Approve a project** (`Approve for professional use`).
 2. **Derive professional evidence** deterministically from the validated `ProjectAnalysis` + verified repo facts — no second AI call, no fabrication.
@@ -639,9 +634,7 @@ Each provider exposes a **pool of free models** (tried in priority order, `serve
 4. **Review & approve** the draft (`Reviewed` → `Approved — Ready to Publish`).
 5. **Publish** via the official LinkedIn Posts API (`POST https://api.linkedin.com/rest/posts`) with a real `urn:li:` post id. Publishing is never automatic; failures preserve the draft and are marked `publish_failed`.
 
----
-
-## CV Builder & PDF Generation
+### CV Builder & PDF Generation
 
 The **Make CV** page lets users assemble a structured CV from their profile data and download it as a PDF.
 
@@ -649,23 +642,19 @@ The **Make CV** page lets users assemble a structured CV from their profile data
 - The generator is **defensive**: it renders any stored profile shape — including legacy/partial records missing `personalInfo` or other sections — without crashing, so "Download PDF" never returns an internal server error.
 - The controller uses a safe filename and returns a friendly message if generation fails for any other reason.
 
----
-
-## Career Intelligence & Analytics
+### Career Intelligence & Analytics
 
 - **Dashboard** (`GET /api/dashboard/career-intelligence`): pipeline overview (single `$group` aggregation), attention items, upcoming interviews (from explicit future `scheduledAt` only), recent status changes (reconstructed from chronological events), recent career emails, merged recent activity (bounded), and next actions. Deterministic, no AI, read-only.
 - **Analytics** (`GET /api/applications/analytics?range=...`): KPIs, funnel, conversion rates (never divided by zero), time-to-stage average/median, stale applications, follow-up + interview-preparation performance, top-company insights, and typed attention items — all computed from persisted data with no extra analytics records.
 
----
-
-## Notifications & Settings
+### Notifications & Settings
 
 - **Notification center:** read-only aggregation of items seen since `Profile.notificationsSeenAt` — high-match opportunities (score ≥ 75), drafts needing review/approval, unconfirmed handoffs, and notify-worthy career emails. Marking "seen" never mutates other data.
 - **Settings:** `GET /api/settings` reports each job source's configured status (never revealing keys) and the profile's job-search + notification preferences, editable through `PATCH /api/profile`.
 
 ---
 
-## n8n Scheduled Ingestion
+## Scheduled Ingestion (n8n)
 
 To keep the opportunity feed fresh automatically, import the bundled n8n workflow (`n8n/workflows/job-ingestion-workflow.json`):
 
@@ -744,7 +733,7 @@ The agent is deliberately constrained so AI output is advice, never action:
 
 ## Roadmap
 
-**Implemented:** GitHub analysis, professional content workflow, LinkedIn publishing, job discovery/ingestion, deterministic opportunity feed, AI job matching, application tracking + timeline + interview intelligence, career intelligence dashboard, interview preparation, follow-up action center, career analytics, Gmail career email intelligence, CV builder + PDF, notifications, settings, and scheduled n8n ingestion.
+**Implemented:** GitHub analysis, professional content workflow, LinkedIn publishing, job discovery/ingestion, deterministic opportunity feed, AI job matching, application tracking + timeline + interview intelligence, career intelligence dashboard, interview preparation, follow-up action center, career analytics, Gmail career email intelligence, CV builder + PDF, notifications, settings, health monitoring, and scheduled n8n ingestion.
 
 **Not implemented (by design):** automatic job applications, LinkedIn/job auto-apply, outbound email on the user's behalf, scraping/browser automation, and full-auto background AI. These are intentionally excluded and would require explicit product decisions.
 
